@@ -15,6 +15,7 @@
     "skipLibCheck": true,
     "incremental": true,
     "noEmit": true,
+    "types": ["bun-types"],
     "plugins": [
       {
         "name": "@effect/language-service"

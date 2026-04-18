@@ -5,6 +5,10 @@
     "": {
       "name": "prodigy-coder",
       "dependencies": {
+        "@effect/ai-anthropic": "^4.0.0-beta.50",
+        "@effect/ai-openai": "^4.0.0-beta.50",
+        "@effect/ai-openai-compat": "^4.0.0-beta.50",
+        "@effect/ai-openrouter": "^4.0.0-beta.50",
         "@effect/platform-bun": "^4.0.0-beta.50",
         "effect": "^4.0.0-beta.50",
       },
@@ -21,6 +25,14 @@
     },
   },
   "packages": {
+    "@effect/ai-anthropic": ["@effect/ai-anthropic@4.0.0-beta.50", "", { "peerDependencies": { "effect": "^4.0.0-beta.50" } }, "sha512-jXGIGItlgu5BuSFcFGXDdCb01CSgx3W87xx3cOki8umYJ3jnHGORzONG8GaLgyelATZUtcCVKeEcHL7Q1W1K6Q=="],
+
+    "@effect/ai-openai": ["@effect/ai-openai@4.0.0-beta.50", "", { "peerDependencies": { "effect": "^4.0.0-beta.50" } }, "sha512-39TL+Lv9mI9p5iMisficG47jKjg/e3Og+JHgMQP6yUOOjPSAgOR/RjscB8EIz5RgHQ9DcGdha93U0DZys5NWsA=="],
+
+    "@effect/ai-openai-compat": ["@effect/ai-openai-compat@4.0.0-beta.50", "", { "peerDependencies": { "effect": "^4.0.0-beta.50" } }, "sha512-trW0cvI2FM9auneJyjQ5LPa9RqWoRe5yzoYDdWGiT2rADhIzt3D23kdSM/L4cFFxQpVfSwZ9NqATzgOrzlyxOg=="],
+
+    "@effect/ai-openrouter": ["@effect/ai-openrouter@4.0.0-beta.50", "", { "peerDependencies": { "effect": "^4.0.0-beta.50" } }, "sha512-am+v+ys2Bj3Ovmf2HcWGusL5f6JgB3L9hFC6gMGdg+TMYB6y3phctPD8qz1HGSRSctpR7PqBvExAmyIM3S9tZQ=="],
+
     "@effect/language-service": ["@effect/language-service@0.85.1", "", { "bin": { "effect-language-service": "cli.js" } }, "sha512-EXnJjIy6zQ3nUO/MZ+ynWUb8B895KZPotd1++oTs9JjDkplwM7cb6zo8Zq2zU6piwq+KflO7amXbEfj1UMpHkw=="],
 
     "@effect/platform-bun": ["@effect/platform-bun@4.0.0-beta.50", "", { "dependencies": { "@effect/platform-node-shared": "^4.0.0-beta.50" }, "peerDependencies": { "effect": "^4.0.0-beta.50" } }, "sha512-KnDleO9PMr++HoLl/VmzR3hNcOG3Hz5+xAtO5ec5SzN7QwedPbPWBZYR88tv5GTeKLgBvPTAjoTt2kbbNh5Jzw=="],
