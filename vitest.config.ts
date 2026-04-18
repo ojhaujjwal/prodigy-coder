@@ -1,0 +1,23 @@
+import { defineConfig } from "vitest/config"
+
+export default defineConfig({
+  test: {
+    globals: true,
+    include: ["src/**/*.test.ts"],
+    projects: [
+      {
+        test: {
+          name: "unit",
+          include: ["src/**/*.test.ts"],
+          exclude: ["src/__integration__/**"],
+        },
+      },
+      {
+        test: {
+          name: "integration",
+          include: ["src/__integration__/**/*.test.ts"],
+        },
+      },
+    ],
+  },
+})
