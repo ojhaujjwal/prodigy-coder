@@ -1,0 +1,25 @@
+{
+  "ignorePatterns": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/.tsbuildinfo",
+    "**/*.md",
+    "**/.ralph/**",
+    "repos/**"
+  ],
+  "jsPlugins": ["./lint/index.ts"],
+  "rules": {
+    "prodigy/no-effect-ignore": "error",
+    "prodigy/no-effect-catchallcause": "error",
+    "prodigy/no-effect-asvoid": "error",
+    "prodigy/no-silent-error-swallow": "error",
+    "prodigy/no-service-option": "error",
+    "prodigy/no-nested-layer-provide": "error",
+    "prodigy/pipe-max-arguments": "error",
+    "prodigy/prefer-option-from-nullable": "error",
+    "prodigy/import-extensions": "error",
+    "prodigy/no-disable-validation": "error",
+    "prodigy/no-void-expression": "error"
+  }
+}

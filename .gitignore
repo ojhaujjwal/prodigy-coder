@@ -32,3 +32,8 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # Finder (MacOS) folder config
 .DS_Store
+
+# Ralph Auto runtime output
+.ralph/
+.ralph-auto/
+progress-auto.txt
