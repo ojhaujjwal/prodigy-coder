@@ -248,7 +248,7 @@ $lint_output
     echo "3. Vitest..."
     echo "------------"
     local vitest_output
-    if vitest_output=$(bun run test 2>&1); then
+    if vitest_output=$(bun run test -- --run 2>&1); then
         echo -e "${GREEN}Vitest passed${NC}"
     else
         echo -e "${RED}Vitest failed${NC}"
