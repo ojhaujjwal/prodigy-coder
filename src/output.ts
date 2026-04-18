@@ -68,28 +68,28 @@ export const makeTextFormatter = (): Formatter =>
   const e = event as TextDelta | ToolCall | ToolResult | ToolApprovalRequest | ApprovalResponse | Finish | ErrorEvent
   switch (e.type) {
     case "text-delta":
-      process.stdout.write(e.delta)
+      Bun.write(Bun.stdout, e.delta)
       break
     case "tool-call": {
       const paramsStr = JSON.stringify(e.params)
       const display = `> ${e.name}(${truncate(paramsStr, 100)})`
-      process.stdout.write(textColor(34, display) + "\n")
+      Bun.write(Bun.stdout, textColor(34, display) + "\n")
       break
     }
     case "tool-result":
-      process.stdout.write(textColor(90, truncate(e.result, 500)) + "\n")
+      Bun.write(Bun.stdout, textColor(90, truncate(e.result, 500)) + "\n")
       break
     case "tool-approval-request":
-      process.stdout.write(textColor(33, `Tool ${e.toolName} requires approval. Allow? (y/n) `))
+      Bun.write(Bun.stdout, textColor(33, `Tool ${e.toolName} requires approval. Allow? (y/n) `))
       break
     case "approval-response":
-      process.stdout.write(textColor(90, e.approved ? "Approved" : "Rejected") + "\n")
+      Bun.write(Bun.stdout, textColor(90, e.approved ? "Approved" : "Rejected") + "\n")
       break
     case "finish":
-      process.stdout.write("\n" + e.text + "\n")
+      Bun.write(Bun.stdout, "\n" + e.text + "\n")
       break
     case "error":
-      process.stderr.write(textColor(31, `Error: ${e.message}`) + "\n")
+      Bun.write(Bun.stderr, textColor(31, `Error: ${e.message}`) + "\n")
       break
   }
 }
@@ -123,7 +123,7 @@ export const makeStreamJsonFormatter = (): Formatter =>
       break
   }
 
-  process.stdout.write(JSON.stringify(output) + "\n")
+  Bun.write(Bun.stdout, JSON.stringify(output) + "\n")
 }
 
 export const createFormatter = (format: "text" | "stream-json"): Formatter =>

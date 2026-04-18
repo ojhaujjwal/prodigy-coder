@@ -10,7 +10,7 @@ export const ProviderConfig = Schema.Struct({
   type: ProviderType,
   baseUrl: Schema.optional(Schema.String),
   apiKey: Schema.optional(Schema.String),
-  model: Schema.String,
+  model: Schema.optional(Schema.String),
 })
 export type ProviderConfig = typeof ProviderConfig.Type
 
@@ -24,7 +24,7 @@ export type ConfigData = typeof ConfigSchema.Type
 
 export interface Config extends ConfigData {}
 
-const loadEnvVar = (key: string): string | undefined => process.env[key]
+const loadEnvVar = (key: string): string | undefined => Bun.env[key]
 
 const envOverrides = (
   config: ConfigData,
@@ -68,7 +68,7 @@ const readFileSync = (path: string): string => {
 }
 
 const findConfigFileSync = (): string | undefined => {
-  const home = process.env.HOME ?? "/"
+  const home = Bun.env.HOME ?? "/"
   for (const configPath of HOME_CONFIG_PATHS) {
     const fullPath = `${home}/${configPath}`
     if (fileExists(fullPath)) {

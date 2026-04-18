@@ -2,7 +2,7 @@
 
 ## Overview
 
-Build a command-line AI coding agent using Effect's AI and CLI modules that can autonomously edit code, run shell commands, and search codebases. Compatible with ralph-loop system (ralph-auto.sh) via `--print` and `--output-format stream-json` flags.
+Build a command-line AI coding agent using Effect's AI and CLI modules (`effect/Unstable/Cli`) that can autonomously edit code, run shell commands, and search codebases. Compatible with ralph-loop system (ralph-auto.sh) via `--print` and `--output-format stream-json` flags. The CLI must use `@repos/effect-smol/packages/effect/src/unstable/cli/` (imported as `effect/Unstable/Cli`) for all CLI construction.
 
 ## Background
 
@@ -27,7 +27,7 @@ The ralph-auto.sh script currently uses `claude --dangerously-skip-permissions -
 ## Tasks
 
 - [ ] **Task 1**: Project setup, config schema+loader, session persistence, output formatters, and base CLI (with vitest integration tests)
-- [ ] **Task 2**: AI provider layer construction with OpenAI-compat support (with vitest integration tests)
+- [x] **Task 2**: AI provider layer construction with OpenAI-compat support (with vitest integration tests)
 - [ ] **Task 3**: Tool definitions and toolkit (all 7 tools with vitest integration tests)
 - [ ] **Task 4**: Agent loop with tool-call resolution, approval flow, and session auto-save (with vitest integration tests)
 - [ ] **Task 5**: Output formatters and final CLI wiring (with vitest integration tests)
@@ -139,26 +139,27 @@ The ralph-auto.sh script currently uses `claude --dangerously-skip-permissions -
    - Stream-json formatter: LDJSON (one JSON object per line, matches Claude Code format)
    - `createFormatter(format: "text" | "stream-json"): Formatter` - formatter interface has `format(event: OutputEvent): Effect<void>`
 
-6. Create `src/index.ts` with Effect CLI command:
-   - Main command `prodigy` with flags:
-     - `--prompt <text>` (optional, can use stdin instead)
-     - `--print` (non-interactive mode)
-     - `--output-format text|stream-json` (default: text)
-     - `--session <id>` (resume session)
-     - `--model <name>` (override model)
-     - `--max-turns <n>` (override max turns)
-     - `--approval-mode none|dangerous|all` (override approval mode)
-     - `--system-prompt <text>` (override system prompt)
-     - `--config <path>` (config file path)
-   - Subcommands:
-     - `session list` - list sessions
-     - `session delete <id>` - delete a session
-     - `config show` - print current config (mask API keys)
-   - Handler stub for now (full integration in later tasks):
-     - Load config
-     - Create/load session
-     - Provide platform layers (FileSystem, Path, ChildProcessSpawner, HttpClient, IdGenerator, Terminal)
-   - Default system prompt: `"You are a coding assistant. You have access to tools to read, write, edit files, run shell commands, search code, and fetch web content. Be concise and helpful."`
+6. Create `src/index.ts` with Effect CLI command using `effect/Unstable/Cli`:
+    - Import from `effect/Unstable/Cli` (not `@effect/cli`)
+    - Main command `prodigy` with flags:
+      - `--prompt <text>` (optional, can use stdin instead)
+      - `--print` (non-interactive mode)
+      - `--output-format text|stream-json` (default: text)
+      - `--session <id>` (resume session)
+      - `--model <name>` (override model)
+      - `--max-turns <n>` (override max turns)
+      - `--approval-mode none|dangerous|all` (override approval mode)
+      - `--system-prompt <text>` (override system prompt)
+      - `--config <path>` (config file path)
+    - Subcommands:
+      - `session list` - list sessions
+      - `session delete <id>` - delete a session
+      - `config show` - print current config (mask API keys)
+    - Handler stub for now (full integration in later tasks):
+      - Load config
+      - Create/load session
+      - Provide platform layers (FileSystem, Path, ChildProcessSpawner, HttpClient, IdGenerator, Terminal)
+    - Default system prompt: `"You are a coding assistant. You have access to tools to read, write, edit files, run shell commands, search code, and fetch web content. Be concise and helpful."`
 
 7. **Vitest integration tests for Task 1:**
 
@@ -190,7 +191,7 @@ The ralph-auto.sh script currently uses `claude --dangerously-skip-permissions -
 
 **Files to create:**
 - `src/provider.ts` - Provider layer builder
-- `tests/provider.test.ts` - Provider layer tests
+- `src/provider.test.ts` - Provider layer tests (note: vitest config includes src/**/*.test.ts)
 
 **Steps:**
 

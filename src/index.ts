@@ -129,7 +129,7 @@ const parseArgs = (argv: string[]): { command: string; args: Record<string, unkn
       args.configPath = argv[++i]
     } else if (arg === "--help" || arg === "-h") {
       printUsage()
-      process.exit(0)
+      globalThis.process.exit(0)
     }
   }
 
@@ -145,29 +145,29 @@ const main = (argv: string[]): void => {
       listSessionsCommand()
     } else if (subcommand === "delete") {
       const id = argv[4]
-      if (!id) {
-        printSessionUsage()
-        process.exit(1)
-      }
-      deleteSessionCommand(id)
-    } else {
+    if (!id) {
       printSessionUsage()
-      process.exit(1)
+      globalThis.process.exit(1)
     }
+    deleteSessionCommand(id)
+  } else {
+    printSessionUsage()
+    globalThis.process.exit(1)
+  }
   } else if (command === "config") {
     const subcommand = argv[3]
     if (subcommand === "show") {
       configShowCommand()
     } else {
       printConfigUsage()
-      process.exit(1)
+      globalThis.process.exit(1)
     }
   } else if (command === "main" || !command) {
     mainCommand(args as Parameters<typeof mainCommand>[0])
   } else {
     printUsage()
-    process.exit(1)
+    globalThis.process.exit(1)
   }
 }
 
-main(process.argv)
+main(Bun.argv)

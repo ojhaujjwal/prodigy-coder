@@ -10,6 +10,7 @@ import importExtensions from "./rules/import-extensions.ts"
 import noDisableValidation from "./rules/no-disable-validation.ts"
 import noVoidExpression from "./rules/no-void-expression.ts"
 import noNodeImports from "./rules/no-node-imports.ts"
+import noProcess from "./rules/no-process.ts"
 
 export default {
   meta: { name: "prodigy" },
@@ -25,6 +26,7 @@ export default {
     "import-extensions": importExtensions,
     "no-disable-validation": noDisableValidation,
     "no-void-expression": noVoidExpression,
-    "no-node-imports": noNodeImports
+    "no-node-imports": noNodeImports,
+    "no-process": noProcess
   }
 }

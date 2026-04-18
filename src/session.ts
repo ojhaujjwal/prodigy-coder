@@ -74,7 +74,7 @@ export const createSession = (systemPrompt?: string): Session => {
 }
 
 export const saveSession = (session: Session): void => {
-  const filePath = `${process.cwd()}/${SESSION_DIR}/${session.id}.json`
+  const filePath = `${Bun.env.PWD}/${SESSION_DIR}/${session.id}.json`
   const updated = { ...session, updatedAt: new Date() }
   const encoded = Schema.encodeSync(SessionSchema)(updated)
   const json = JSON.stringify(encoded, null, 2)
@@ -82,7 +82,7 @@ export const saveSession = (session: Session): void => {
 }
 
 export const loadSession = (id: string): Session => {
-  const filePath = `${process.cwd()}/${SESSION_DIR}/${id}.json`
+  const filePath = `${Bun.env.PWD}/${SESSION_DIR}/${id}.json`
   const content = readFileSync(filePath)
   const parsed = JSON.parse(content) as unknown
   return Schema.decodeUnknownSync(SessionSchema)(parsed)
@@ -115,7 +115,7 @@ export const listSessions = (): ReadonlyArray<{ id: string; createdAt: Date; upd
 }
 
 export const deleteSession = (id: string): void => {
-  const filePath = `${process.cwd()}/${SESSION_DIR}/${id}.json`
+  const filePath = `${Bun.env.PWD}/${SESSION_DIR}/${id}.json`
   if (fileExists(filePath)) {
     const proc = Bun.spawnSync(["rm", filePath])
     if (proc.exitCode !== 0) {
