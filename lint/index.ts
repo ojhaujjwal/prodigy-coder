@@ -9,6 +9,7 @@ import preferOptionFromNullable from "./rules/prefer-option-from-nullable.ts"
 import importExtensions from "./rules/import-extensions.ts"
 import noDisableValidation from "./rules/no-disable-validation.ts"
 import noVoidExpression from "./rules/no-void-expression.ts"
+import noNodeImports from "./rules/no-node-imports.ts"
 
 export default {
   meta: { name: "prodigy" },
@@ -23,6 +24,7 @@ export default {
     "prefer-option-from-nullable": preferOptionFromNullable,
     "import-extensions": importExtensions,
     "no-disable-validation": noDisableValidation,
-    "no-void-expression": noVoidExpression
+    "no-void-expression": noVoidExpression,
+    "no-node-imports": noNodeImports
   }
 }

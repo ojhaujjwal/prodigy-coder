@@ -1,7 +1,11 @@
-import * as fs from "node:fs"
 import { loadConfig, maskConfig, type Config } from "./config.ts"
 import { createSession, loadSession, listSessions, deleteSession, type Session } from "./session.ts"
 import { createFormatter, type OutputEvent } from "./output.ts"
+
+const readStdinSync = (): string => {
+  const result = Bun.spawnSync(["cat", "/dev/stdin"])
+  return new TextDecoder().decode(result.stdout)
+}
 
 const runAgent = (
   prompt: string,
@@ -51,7 +55,7 @@ const mainCommand = (args: {
 
   let prompt = args.prompt
   if (!prompt) {
-    prompt = fs.readFileSync("/dev/stdin", "utf-8")
+    prompt = readStdinSync()
   }
 
   const format = args.outputFormat ?? "text"

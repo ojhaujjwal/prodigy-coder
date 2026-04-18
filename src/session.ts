@@ -1,6 +1,4 @@
 import { Schema } from "effect"
-import * as fs from "node:fs"
-import * as path from "node:path"
 
 export const Message = Schema.Struct({
   role: Schema.Literals(["system", "user", "assistant"]),
@@ -18,10 +16,46 @@ export type Session = typeof SessionSchema.Type
 
 const SESSION_DIR = ".prodigy-coder/sessions"
 
-export const createSession = (systemPrompt?: string): Session => {
-  if (!fs.existsSync(SESSION_DIR)) {
-    fs.mkdirSync(SESSION_DIR, { recursive: true })
+const dirExists = (path: string): boolean => {
+  const result = Bun.spawnSync(["test", "-d", path])
+  return result.exitCode === 0
+}
+
+const fileExists = (path: string): boolean => {
+  const result = Bun.spawnSync(["test", "-f", path])
+  return result.exitCode === 0
+}
+
+const readFileSync = (path: string): string => {
+  const result = Bun.spawnSync(["cat", path])
+  return new TextDecoder().decode(result.stdout)
+}
+
+const writeFileSync = (path: string, content: string): void => {
+  Bun.write(path, content)
+}
+
+const listJsonFilesSync = (dir: string): string[] => {
+  const result = Bun.spawnSync(["find", dir, "-name", "*.json", "-type", "f"])
+  if (result.exitCode !== 0) {
+    return []
   }
+  const output = new TextDecoder().decode(result.stdout).trim()
+  if (!output) return []
+  return output.split("\n").filter((f: string) => f.endsWith(".json"))
+}
+
+const ensureSessionDirSync = (): void => {
+  if (!dirExists(SESSION_DIR)) {
+    const proc = Bun.spawnSync(["mkdir", "-p", SESSION_DIR])
+    if (proc.exitCode !== 0) {
+      throw new Error(`Failed to create session directory: ${SESSION_DIR}`)
+    }
+  }
+}
+
+export const createSession = (systemPrompt?: string): Session => {
+  ensureSessionDirSync()
 
   const id = crypto.randomUUID()
   const now = new Date()
@@ -40,38 +74,30 @@ export const createSession = (systemPrompt?: string): Session => {
 }
 
 export const saveSession = (session: Session): void => {
-  const filePath = path.join(process.cwd(), SESSION_DIR, `${session.id}.json`)
+  const filePath = `${process.cwd()}/${SESSION_DIR}/${session.id}.json`
   const updated = { ...session, updatedAt: new Date() }
   const encoded = Schema.encodeSync(SessionSchema)(updated)
   const json = JSON.stringify(encoded, null, 2)
-  fs.writeFileSync(filePath, json, "utf-8")
+  writeFileSync(filePath, json)
 }
 
 export const loadSession = (id: string): Session => {
-  const filePath = path.join(process.cwd(), SESSION_DIR, `${id}.json`)
-  const content = fs.readFileSync(filePath, "utf-8")
-  const parsed = JSON.parse(content)
+  const filePath = `${process.cwd()}/${SESSION_DIR}/${id}.json`
+  const content = readFileSync(filePath)
+  const parsed = JSON.parse(content) as unknown
   return Schema.decodeUnknownSync(SessionSchema)(parsed)
 }
 
 export const listSessions = (): ReadonlyArray<{ id: string; createdAt: Date; updatedAt: Date }> => {
-  if (!fs.existsSync(SESSION_DIR)) {
-    fs.mkdirSync(SESSION_DIR, { recursive: true })
-  }
+  ensureSessionDirSync()
 
-  const dir = path.join(process.cwd(), SESSION_DIR)
-  let entries: fs.Dirent[] = []
-  try {
-    entries = fs.readdirSync(dir, { withFileTypes: true })
-  } catch {
-    return []
-  }
+  const entries = listJsonFilesSync(SESSION_DIR)
 
   const sessions: { id: string; createdAt: Date; updatedAt: Date }[] = []
 
   for (const entry of entries) {
-    if (entry.isFile() && entry.name.endsWith(".json")) {
-      const id = entry.name.replace(".json", "")
+    if (entry.endsWith(".json")) {
+      const id = entry.replace(`${SESSION_DIR}/`, "").replace(".json", "")
       try {
         const session = loadSession(id)
         sessions.push({
@@ -89,8 +115,11 @@ export const listSessions = (): ReadonlyArray<{ id: string; createdAt: Date; upd
 }
 
 export const deleteSession = (id: string): void => {
-  const filePath = path.join(process.cwd(), SESSION_DIR, `${id}.json`)
-  if (fs.existsSync(filePath)) {
-    fs.unlinkSync(filePath)
+  const filePath = `${process.cwd()}/${SESSION_DIR}/${id}.json`
+  if (fileExists(filePath)) {
+    const proc = Bun.spawnSync(["rm", filePath])
+    if (proc.exitCode !== 0) {
+      throw new Error(`Failed to delete session: ${id}`)
+    }
   }
 }

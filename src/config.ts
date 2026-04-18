@@ -1,6 +1,4 @@
 import { Schema } from "effect"
-import * as fs from "node:fs"
-import * as path from "node:path"
 
 export const ProviderType = Schema.Literals(["openai-compat", "openai", "anthropic", "openrouter"])
 export type ProviderType = typeof ProviderType.Type
@@ -59,7 +57,31 @@ const defaultConfig = (apiKey?: string, model?: string): ConfigData => ({
 
 const HOME_CONFIG_PATHS = [".prodigy-coder.json", ".config/prodigy-coder.json"]
 
-export const loadConfig = (explicitPath?: string): ConfigData => {
+const fileExists = (path: string): boolean => {
+  const result = Bun.spawnSync(["test", "-f", path])
+  return result.exitCode === 0
+}
+
+const readFileSync = (path: string): string => {
+  const result = Bun.spawnSync(["cat", path])
+  return new TextDecoder().decode(result.stdout)
+}
+
+const findConfigFileSync = (): string | undefined => {
+  const home = process.env.HOME ?? "/"
+  for (const configPath of HOME_CONFIG_PATHS) {
+    const fullPath = `${home}/${configPath}`
+    if (fileExists(fullPath)) {
+      return fullPath
+    }
+  }
+  if (fileExists(".prodigy-coder.json")) {
+    return ".prodigy-coder.json"
+  }
+  return undefined
+}
+
+export const loadConfig = (explicitPath?: string): Config => {
   const apiKey =
     loadEnvVar("PRODIGY_CODER_API_KEY") ??
     loadEnvVar("OPENAI_API_KEY") ??
@@ -73,8 +95,8 @@ export const loadConfig = (explicitPath?: string): ConfigData => {
 
   const configPath = explicitPath ?? findConfigFileSync()
   if (configPath) {
-    const content = fs.readFileSync(configPath, "utf-8")
-    const parsed = JSON.parse(content)
+    const content = readFileSync(configPath)
+    const parsed = JSON.parse(content) as unknown
     const decoded = Schema.decodeUnknownSync(ConfigSchema)(parsed)
     loadedConfig = envOverrides(decoded, apiKey, baseUrl, model, approvalMode)
   } else {
@@ -82,20 +104,6 @@ export const loadConfig = (explicitPath?: string): ConfigData => {
   }
 
   return Schema.decodeUnknownSync(ConfigSchema)(loadedConfig) as Config
-}
-
-function findConfigFileSync(): string | undefined {
-  const home = process.env.HOME ?? "/"
-  for (const configPath of HOME_CONFIG_PATHS) {
-    const fullPath = path.join(home, configPath)
-    if (fs.existsSync(fullPath)) {
-      return fullPath
-    }
-  }
-  if (fs.existsSync(".prodigy-coder.json")) {
-    return ".prodigy-coder.json"
-  }
-  return undefined
 }
 
 export const maskConfig = (config: ConfigData): ConfigData => ({
