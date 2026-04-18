@@ -245,6 +245,26 @@ $lint_output
     fi
 
     echo ""
+    echo "3. Vitest..."
+    echo "------------"
+    local vitest_output
+    if vitest_output=$(bun run test 2>&1); then
+        echo -e "${GREEN}Vitest passed${NC}"
+    else
+        echo -e "${RED}Vitest failed${NC}"
+        ci_failed=1
+        error_output+="## Vitest Failed
+
+Command: \`bun run test\`
+
+\`\`\`
+$vitest_output
+\`\`\`
+
+"
+    fi
+
+    echo ""
     echo "=========================================="
     if [ $ci_failed -eq 0 ]; then
         echo -e "${GREEN}All CI checks passed!${NC}"
