@@ -1,4 +1,4 @@
-import { Schema } from "effect"
+import { Clock, Context, Effect, FileSystem, Layer, Option, Schema } from "effect"
 
 export const Message = Schema.Struct({
   role: Schema.Literals(["system", "user", "assistant"]),
@@ -8,7 +8,7 @@ export type Message = typeof Message.Type
 
 export const SessionSchema = Schema.Struct({
   id: Schema.String,
-  messages: Schema.Array(Message),
+  messages: Schema.mutable(Schema.Array(Message)),
   createdAt: Schema.Date,
   updatedAt: Schema.Date,
 })
@@ -16,110 +16,111 @@ export type Session = typeof SessionSchema.Type
 
 const SESSION_DIR = ".prodigy-coder/sessions"
 
-const dirExists = (path: string): boolean => {
-  const result = Bun.spawnSync(["test", "-d", path])
-  return result.exitCode === 0
-}
-
-const fileExists = (path: string): boolean => {
-  const result = Bun.spawnSync(["test", "-f", path])
-  return result.exitCode === 0
-}
-
-const readFileSync = (path: string): string => {
-  const result = Bun.spawnSync(["cat", path])
-  return new TextDecoder().decode(result.stdout)
-}
-
-const writeFileSync = (path: string, content: string): void => {
-  Bun.write(path, content)
-}
-
-const listJsonFilesSync = (dir: string): string[] => {
-  const result = Bun.spawnSync(["find", dir, "-name", "*.json", "-type", "f"])
-  if (result.exitCode !== 0) {
-    return []
+class SessionRepo extends Context.Service<
+  SessionRepo,
+  {
+    readonly create: (systemPrompt?: string) => Effect.Effect<Session, never>
+    readonly save: (session: Session) => Effect.Effect<void, unknown>
+    readonly load: (id: string) => Effect.Effect<Session, unknown>
+    readonly list: () => Effect.Effect<ReadonlyArray<{ id: string; createdAt: Date; updatedAt: Date }>, unknown>
+    readonly delete: (id: string) => Effect.Effect<void, unknown>
   }
-  const output = new TextDecoder().decode(result.stdout).trim()
-  if (!output) return []
-  return output.split("\n").filter((f: string) => f.endsWith(".json"))
-}
+>()("SessionRepo") {
+  static readonly layer = Layer.effect(
+    SessionRepo,
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem
+      const clock = yield* Clock.Clock
 
-const ensureSessionDirSync = (): void => {
-  if (!dirExists(SESSION_DIR)) {
-    const proc = Bun.spawnSync(["mkdir", "-p", SESSION_DIR])
-    if (proc.exitCode !== 0) {
-      throw new Error(`Failed to create session directory: ${SESSION_DIR}`)
-    }
-  }
-}
+      const ensureDir = Effect.gen(function* () {
+        const exists = yield* fs.exists(SESSION_DIR)
+        if (!exists) {
+          yield* fs.makeDirectory(SESSION_DIR, { recursive: true })
+        }
+      })
 
-export const createSession = (systemPrompt?: string): Session => {
-  ensureSessionDirSync()
+      const sessionPath = (id: string) => `${SESSION_DIR}/${id}.json`
 
-  const id = crypto.randomUUID()
-  const now = new Date()
+      const create = (systemPrompt?: string) =>
+        Effect.gen(function* () {
+          yield* ensureDir.pipe(Effect.orDie)
+          const id = crypto.randomUUID()
+          const now = yield* clock.currentTimeMillis
+          const nowDate = new Date(now)
 
-  const messages: Message[] = []
-  if (systemPrompt) {
-    messages.push({ role: "system", content: systemPrompt })
-  }
+          const messages: Message[] = systemPrompt
+            ? [{ role: "system", content: systemPrompt }]
+            : []
 
-  return {
-    id,
-    messages,
-    createdAt: now,
-    updatedAt: now,
-  }
-}
-
-export const saveSession = (session: Session): void => {
-  const filePath = `${Bun.env.PWD}/${SESSION_DIR}/${session.id}.json`
-  const updated = { ...session, updatedAt: new Date() }
-  const encoded = Schema.encodeSync(SessionSchema)(updated)
-  const json = JSON.stringify(encoded, null, 2)
-  writeFileSync(filePath, json)
-}
-
-export const loadSession = (id: string): Session => {
-  const filePath = `${Bun.env.PWD}/${SESSION_DIR}/${id}.json`
-  const content = readFileSync(filePath)
-  const parsed = JSON.parse(content) as unknown
-  return Schema.decodeUnknownSync(SessionSchema)(parsed)
-}
-
-export const listSessions = (): ReadonlyArray<{ id: string; createdAt: Date; updatedAt: Date }> => {
-  ensureSessionDirSync()
-
-  const entries = listJsonFilesSync(SESSION_DIR)
-
-  const sessions: { id: string; createdAt: Date; updatedAt: Date }[] = []
-
-  for (const entry of entries) {
-    if (entry.endsWith(".json")) {
-      const id = entry.replace(`${SESSION_DIR}/`, "").replace(".json", "")
-      try {
-        const session = loadSession(id)
-        sessions.push({
-          id: session.id,
-          createdAt: session.createdAt,
-          updatedAt: session.updatedAt,
+          return {
+            id,
+            messages,
+            createdAt: nowDate,
+            updatedAt: nowDate,
+          }
         })
-      } catch {
-        // skip invalid session files
-      }
-    }
-  }
 
-  return sessions.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+      const save = Effect.fnUntraced(function* (session: Session) {
+        const now = yield* clock.currentTimeMillis
+        const updated = { ...session, updatedAt: new Date(now) }
+        const json = yield* Schema.encodeEffect(SessionSchema)(updated)
+        yield* fs.writeFileString(sessionPath(session.id), JSON.stringify(json, null, 2))
+      })
+
+      const load = Effect.fnUntraced(function* (id: string) {
+        const content = yield* fs.readFileString(sessionPath(id))
+        const parsed = JSON.parse(content) as unknown
+        return yield* Schema.decodeUnknownEffect(SessionSchema)(parsed)
+      })
+
+      const list = Effect.fnUntraced(function* () {
+        yield* ensureDir
+        const entries = yield* fs.readDirectory(SESSION_DIR)
+        const jsonFiles = entries.filter((f) => f.endsWith(".json"))
+
+        const sessions: { id: string; createdAt: Date; updatedAt: Date }[] = []
+
+        for (const entry of jsonFiles) {
+          const id = entry.replace(".json", "")
+          const result = yield* load(id).pipe(Effect.option)
+          if (Option.isSome(result)) {
+            sessions.push({
+              id: result.value.id,
+              createdAt: result.value.createdAt,
+              updatedAt: result.value.updatedAt,
+            })
+          }
+        }
+
+        return sessions.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+      })
+
+      const deleteSession = Effect.fnUntraced(function* (id: string) {
+        const path = sessionPath(id)
+        const exists = yield* fs.exists(path)
+        if (exists) {
+          yield* fs.remove(path)
+        }
+      })
+
+      return { create, save, load, list, delete: deleteSession }
+    })
+  )
 }
 
-export const deleteSession = (id: string): void => {
-  const filePath = `${Bun.env.PWD}/${SESSION_DIR}/${id}.json`
-  if (fileExists(filePath)) {
-    const proc = Bun.spawnSync(["rm", filePath])
-    if (proc.exitCode !== 0) {
-      throw new Error(`Failed to delete session: ${id}`)
-    }
-  }
-}
+export const createSession = (systemPrompt?: string) =>
+  Effect.service(SessionRepo).pipe(Effect.flatMap((repo) => repo.create(systemPrompt)))
+
+export const saveSession = (session: Session) =>
+  Effect.service(SessionRepo).pipe(Effect.flatMap((repo) => repo.save(session)))
+
+export const loadSession = (id: string) =>
+  Effect.service(SessionRepo).pipe(Effect.flatMap((repo) => repo.load(id)))
+
+export const listSessions = () =>
+  Effect.service(SessionRepo).pipe(Effect.flatMap((repo) => repo.list()))
+
+export const deleteSession = (id: string) =>
+  Effect.service(SessionRepo).pipe(Effect.flatMap((repo) => repo.delete(id)))
+
+export { SessionRepo }

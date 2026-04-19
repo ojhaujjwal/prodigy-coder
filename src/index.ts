@@ -1,173 +1,166 @@
-import { loadConfig, maskConfig, type Config } from "./config.ts"
-import { createSession, loadSession, listSessions, deleteSession, type Session } from "./session.ts"
+import { BunRuntime, BunServices } from "@effect/platform-bun"
+import { Argument, Command, Flag } from "effect/unstable/cli"
+import { Console, Effect, Option } from "effect"
+import { AppConfig, loadConfig, maskConfig } from "./config.ts"
+import { SessionRepo, createSession, loadSession, saveSession } from "./session.ts"
 import { createFormatter, type OutputEvent } from "./output.ts"
-
-const readStdinSync = (): string => {
-  const result = Bun.spawnSync(["cat", "/dev/stdin"])
-  return new TextDecoder().decode(result.stdout)
-}
 
 const runAgent = (
   prompt: string,
-  session: Session,
-  config: Config,
+  sessionId: Option.Option<string>,
   format: "text" | "stream-json"
-): void => {
-  const formatter = createFormatter(format)
-  formatter({ type: "text-delta", delta: `Processing: ${prompt}\n` } as OutputEvent)
-  formatter({ type: "finish", text: "Agent completed (stub)" } as OutputEvent)
-}
+): Effect.Effect<void, unknown, AppConfig | SessionRepo> =>
+  Effect.gen(function* () {
+    const config = yield* AppConfig
+    const formatter = createFormatter(format)
 
-const mainCommand = (args: {
-  prompt?: string
-  print?: boolean
-  outputFormat: "text" | "stream-json"
-  session?: string
-  model?: string
-  maxTurns?: number
-  approvalMode?: "none" | "dangerous" | "all"
-  systemPrompt?: string
-  configPath?: string
-}): void => {
-  let config = loadConfig(args.configPath)
+    const session = yield* Option.match(sessionId, {
+      onNone: () => createSession(config.systemPrompt),
+      onSome: (id) => loadSession(id),
+    })
 
-  if (args.model) {
-    config = { ...config, provider: { ...config.provider, model: args.model } }
-  }
-  if (args.maxTurns) {
-    config = { ...config, maxTurns: args.maxTurns }
-  }
-  if (args.approvalMode) {
-    config = { ...config, approvalMode: args.approvalMode }
-  }
-  if (args.systemPrompt) {
-    config = { ...config, systemPrompt: args.systemPrompt }
-  }
+    yield* formatter({ type: "text-delta", delta: `Processing: ${prompt}\n` } as OutputEvent)
+    yield* formatter({ type: "finish", text: "Agent completed (stub)" } as OutputEvent)
 
-  const sessionId = args.session
-  let session: Session
+    yield* saveSession(session)
+  })
 
-  if (sessionId) {
-    session = loadSession(sessionId)
-  } else {
-    session = createSession(config.systemPrompt)
-  }
+const promptArg = Argument.string("prompt").pipe(
+  Argument.optional,
+  Argument.withDescription("The prompt to process")
+)
 
-  let prompt = args.prompt
-  if (!prompt) {
-    prompt = readStdinSync()
-  }
+const printFlag = Flag.boolean("print").pipe(
+  Flag.withAlias("p"),
+  Flag.withDescription("Print output")
+)
 
-  const format = args.outputFormat ?? "text"
-  runAgent(prompt, session, config, format)
-}
+const outputFormatFlag = Flag.choice("output-format", ["text", "stream-json"]).pipe(
+  Flag.withAlias("f"),
+  Flag.withDefault("text"),
+  Flag.withDescription("Output format")
+)
 
-const listSessionsCommand = (): void => {
-  const sessions = listSessions()
-  if (sessions.length === 0) {
-    console.log("No sessions found")
-  } else {
-    for (const session of sessions) {
-      console.log(`${session.id} | Created: ${session.createdAt.toISOString()} | Updated: ${session.updatedAt.toISOString()}`)
-    }
-  }
-}
+const sessionFlag = Flag.string("session").pipe(
+  Flag.withAlias("s"),
+  Flag.withDescription("Session ID to load")
+)
 
-const deleteSessionCommand = (id: string): void => {
-  deleteSession(id)
-  console.log(`Deleted session ${id}`)
-}
+const modelFlag = Flag.string("model").pipe(
+  Flag.withAlias("m"),
+  Flag.withDescription("Model name")
+)
 
-const configShowCommand = (): void => {
-  const config = loadConfig()
-  const masked = maskConfig(config)
-  console.log(JSON.stringify(masked, null, 2))
-}
+const maxTurnsFlag = Flag.integer("max-turns").pipe(
+  Flag.withAlias("t"),
+  Flag.withDescription("Maximum number of turns")
+)
 
-const printUsage = (): void => {
-  console.log("Usage: prodigy [--prompt <text>] [--print] [--output-format text|stream-json]")
-  console.log("       [--session <id>] [--model <name>] [--max-turns <n>] [--approval-mode none|dangerous|all]")
-  console.log("       [--system-prompt <text>] [--config <path>]")
-  console.log("")
-  console.log("Subcommands:")
-  console.log("  session list                   - List all sessions")
-  console.log("  session delete <id>           - Delete a session")
-  console.log("  config show                   - Show current config (masked)")
-}
+const approvalModeFlag = Flag.choice("approval-mode", ["none", "dangerous", "all"]).pipe(
+  Flag.withAlias("a"),
+  Flag.withDescription("Approval mode")
+)
 
-const printSessionUsage = (): void => {
-  console.log("Usage: prodigy session [list|delete <id>]")
-}
+const systemPromptFlag = Flag.string("system-prompt").pipe(
+  Flag.withDescription("System prompt")
+)
 
-const printConfigUsage = (): void => {
-  console.log("Usage: prodigy config show")
-}
+const configFlag = Flag.string("config").pipe(
+  Flag.withDescription("Config file path")
+)
 
-const parseArgs = (argv: string[]): { command: string; args: Record<string, unknown> } => {
-  const command = argv[2] || "main"
-  const args: Record<string, unknown> = { outputFormat: "text" }
+const mainCommand = Command.make(
+  "prodigy",
+  {
+    prompt: promptArg,
+    print: printFlag,
+    outputFormat: outputFormatFlag,
+    session: sessionFlag,
+    model: modelFlag,
+    maxTurns: maxTurnsFlag,
+    approvalMode: approvalModeFlag,
+    systemPrompt: systemPromptFlag,
+    config: configFlag,
+  },
+  ({ prompt, outputFormat, session, model: _model, maxTurns: _maxTurns, approvalMode: _approvalMode, systemPrompt: _systemPrompt, config }) =>
+    Effect.gen(function* () {
+      const sessionId = session ? Option.some(session) : Option.none<string>()
 
-  for (let i = 3; i < argv.length; i++) {
-    const arg = argv[i]
-    if (arg === "--prompt" || arg === "-p") {
-      args.prompt = argv[++i]
-    } else if (arg === "--print") {
-      args.print = true
-    } else if (arg === "--output-format" || arg === "-f") {
-      args.outputFormat = argv[++i] as "text" | "stream-json"
-    } else if (arg === "--session" || arg === "-s") {
-      args.session = argv[++i]
-    } else if (arg === "--model" || arg === "-m") {
-      args.model = argv[++i]
-    } else if (arg === "--max-turns" || arg === "-t") {
-      args.maxTurns = parseInt(argv[++i], 10)
-    } else if (arg === "--approval-mode" || arg === "-a") {
-      args.approvalMode = argv[++i] as "none" | "dangerous" | "all"
-    } else if (arg === "--system-prompt") {
-      args.systemPrompt = argv[++i]
-    } else if (arg === "--config") {
-      args.configPath = argv[++i]
-    } else if (arg === "--help" || arg === "-h") {
-      printUsage()
-      globalThis.process.exit(0)
-    }
-  }
+      const promptText = Option.getOrElse(prompt, () => "")
+      if (!promptText) {
+        yield* Console.log("No prompt provided. Use --prompt or pipe input.")
+        return
+      }
 
-  return { command, args }
-}
+      const format = outputFormat as "text" | "stream-json"
+      yield* runAgent(promptText, sessionId, format)
+    }).pipe(
+      Effect.provide(config ? loadConfig(config) : loadConfig()),
+      Effect.provide(SessionRepo.layer)
+    )
+).pipe(Command.withDescription("Run the AI coder"))
 
-const main = (argv: string[]): void => {
-  const { command, args } = parseArgs(argv)
+const listSessionsCommand = Command.make(
+  "list",
+  {},
+  () =>
+    Effect.gen(function* () {
+      const repo = yield* SessionRepo
+      const sessions = yield* repo.list()
 
-  if (command === "session") {
-    const subcommand = argv[3]
-    if (subcommand === "list") {
-      listSessionsCommand()
-    } else if (subcommand === "delete") {
-      const id = argv[4]
-    if (!id) {
-      printSessionUsage()
-      globalThis.process.exit(1)
-    }
-    deleteSessionCommand(id)
-  } else {
-    printSessionUsage()
-    globalThis.process.exit(1)
-  }
-  } else if (command === "config") {
-    const subcommand = argv[3]
-    if (subcommand === "show") {
-      configShowCommand()
-    } else {
-      printConfigUsage()
-      globalThis.process.exit(1)
-    }
-  } else if (command === "main" || !command) {
-    mainCommand(args as Parameters<typeof mainCommand>[0])
-  } else {
-    printUsage()
-    globalThis.process.exit(1)
-  }
-}
+      if (sessions.length === 0) {
+        yield* Console.log("No sessions found")
+      } else {
+        for (const session of sessions) {
+          yield* Console.log(`${session.id} | Created: ${session.createdAt.toISOString()} | Updated: ${session.updatedAt.toISOString()}`)
+        }
+      }
+    }).pipe(Effect.provide(SessionRepo.layer))
+).pipe(Command.withDescription("List all sessions"))
 
-main(Bun.argv)
+const deleteSessionArg = Argument.string("id").pipe(
+  Argument.withDescription("Session ID to delete")
+)
+
+const deleteSessionCommand = Command.make(
+  "delete",
+  { id: deleteSessionArg },
+  ({ id }) =>
+    Effect.gen(function* () {
+      const repo = yield* SessionRepo
+      yield* repo.delete(id)
+      yield* Console.log(`Deleted session ${id}`)
+    }).pipe(Effect.provide(SessionRepo.layer))
+).pipe(Command.withDescription("Delete a session"))
+
+const sessionCommand = Command.make("session", {}).pipe(
+  Command.withSubcommands([listSessionsCommand, deleteSessionCommand])
+).pipe(Command.withDescription("Manage sessions"))
+
+const configShowCommand = Command.make(
+  "show",
+  {},
+  () =>
+    Effect.gen(function* () {
+      const config = yield* AppConfig
+      const masked = maskConfig(config)
+      yield* Console.log(JSON.stringify(masked, null, 2))
+    }).pipe(Effect.provide(loadConfig()))
+).pipe(Command.withDescription("Show current config (masked)"))
+
+const configCommand = Command.make("config", {}).pipe(
+  Command.withSubcommands([configShowCommand])
+).pipe(Command.withDescription("Manage configuration"))
+
+const app = Command.make("prodigy", {}).pipe(
+  Command.withDescription("AI coding assistant"),
+  Command.withSubcommands([mainCommand, sessionCommand, configCommand])
+)
+
+const cli = Command.run(app, {
+  version: "0.0.1"
+}).pipe(
+  Effect.provide(BunServices.layer)
+)
+
+BunRuntime.runMain(cli)
