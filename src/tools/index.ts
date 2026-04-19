@@ -20,13 +20,13 @@ export const MyToolkit = Toolkit.make(
 export type MyToolkit = typeof MyToolkit
 
 export const MyToolkitLayer = MyToolkit.toLayer({
-  shell: shellHandler as any,
-  read: readHandler as any,
-  write: writeHandler as any,
-  edit: editHandler as any,
-  grep: grepHandler as any,
-  glob: globHandler as any,
-  webfetch: webfetchHandler as any,
+  shell: shellHandler,
+  read: readHandler,
+  write: writeHandler,
+  edit: editHandler,
+  grep: grepHandler,
+  glob: globHandler,
+  webfetch: webfetchHandler,
 })
 
 export { ShellTool, ReadTool, WriteTool, EditTool, GrepTool, GlobTool, WebFetchTool }

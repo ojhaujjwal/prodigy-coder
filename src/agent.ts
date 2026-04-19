@@ -1,5 +1,7 @@
 import * as AiError from "effect/unstable/ai/AiError"
 import * as LanguageModel from "effect/unstable/ai/LanguageModel"
+import * as Prompt from "effect/unstable/ai/Prompt"
+import * as Response from "effect/unstable/ai/Response"
 import { Effect, Layer, Stream } from "effect"
 import type { Session, Message } from "./session.ts"
 import type { ConfigData } from "./config.ts"
@@ -24,7 +26,7 @@ const executeTool = (
   return Effect.map(handler(params), (result) => ({ result, isError: false }))
 }
 
-const toolCallToOutputEvent = (part: any): OutputEvent => ({
+const toolCallToOutputEvent = (part: Response.ToolCallPart<string, unknown>): OutputEvent => ({
   type: "tool-call",
   id: part.id,
   name: part.name,
@@ -43,6 +45,16 @@ const toolResultToOutputEvent = (
   result,
   isError,
 })
+
+const messageToEncoded = (msg: Message): Prompt.MessageEncoded => {
+  if (msg.role === "system") {
+    return { role: "system", content: msg.content }
+  }
+  if (msg.role === "user") {
+    return { role: "user", content: [{ type: "text", text: msg.content }] }
+  }
+  return { role: "assistant", content: [{ type: "text", text: msg.content }] }
+}
 
 export const runAgent = (
   promptText: string,
@@ -67,16 +79,19 @@ export const runAgent = (
     while (!finished && turnCount < config.maxTurns) {
       turnCount++
 
+      const promptMessages: Prompt.MessageEncoded[] = messages.map(messageToEncoded)
+
       const llmStream = LanguageModel.streamText({
-        prompt: messages as any,
+        prompt: promptMessages,
         disableToolCallResolution: true,
-      } as any)
+      })
 
       yield* llmStream.pipe(
-        Stream.runForEach((part: any) => {
+        Stream.mapEffect((part: Response.AnyPart) => Effect.succeed(part)),
+        Stream.runForEach((part) => {
           switch (part.type) {
             case "text-delta":
-              outputEvents.push({ type: "text-delta", delta: part.text })
+              outputEvents.push({ type: "text-delta", delta: part.delta })
               return Effect.void
             case "tool-call": {
               outputEvents.push(toolCallToOutputEvent(part))
@@ -113,9 +128,9 @@ export const runAgent = (
             content: "",
           })
           messages.push({
-            role: "tool",
-            content: toolResult.result,
-          } as any)
+            role: "assistant",
+            content: `[tool result: ${toolResult.name}] ${toolResult.result}`,
+          })
         }
       }
     }

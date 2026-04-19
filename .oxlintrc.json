@@ -10,6 +10,7 @@
   ],
   "jsPlugins": ["./lint/index.ts"],
   "rules": {
+    "no-explicit-any": "error",
     "prodigy/no-effect-ignore": "error",
     "prodigy/no-effect-catchallcause": "error",
     "prodigy/no-effect-asvoid": "error",

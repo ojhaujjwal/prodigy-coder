@@ -7,6 +7,10 @@ import { globHandler } from "./glob.ts"
 
 const testLayer = bunServicesLayer
 
+const mockContext = {
+  preliminary: () => Effect.void,
+}
+
 describe("glob tool", () => {
   it("finds files matching *.txt pattern", () =>
     Effect.gen(function* () {
@@ -15,14 +19,14 @@ describe("glob tool", () => {
       yield* fs.writeFileString("/tmp/test-glob/file1.txt", "content1")
       yield* fs.writeFileString("/tmp/test-glob/file2.txt", "content2")
       yield* fs.writeFileString("/tmp/test-glob/file3.ts", "content3")
-      const result = yield* globHandler({ pattern: "*.txt", path: "/tmp/test-glob" })
+      const result = yield* globHandler({ pattern: "*.txt", path: "/tmp/test-glob" }, mockContext)
       assert.isTrue(result.length >= 2)
       assert.isTrue(result.every((f) => f.endsWith(".txt")))
     }).pipe(Effect.provide(testLayer)))
 
   it("returns empty array when no matches", () =>
     Effect.gen(function* () {
-      const result = yield* globHandler({ pattern: "*.xyz", path: "/tmp/test-glob-none" })
+      const result = yield* globHandler({ pattern: "*.xyz", path: "/tmp/test-glob-none" }, mockContext)
       assert.isArray(result)
     }).pipe(Effect.provide(testLayer)))
 })

@@ -1,7 +1,18 @@
 import { describe, it } from "@effect/vitest"
 import { assert } from "@effect/vitest"
-import { Layer } from "effect"
+import { Effect, Layer, Stream } from "effect"
+import * as LanguageModel from "effect/unstable/ai/LanguageModel"
+import * as Response from "effect/unstable/ai/Response"
+import * as AiError from "effect/unstable/ai/AiError"
 import { runAgent, type AgentConfig } from "../src/agent.ts"
+
+const mockLanguageModelLayer = Layer.effect(
+  LanguageModel.LanguageModel,
+  LanguageModel.make({
+    streamText: () => Stream.empty as Stream.Stream<Response.StreamPartEncoded, AiError.AiError>,
+    generateText: () => Effect.succeed([]),
+  })
+)
 
 describe("agent", () => {
   it("runAgent should have correct type signature", () => {
@@ -30,12 +41,7 @@ describe("agent", () => {
       handlers: {},
     }
 
-    const mockProviderLayer = Layer.succeed(
-      {} as any,
-      {}
-    )
-
-    const result = runAgent("test prompt", agentConfig, mockProviderLayer)
+    const result = runAgent("test prompt", agentConfig, mockLanguageModelLayer)
     assert.isDefined(result)
   })
 
@@ -64,12 +70,7 @@ describe("agent", () => {
       handlers: {},
     }
 
-    const mockProviderLayer = Layer.succeed(
-      {} as any,
-      {}
-    )
-
-    const result = runAgent("test prompt", agentConfig, mockProviderLayer)
+    const result = runAgent("test prompt", agentConfig, mockLanguageModelLayer)
     assert.isDefined(result)
   })
 })
