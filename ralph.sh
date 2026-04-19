@@ -408,7 +408,7 @@ run_iteration() {
     echo ""
 
     local agent_exit_code=0
-    if OPENCODE_PERMISSION='{"edit":{"*":"allow",".oxlintrc.json":"deny","lint/**":"deny"}}' opencode run -m "$MODEL" -- "$(cat "$prompt_file")" 2>&1 | tee "$output_file"; then
+    if OPENCODE_PERMISSION='{"edit":{"*":"allow",".oxlintrc.json":"deny","lint/**":"deny","tsconfig.json":"deny"}}' opencode run -m "$MODEL" -- "$(cat "$prompt_file")" 2>&1 | tee "$output_file"; then
         echo ""
         log "SUCCESS" "Agent completed iteration $iteration"
     else
