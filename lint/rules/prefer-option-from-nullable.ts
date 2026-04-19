@@ -1,6 +1,6 @@
-import type { CreateRule, ESTree, Visitor } from "oxlint"
+import { defineRule } from "@oxlint/plugins"
 
-const rule: CreateRule = {
+export default defineRule({
   meta: {
     type: "suggestion",
     docs: {
@@ -13,20 +13,36 @@ const rule: CreateRule = {
   },
   create(context) {
     return {
-      ConditionalExpression(node: ESTree.ConditionalExpression) {
+      ConditionalExpression(node) {
         const { test, consequent, alternate } = node
 
         if (test.type !== "BinaryExpression") return
         if (test.operator !== "!==" && test.operator !== "!=") return
 
         let testedName: string | null = null
-        if (test.left.type === "Identifier" && test.right.type === "Literal" && test.right.value === null) {
+        if (
+          test.left.type === "Identifier" &&
+          test.right.type === "Literal" &&
+          test.right.value === null
+        ) {
           testedName = test.left.name
-        } else if (test.right.type === "Identifier" && test.left.type === "Literal" && test.left.value === null) {
+        } else if (
+          test.right.type === "Identifier" &&
+          test.left.type === "Literal" &&
+          test.left.value === null
+        ) {
           testedName = test.right.name
-        } else if (test.left.type === "MemberExpression" && test.right.type === "Literal" && test.right.value === null) {
+        } else if (
+          test.left.type === "MemberExpression" &&
+          test.right.type === "Literal" &&
+          test.right.value === null
+        ) {
           testedName = context.sourceCode.getText(test.left)
-        } else if (test.right.type === "MemberExpression" && test.left.type === "Literal" && test.left.value === null) {
+        } else if (
+          test.right.type === "MemberExpression" &&
+          test.left.type === "Literal" &&
+          test.left.value === null
+        ) {
           testedName = context.sourceCode.getText(test.right)
         }
         if (!testedName) return
@@ -45,16 +61,16 @@ const rule: CreateRule = {
         const altCallee = alternate.callee
         const isOptionNone =
           (altCallee.type === "MemberExpression" &&
-           altCallee.object.type === "Identifier" &&
-           altCallee.object.name === "Option" &&
-           altCallee.property.type === "Identifier" &&
-           altCallee.property.name === "none") ||
+            altCallee.object.type === "Identifier" &&
+            altCallee.object.name === "Option" &&
+            altCallee.property.type === "Identifier" &&
+            altCallee.property.name === "none") ||
           (altCallee.type === "TSInstantiationExpression" &&
-           altCallee.expression.type === "MemberExpression" &&
-           altCallee.expression.object.type === "Identifier" &&
-           altCallee.expression.object.name === "Option" &&
-           altCallee.expression.property.type === "Identifier" &&
-           altCallee.expression.property.name === "none")
+            altCallee.expression.type === "MemberExpression" &&
+            altCallee.expression.object.type === "Identifier" &&
+            altCallee.expression.object.name === "Option" &&
+            altCallee.expression.property.type === "Identifier" &&
+            altCallee.expression.property.name === "none")
         if (!isOptionNone) return
 
         context.report({
@@ -63,8 +79,6 @@ const rule: CreateRule = {
           data: { name: testedName }
         })
       }
-    } as Visitor
+    }
   }
-}
-
-export default rule
+})

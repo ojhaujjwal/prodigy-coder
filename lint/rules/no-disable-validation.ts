@@ -1,6 +1,6 @@
-import type { CreateRule, ESTree, Visitor } from "oxlint"
+import { defineRule } from "@oxlint/plugins"
 
-const rule: CreateRule = {
+export default defineRule({
   meta: {
     type: "problem",
     docs: {
@@ -13,23 +13,21 @@ const rule: CreateRule = {
   },
   create(context) {
     return {
-      Property(node: ESTree.Property) {
-        if (
-          node.key &&
-          ((node.key.type === "Identifier" && node.key.name === "disableValidation") ||
-           (node.key.type === "Literal" && node.key.value === "disableValidation")) &&
-          node.value &&
-          node.value.type === "Literal" &&
-          node.value.value === true
-        ) {
+      Property(node) {
+        const key = node.key
+        const value = node.value
+        const keyIsDisableValidation =
+          (key.type === "Identifier" && key.name === "disableValidation") ||
+          (key.type === "Literal" && key.value === "disableValidation")
+        const valueIsTrue = value.type === "Literal" && value.value === true
+
+        if (keyIsDisableValidation && valueIsTrue) {
           context.report({
             node,
             messageId: "noDisableValidation"
           })
         }
       }
-    } as Visitor
+    }
   }
-}
-
-export default rule
+})

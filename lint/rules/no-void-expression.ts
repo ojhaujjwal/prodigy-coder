@@ -1,6 +1,6 @@
-import type { CreateRule, ESTree, Visitor } from "oxlint"
+import { defineRule } from "@oxlint/plugins"
 
-const rule: CreateRule = {
+export default defineRule({
   meta: {
     type: "problem",
     docs: {
@@ -13,7 +13,7 @@ const rule: CreateRule = {
   },
   create(context) {
     return {
-      UnaryExpression(node: ESTree.UnaryExpression) {
+      UnaryExpression(node) {
         if (node.operator === "void") {
           const expression = context.sourceCode.getText(node.argument)
           context.report({
@@ -23,8 +23,6 @@ const rule: CreateRule = {
           })
         }
       }
-    } as Visitor
+    }
   }
-}
-
-export default rule
+})

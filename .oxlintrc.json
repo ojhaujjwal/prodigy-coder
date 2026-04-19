@@ -22,6 +22,8 @@
     "prodigy/no-disable-validation": "error",
     "prodigy/no-void-expression": "error",
     "prodigy/no-node-imports": "error",
-    "prodigy/no-process": "error"
+    "prodigy/no-process": "error",
+    "prodigy/no-bun-globals": "error",
+    "prodigy/no-console": "error"
   }
 }

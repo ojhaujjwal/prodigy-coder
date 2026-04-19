@@ -1,6 +1,7 @@
-import type { CreateRule, ESTree, Visitor } from "oxlint"
+import type { ESTree } from "@oxlint/plugins"
+import { defineRule } from "@oxlint/plugins"
 
-const rule: CreateRule = {
+export default defineRule({
   meta: {
     type: "problem",
     docs: {
@@ -14,7 +15,7 @@ const rule: CreateRule = {
     schema: []
   },
   create(context) {
-    function checkImportSource(node: ESTree.Node, source: string | undefined) {
+    function checkImportSource(node: ESTree.Node, source: string | null | undefined) {
       if (!source || typeof source !== "string") return
 
       const isRelative = source.startsWith("./") || source.startsWith("../")
@@ -49,19 +50,17 @@ const rule: CreateRule = {
     }
 
     return {
-      ImportDeclaration(node: ESTree.ImportDeclaration) {
-        checkImportSource(node, node.source?.value)
+      ImportDeclaration(node) {
+        checkImportSource(node, node.source.value)
       },
-      ExportNamedDeclaration(node: ESTree.ExportNamedDeclaration) {
+      ExportNamedDeclaration(node) {
         if (node.source) {
           checkImportSource(node, node.source.value)
         }
       },
-      ExportAllDeclaration(node: ESTree.ExportAllDeclaration) {
-        checkImportSource(node, node.source?.value)
+      ExportAllDeclaration(node) {
+        checkImportSource(node, node.source.value)
       }
-    } as Visitor
+    }
   }
-}
-
-export default rule
+})
