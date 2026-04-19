@@ -4,13 +4,24 @@ import { Effect, Layer } from "effect"
 import { SessionRepo } from "./session.ts"
 import { layer as bunServicesLayer } from "@effect/platform-bun/BunServices"
 
-const testLayer = SessionRepo.layer.pipe(Layer.merge(bunServicesLayer))
+const testLayer = SessionRepo.layer.pipe(Layer.provide(bunServicesLayer))
 
 describe("session", () => {
 
+  const cleanupSessions = () =>
+    Effect.sync(() => {
+      try {
+        const { existsSync, rmSync } = require("node:fs")
+        if (existsSync(".prodigy-coder/sessions")) {
+          rmSync(".prodigy-coder/sessions", { recursive: true, force: true })
+        }
+      } catch {}
+    })
+
   describe("createSession", () => {
-    it("returns session with valid UUID and empty messages", () =>
+    it.effect("returns session with valid UUID and empty messages", () =>
       Effect.gen(function* () {
+        yield* cleanupSessions()
         const repo = yield* SessionRepo
         const session = yield* repo.create()
 
@@ -21,8 +32,9 @@ describe("session", () => {
         assert.isTrue(session.updatedAt instanceof Date)
       }).pipe(Effect.provide(testLayer)))
 
-    it("createSession with systemPrompt adds it as first message", () =>
+    it.effect("createSession with systemPrompt adds it as first message", () =>
       Effect.gen(function* () {
+        yield* cleanupSessions()
         const repo = yield* SessionRepo
         const session = yield* repo.create("You are a helpful assistant")
 
@@ -33,8 +45,9 @@ describe("session", () => {
   })
 
   describe("saveSession and loadSession", () => {
-    it("saveSession then loadSession returns equivalent session", () =>
+    it.effect("saveSession then loadSession returns equivalent session", () =>
       Effect.gen(function* () {
+        yield* cleanupSessions()
         const repo = yield* SessionRepo
         const session = yield* repo.create("Test prompt")
         session.messages.push({ role: "user", content: "Hello" })
@@ -56,16 +69,18 @@ describe("session", () => {
   })
 
   describe("listSessions", () => {
-    it("returns empty array when no sessions exist", () =>
+    it.effect("returns empty array when no sessions exist", () =>
       Effect.gen(function* () {
+        yield* cleanupSessions()
         const repo = yield* SessionRepo
         const sessions = yield* repo.list()
         assert.isTrue(Array.isArray(sessions))
         assert.isTrue(sessions.length === 0)
       }).pipe(Effect.provide(testLayer)))
 
-    it("returns created sessions", () =>
+    it.effect("returns created sessions", () =>
       Effect.gen(function* () {
+        yield* cleanupSessions()
         const repo = yield* SessionRepo
         const session1 = yield* repo.create()
         const session2 = yield* repo.create()
@@ -82,8 +97,9 @@ describe("session", () => {
   })
 
   describe("deleteSession", () => {
-    it("removes session file", () =>
+    it.effect("removes session file", () =>
       Effect.gen(function* () {
+        yield* cleanupSessions()
         const repo = yield* SessionRepo
         const session = yield* repo.create()
         yield* repo.save(session)
@@ -98,16 +114,18 @@ describe("session", () => {
         assert.isFalse(sessionsAfter.some((s) => s.id === sessionId))
       }).pipe(Effect.provide(testLayer)))
 
-    it("does not throw for non-existent session", () =>
+    it.effect("does not throw for non-existent session", () =>
       Effect.gen(function* () {
+        yield* cleanupSessions()
         const repo = yield* SessionRepo
         yield* repo.delete("non-existent-id")
       }).pipe(Effect.provide(testLayer)))
   })
 
   describe("loadSession", () => {
-    it("throws for non-existent session", () =>
+    it.effect("throws for non-existent session", () =>
       Effect.gen(function* () {
+        yield* cleanupSessions()
         const repo = yield* SessionRepo
         yield* repo.load("non-existent-id")
       }).pipe(

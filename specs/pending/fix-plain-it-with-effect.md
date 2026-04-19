@@ -22,7 +22,7 @@ The fix is mechanical: change `it(` to `it.effect(` for every test case that con
 Order: unit tests first, then integration, then e2e.
 
 - [x] **Task 1**: Fix `src/config.test.ts` — change 5 `it(` to `it.effect(`
-- [ ] **Task 2**: Fix `src/session.test.ts` — change 8 `it(` to `it.effect(`
+- [x] **Task 2**: Fix `src/session.test.ts` — change 8 `it(` to `it.effect(`
 - [ ] **Task 3**: Fix `src/output.test.ts` — change 15 `it(` to `it.effect(`
 - [ ] **Task 4**: Fix `src/tools/shell.test.ts` — change 3 `it(` to `it.effect(`
 - [ ] **Task 5**: Fix `src/tools/glob.test.ts` — change 2 `it(` to `it.effect(`
