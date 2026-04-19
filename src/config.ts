@@ -83,8 +83,7 @@ const findConfigFile = Effect.fnUntraced(function* (explicitPath: Option.Option<
 const readConfigFile = Effect.fnUntraced(function* (path: string) {
   const fs = yield* FileSystem.FileSystem
   const content = yield* fs.readFileString(path)
-  const parsed = JSON.parse(content) as unknown
-  return Schema.decodeUnknownSync(ConfigSchema)(parsed) as ConfigData
+  return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(ConfigSchema))(content)
 })
 
 class AppConfig extends Context.Service<

@@ -20,10 +20,10 @@ class SessionRepo extends Context.Service<
   SessionRepo,
   {
     readonly create: (systemPrompt?: string) => Effect.Effect<Session, never>
-    readonly save: (session: Session) => Effect.Effect<void, unknown>
-    readonly load: (id: string) => Effect.Effect<Session, unknown>
-    readonly list: () => Effect.Effect<ReadonlyArray<{ id: string; createdAt: Date; updatedAt: Date }>, unknown>
-    readonly delete: (id: string) => Effect.Effect<void, unknown>
+    readonly save: (session: Session) => Effect.Effect<void, unknown, never>
+    readonly load: (id: string) => Effect.Effect<Session, unknown, never>
+    readonly list: () => Effect.Effect<ReadonlyArray<{ id: string; createdAt: Date; updatedAt: Date }>, unknown, never>
+    readonly delete: (id: string) => Effect.Effect<void, unknown, never>
   }
 >()("SessionRepo") {
   static readonly layer = Layer.effect(
@@ -63,14 +63,13 @@ class SessionRepo extends Context.Service<
       const save = Effect.fnUntraced(function* (session: Session) {
         const now = yield* clock.currentTimeMillis
         const updated = { ...session, updatedAt: new Date(now) }
-        const json = yield* Schema.encodeEffect(SessionSchema)(updated)
-        yield* fs.writeFileString(sessionPath(session.id), JSON.stringify(json, null, 2))
+        const json = Schema.encodeUnknownSync(Schema.fromJsonString(SessionSchema))(updated)
+        yield* fs.writeFileString(sessionPath(session.id), json)
       })
 
       const load = Effect.fnUntraced(function* (id: string) {
         const content = yield* fs.readFileString(sessionPath(id))
-        const parsed = JSON.parse(content) as unknown
-        return yield* Schema.decodeUnknownEffect(SessionSchema)(parsed)
+        return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(SessionSchema))(content)
       })
 
       const list = Effect.fnUntraced(function* () {

@@ -1,6 +1,6 @@
 import { BunRuntime, BunServices } from "@effect/platform-bun"
 import { Argument, Command, Flag } from "effect/unstable/cli"
-import { Console, Effect, Option } from "effect"
+import { Console, Effect, Layer, Option, Schema } from "effect"
 import { AppConfig, loadConfig, maskConfig } from "./config.ts"
 import { SessionRepo, createSession, loadSession, saveSession } from "./session.ts"
 import { createFormatter, type OutputEvent } from "./output.ts"
@@ -95,8 +95,11 @@ const mainCommand = Command.make(
       const format = outputFormat as "text" | "stream-json"
       yield* runAgent(promptText, sessionId, format)
     }).pipe(
-      Effect.provide(config ? loadConfig(config) : loadConfig()),
-      Effect.provide(SessionRepo.layer)
+      Effect.provide(
+        (config ? loadConfig(config) : loadConfig()).pipe(
+          Layer.merge(SessionRepo.layer)
+        )
+      )
     )
 ).pipe(Command.withDescription("Run the AI coder"))
 
@@ -133,9 +136,10 @@ const deleteSessionCommand = Command.make(
     }).pipe(Effect.provide(SessionRepo.layer))
 ).pipe(Command.withDescription("Delete a session"))
 
-const sessionCommand = Command.make("session", {}).pipe(
-  Command.withSubcommands([listSessionsCommand, deleteSessionCommand])
-).pipe(Command.withDescription("Manage sessions"))
+const sessionCommand = Command.make("session", {}, () => Effect.void).pipe(
+  Command.withSubcommands([listSessionsCommand, deleteSessionCommand]),
+  Command.withDescription("Manage sessions")
+)
 
 const configShowCommand = Command.make(
   "show",
@@ -144,13 +148,15 @@ const configShowCommand = Command.make(
     Effect.gen(function* () {
       const config = yield* AppConfig
       const masked = maskConfig(config)
-      yield* Console.log(JSON.stringify(masked, null, 2))
+      const json = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown))(masked)
+      yield* Console.log(json)
     }).pipe(Effect.provide(loadConfig()))
 ).pipe(Command.withDescription("Show current config (masked)"))
 
-const configCommand = Command.make("config", {}).pipe(
-  Command.withSubcommands([configShowCommand])
-).pipe(Command.withDescription("Manage configuration"))
+const configCommand = Command.make("config", {}, () => Effect.void).pipe(
+  Command.withSubcommands([configShowCommand]),
+  Command.withDescription("Manage configuration")
+)
 
 const app = Command.make("prodigy", {}).pipe(
   Command.withDescription("AI coding assistant"),

@@ -1,11 +1,14 @@
 import { describe, it } from "@effect/vitest"
 import { assert } from "@effect/vitest"
-import { Effect } from "effect"
+import { Effect, Schema } from "effect"
 import {
   makeTextFormatter,
   makeStreamJsonFormatter,
   type OutputEvent,
 } from "./output.ts"
+
+const parseJson = (input: string) =>
+  Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Unknown))(input) as Record<string, unknown>
 
 describe("output", () => {
   describe("text formatter", () => {
@@ -85,11 +88,12 @@ describe("output", () => {
         yield* formatter(event)
 
         assert.equal(outputs.length, 1)
-        const parsed = JSON.parse(outputs[0])
+        const parsed = parseJson(outputs[0])
         assert.equal(parsed.type, "content")
         assert.isArray(parsed.content)
-        assert.equal(parsed.content[0].type, "text")
-        assert.equal(parsed.content[0].text, "Hello")
+        const content = parsed.content as Array<{ type: string; text: string }>
+        assert.equal(content[0].type, "text")
+        assert.equal(content[0].text, "Hello")
       }))
 
     it("stream-json formatter outputs valid LDJSON for tool-call", () =>
@@ -106,7 +110,7 @@ describe("output", () => {
         yield* formatter(event)
 
         assert.equal(outputs.length, 1)
-        const parsed = JSON.parse(outputs[0])
+        const parsed = parseJson(outputs[0])
         assert.equal(parsed.type, "tool_use")
         assert.equal(parsed.name, "read")
         assert.deepEqual(parsed.input, { filePath: "/test.txt" })
@@ -127,7 +131,7 @@ describe("output", () => {
         yield* formatter(event)
 
         assert.equal(outputs.length, 1)
-        const parsed = JSON.parse(outputs[0])
+        const parsed = parseJson(outputs[0])
         assert.equal(parsed.type, "tool_result")
         assert.equal(parsed.content, "file contents")
         assert.equal(parsed.is_error, false)
@@ -142,7 +146,7 @@ describe("output", () => {
         yield* formatter(event)
 
         assert.equal(outputs.length, 1)
-        const parsed = JSON.parse(outputs[0])
+        const parsed = parseJson(outputs[0])
         assert.equal(parsed.type, "final")
         assert.equal(parsed.content, "Done")
       }))
@@ -156,7 +160,7 @@ describe("output", () => {
         yield* formatter(event)
 
         assert.equal(outputs.length, 1)
-        const parsed = JSON.parse(outputs[0])
+        const parsed = parseJson(outputs[0])
         assert.equal(parsed.type, "error")
         assert.equal(parsed.message, "Failed")
       }))
@@ -175,7 +179,7 @@ describe("output", () => {
         yield* formatter(event)
 
         assert.equal(outputs.length, 1)
-        const parsed = JSON.parse(outputs[0])
+        const parsed = parseJson(outputs[0])
         assert.equal(parsed.type, "approval_required")
         assert.equal(parsed.tool_name, "shell")
       }))
@@ -189,7 +193,7 @@ describe("output", () => {
         yield* formatter(event)
 
         assert.equal(outputs.length, 1)
-        const parsed = JSON.parse(outputs[0])
+        const parsed = parseJson(outputs[0])
         assert.equal(parsed.type, "approval_response")
         assert.equal(parsed.approved, true)
       }))

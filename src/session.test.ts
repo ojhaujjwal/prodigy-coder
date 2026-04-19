@@ -1,8 +1,10 @@
 import { describe, it } from "@effect/vitest"
 import { assert } from "@effect/vitest"
-import { Effect } from "effect"
+import { Effect, Layer } from "effect"
 import { SessionRepo } from "./session.ts"
 import { layer as bunServicesLayer } from "@effect/platform-bun/BunServices"
+
+const testLayer = SessionRepo.layer.pipe(Layer.merge(bunServicesLayer))
 
 describe("session", () => {
 
@@ -17,7 +19,7 @@ describe("session", () => {
         assert.isTrue(session.messages.length === 0)
         assert.isTrue(session.createdAt instanceof Date)
         assert.isTrue(session.updatedAt instanceof Date)
-      }).pipe(Effect.provide(SessionRepo.layer), Effect.provide(bunServicesLayer)))
+      }).pipe(Effect.provide(testLayer)))
 
     it("createSession with systemPrompt adds it as first message", () =>
       Effect.gen(function* () {
@@ -27,7 +29,7 @@ describe("session", () => {
         assert.equal(session.messages.length, 1)
         assert.equal(session.messages[0].role, "system")
         assert.equal(session.messages[0].content, "You are a helpful assistant")
-      }).pipe(Effect.provide(SessionRepo.layer), Effect.provide(bunServicesLayer)))
+      }).pipe(Effect.provide(testLayer)))
   })
 
   describe("saveSession and loadSession", () => {
@@ -50,7 +52,7 @@ describe("session", () => {
         assert.equal(loaded.messages[1].content, "Hello")
         assert.equal(loaded.messages[2].role, "assistant")
         assert.equal(loaded.messages[2].content, "Hi there!")
-      }).pipe(Effect.provide(SessionRepo.layer), Effect.provide(bunServicesLayer)))
+      }).pipe(Effect.provide(testLayer)))
   })
 
   describe("listSessions", () => {
@@ -60,7 +62,7 @@ describe("session", () => {
         const sessions = yield* repo.list()
         assert.isTrue(Array.isArray(sessions))
         assert.isTrue(sessions.length === 0)
-      }).pipe(Effect.provide(SessionRepo.layer), Effect.provide(bunServicesLayer)))
+      }).pipe(Effect.provide(testLayer)))
 
     it("returns created sessions", () =>
       Effect.gen(function* () {
@@ -76,7 +78,7 @@ describe("session", () => {
         const ids: string[] = sessions.map((s) => s.id)
         assert.isTrue(ids.includes(session1.id))
         assert.isTrue(ids.includes(session2.id))
-      }).pipe(Effect.provide(SessionRepo.layer), Effect.provide(bunServicesLayer)))
+      }).pipe(Effect.provide(testLayer)))
   })
 
   describe("deleteSession", () => {
@@ -94,13 +96,13 @@ describe("session", () => {
 
         const sessionsAfter = yield* repo.list()
         assert.isFalse(sessionsAfter.some((s) => s.id === sessionId))
-      }).pipe(Effect.provide(SessionRepo.layer), Effect.provide(bunServicesLayer)))
+      }).pipe(Effect.provide(testLayer)))
 
     it("does not throw for non-existent session", () =>
       Effect.gen(function* () {
         const repo = yield* SessionRepo
         yield* repo.delete("non-existent-id")
-      }).pipe(Effect.provide(SessionRepo.layer), Effect.provide(bunServicesLayer)))
+      }).pipe(Effect.provide(testLayer)))
   })
 
   describe("loadSession", () => {
@@ -109,8 +111,7 @@ describe("session", () => {
         const repo = yield* SessionRepo
         yield* repo.load("non-existent-id")
       }).pipe(
-        Effect.provide(SessionRepo.layer),
-        Effect.provide(bunServicesLayer),
+        Effect.provide(testLayer),
         Effect.flip,
         Effect.map((error) => {
           assert.isTrue(error !== undefined)
