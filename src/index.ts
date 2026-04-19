@@ -1,29 +1,63 @@
 import { BunRuntime, BunServices } from "@effect/platform-bun"
 import { Argument, Command, Flag } from "effect/unstable/cli"
 import { Console, Effect, Layer, Option, Schema } from "effect"
+import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient"
 import { AppConfig, loadConfig, maskConfig } from "./config.ts"
-import { SessionRepo, createSession, loadSession, saveSession } from "./session.ts"
+import { SessionRepo, createSession, loadSession, type Session } from "./session.ts"
 import { createFormatter, type OutputEvent } from "./output.ts"
+import { runAgent as runAgentLoop } from "./agent.ts"
+import type { AgentConfig } from "./agent.ts"
+import { shellHandler } from "./tools/shell.ts"
+import { readHandler } from "./tools/read.ts"
+import { writeHandler } from "./tools/write.ts"
+import { editHandler } from "./tools/edit.ts"
+import { grepHandler } from "./tools/grep.ts"
+import { globHandler } from "./tools/glob.ts"
+import { webfetchHandler } from "./tools/webfetch.ts"
+import { buildProviderLayer } from "./provider.ts"
+import * as AiError from "effect/unstable/ai/AiError"
+
+const mockContext = { preliminary: () => Effect.void } as unknown
+
+export const createHandlers = (): Record<string, (params: unknown) => Effect.Effect<string>> => ({
+  shell: (p) => shellHandler(p as Parameters<typeof shellHandler>[0], mockContext as Parameters<typeof shellHandler>[1]).pipe(Effect.provide(BunServices.layer)) as unknown as Effect.Effect<string>,
+  read: (p) => readHandler(p as Parameters<typeof readHandler>[0], mockContext as Parameters<typeof readHandler>[1]).pipe(Effect.provide(BunServices.layer)) as unknown as Effect.Effect<string>,
+  write: (p) => writeHandler(p as Parameters<typeof writeHandler>[0], mockContext as Parameters<typeof writeHandler>[1]).pipe(Effect.provide(BunServices.layer)) as unknown as Effect.Effect<string>,
+  edit: (p) => editHandler(p as Parameters<typeof editHandler>[0], mockContext as Parameters<typeof editHandler>[1]).pipe(Effect.provide(BunServices.layer)) as unknown as Effect.Effect<string>,
+  grep: (p) => grepHandler(p as Parameters<typeof grepHandler>[0], mockContext as Parameters<typeof grepHandler>[1]).pipe(Effect.provide(BunServices.layer), Effect.map((lines) => lines.join("\n"))) as unknown as Effect.Effect<string>,
+  glob: (p) => globHandler(p as Parameters<typeof globHandler>[0], mockContext as Parameters<typeof globHandler>[1]).pipe(Effect.provide(BunServices.layer), Effect.map((files) => files.join("\n"))) as unknown as Effect.Effect<string>,
+  webfetch: (p) => webfetchHandler(p as Parameters<typeof webfetchHandler>[0], mockContext as Parameters<typeof webfetchHandler>[1]).pipe(Effect.provide(BunServices.layer)) as unknown as Effect.Effect<string>,
+})
 
 const runAgent = (
   prompt: string,
   sessionId: Option.Option<string>,
-  format: "text" | "stream-json"
-): Effect.Effect<void, unknown, AppConfig | SessionRepo> =>
-  Effect.gen(function* () {
-    const config = yield* AppConfig
-    const formatter = createFormatter(format)
-
-    const session = yield* Option.match(sessionId, {
-      onNone: () => createSession(config.systemPrompt),
-      onSome: (id) => loadSession(id),
-    })
-
-    yield* formatter({ type: "text-delta", delta: `Processing: ${prompt}\n` } as OutputEvent)
-    yield* formatter({ type: "finish", text: "Agent completed (stub)" } as OutputEvent)
-
-    yield* saveSession(session)
+  config: import("./config.ts").ConfigData
+): Effect.Effect<OutputEvent[], AiError.AiError | Error> => {
+  const sessionEffect: Effect.Effect<Session, never> = Option.match(sessionId, {
+    onNone: () => createSession(config.systemPrompt) as Effect.Effect<Session, never>,
+    onSome: (id) => loadSession(id) as Effect.Effect<Session, never>,
   })
+
+  return Effect.gen(function* () {
+    const session = yield* sessionEffect
+
+    const handlers = createHandlers()
+    const agentConfig: AgentConfig = { session, config, handlers }
+    const providerLayer = buildProviderLayer(config.provider).pipe(
+      Layer.provide(BunServices.layer),
+      Layer.provide(FetchHttpClient.layer)
+    )
+
+    return yield* runAgentLoop(prompt, agentConfig, providerLayer)
+  }).pipe(
+    Effect.provide(
+      SessionRepo.layer.pipe(
+        Layer.provide(BunServices.layer)
+      )
+    )
+  )
+}
 
 const promptArg = Argument.string("prompt").pipe(
   Argument.optional,
@@ -84,6 +118,7 @@ const mainCommand = Command.make(
   },
   ({ prompt, outputFormat, session, model: _model, maxTurns: _maxTurns, approvalMode: _approvalMode, systemPrompt: _systemPrompt, config }) =>
     Effect.gen(function* () {
+      const appConfig = yield* AppConfig
       const sessionId = session ? Option.some(session) : Option.none<string>()
 
       const promptText = Option.getOrElse(prompt, () => "")
@@ -93,7 +128,12 @@ const mainCommand = Command.make(
       }
 
       const format = outputFormat as "text" | "stream-json"
-      yield* runAgent(promptText, sessionId, format)
+      const formatter = createFormatter(format)
+      const outputEvents = yield* runAgent(promptText, sessionId, appConfig)
+
+      for (const event of outputEvents) {
+        yield* formatter(event)
+      }
     }).pipe(
       Effect.provide(
         (config ? loadConfig(config) : loadConfig()).pipe(

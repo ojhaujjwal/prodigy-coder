@@ -11,19 +11,25 @@ import type { OutputEvent } from "./output.ts"
 export interface AgentConfig {
   readonly session: Session
   readonly config: ConfigData
-  readonly handlers: Record<string, (params: unknown) => Effect.Effect<string>>
+  readonly handlers: Record<string, (params: unknown) => Effect.Effect<string, AiError.AiError>>
 }
 
 const executeTool = (
   toolName: string,
   params: unknown,
-  handlers: Record<string, (params: unknown) => Effect.Effect<string>>
+  handlers: Record<string, (params: unknown) => Effect.Effect<string, AiError.AiError>>
 ): Effect.Effect<{ result: string; isError: boolean }> => {
   const handler = handlers[toolName]
   if (!handler) {
     return Effect.succeed({ result: `Unknown tool: ${toolName}`, isError: true })
   }
-  return Effect.map(handler(params), (result) => ({ result, isError: false }))
+  return Effect.matchEffect(handler(params), {
+    onSuccess: (result) => Effect.succeed({ result, isError: false }),
+    onFailure: (error) => {
+      const message = error.reason instanceof Error ? error.reason.message : "Unknown error"
+      return Effect.succeed({ result: `Tool error: ${message}`, isError: true })
+    },
+  })
 }
 
 const toolCallToOutputEvent = (part: Response.ToolCallPart<string, unknown>): OutputEvent => ({

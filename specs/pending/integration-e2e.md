@@ -21,7 +21,7 @@ The current `index.ts` has a stub `runAgent` that prints a placeholder message a
 
 ## Tasks
 
-- [ ] **Task 1**: Wire up real `runAgent` in `index.ts`
+- [x] **Task 1**: Wire up real `runAgent` in `index.ts`
 - [ ] **Task 2**: Create test helpers and basic agent integration tests
 - [ ] **Task 3**: Add agent integration tests for policy scenarios (approval, max turns, system prompt, session)
 - [ ] **Task 4**: Add output integration tests
