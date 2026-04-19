@@ -23,7 +23,7 @@ export const globHandler = (
   _context: Toolkit.HandlerContext<typeof GlobTool>,
 ) =>
   Effect.gen(function* () {
-    const handle = yield* ChildProcess.make`find ${path} -name "${pattern}" -type f`
+    const handle = yield* ChildProcess.make`find ${path} -name ${pattern} -type f`
 
     const chunks: string[] = []
     const stdoutStream = handle.stdout

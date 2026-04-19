@@ -8,44 +8,33 @@ import type { Session, Message } from "../session.ts"
 export type MockPart =
   | { type: "text-delta"; delta: string }
   | { type: "tool-call"; id: string; name: string; params: unknown }
-  | { type: "finish"; reason: string }
+  | { type: "finish"; reason: "stop" | "length" | "content-filter" | "tool-calls" | "error" | "pause" | "other" | "unknown" }
 
 export type TurnResponse = MockPart[]
-
-const textDeltaPart = (delta: string): Response.StreamPartEncoded =>
-  ({
-    type: "text-delta",
-    id: "mock-id",
-    delta,
-  }) as Response.StreamPartEncoded
-
-const toolCallPart = (id: string, name: string, params: unknown): Response.StreamPartEncoded =>
-  ({
-    type: "tool-call",
-    id,
-    name,
-    params,
-    providerExecuted: false,
-  }) as Response.StreamPartEncoded
-
-const finishPart = (reason: string): Response.StreamPartEncoded =>
-  ({
-    type: "finish",
-    reason,
-    usage: {
-      inputTokens: { uncached: 0, total: 1, cacheRead: 0, cacheWrite: undefined },
-      outputTokens: { total: 1, text: 1, reasoning: 0 },
-    },
-  }) as Response.StreamPartEncoded
 
 const mockPartToEncoded = (part: MockPart): Response.StreamPartEncoded => {
   switch (part.type) {
     case "text-delta":
-      return textDeltaPart(part.delta)
+      return Response.makePart("text-delta", {
+        id: "mock-id",
+        delta: part.delta,
+      }) as Response.StreamPartEncoded
     case "tool-call":
-      return toolCallPart(part.id, part.name, part.params)
+      return Response.toolCallPart({
+        id: part.id,
+        name: part.name,
+        params: part.params,
+        providerExecuted: false,
+      }) as Response.StreamPartEncoded
     case "finish":
-      return finishPart(part.reason)
+      return Response.makePart("finish", {
+        reason: part.reason,
+        usage: {
+          inputTokens: { uncached: 0, total: 1, cacheRead: 0, cacheWrite: undefined },
+          outputTokens: { total: 1, text: 1, reasoning: 0 },
+        },
+        response: undefined,
+      }) as Response.StreamPartEncoded
   }
 }
 

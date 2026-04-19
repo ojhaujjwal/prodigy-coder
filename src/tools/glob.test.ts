@@ -12,10 +12,15 @@ const mockContext = {
 }
 
 describe("glob tool", () => {
-  it("finds files matching *.txt pattern", () =>
+  it.effect("finds files matching *.txt pattern", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem
-      yield* fs.makeDirectory("/tmp/test-glob", { recursive: true })
+      yield* fs.makeDirectory("/tmp/test-glob", { recursive: true }).pipe(
+        Effect.catch(() => Effect.void)
+      )
+      for (const f of ["/tmp/test-glob/file1.txt", "/tmp/test-glob/file2.txt", "/tmp/test-glob/file3.ts"]) {
+        yield* fs.remove(f).pipe(Effect.catch(() => Effect.void))
+      }
       yield* fs.writeFileString("/tmp/test-glob/file1.txt", "content1")
       yield* fs.writeFileString("/tmp/test-glob/file2.txt", "content2")
       yield* fs.writeFileString("/tmp/test-glob/file3.ts", "content3")
@@ -24,7 +29,7 @@ describe("glob tool", () => {
       assert.isTrue(result.every((f) => f.endsWith(".txt")))
     }).pipe(Effect.provide(testLayer)))
 
-  it("returns empty array when no matches", () =>
+  it.effect("returns empty array when no matches", () =>
     Effect.gen(function* () {
       const result = yield* globHandler({ pattern: "*.xyz", path: "/tmp/test-glob-none" }, mockContext)
       assert.isArray(result)

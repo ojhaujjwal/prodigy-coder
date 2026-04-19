@@ -31,7 +31,7 @@ const runAgentWithMocks = (
 }
 
 describe("output integration", () => {
-  it("Test 1: Stream-json formatter through agent", () =>
+  it.effect("Test 1: Stream-json formatter through agent", () =>
     Effect.gen(function* () {
       const mockResponses: import("./helpers.ts").TurnResponse[] = [
         [
@@ -56,7 +56,7 @@ describe("output integration", () => {
 
   )
 
-  it("Test 2: Text formatter through agent", () =>
+  it.effect("Test 2: Text formatter through agent", () =>
     Effect.gen(function* () {
       const mockResponses: import("./helpers.ts").TurnResponse[] = [
         [
@@ -78,7 +78,7 @@ describe("output integration", () => {
 
   )
 
-  it("Test 3: All event types produce valid output", () =>
+  it.effect("Test 3: All event types produce valid output", () =>
     Effect.gen(function* () {
       const events: OutputEvent[] = [
         { type: "text-delta", delta: "Hello" },

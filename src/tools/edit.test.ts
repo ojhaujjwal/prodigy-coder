@@ -12,7 +12,7 @@ const mockContext = {
 }
 
 describe("edit tool", () => {
-  it("replaces oldString with newString in file", () =>
+  it.effect("replaces oldString with newString in file", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem
       yield* fs.writeFileString("/tmp/test-edit.txt", "Hello, world!")
@@ -22,7 +22,7 @@ describe("edit tool", () => {
       assert.equal(content, "Hello, universe!")
     }).pipe(Effect.provide(testLayer)))
 
-  it("returns error when oldString not found in file", () =>
+  it.effect("returns error when oldString not found in file", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem
       yield* fs.writeFileString("/tmp/test-edit2.txt", "Hello, world!")
@@ -30,9 +30,11 @@ describe("edit tool", () => {
       assert.isTrue(result.includes("Error: oldString not found"))
     }).pipe(Effect.provide(testLayer)))
 
-  it("returns error when file doesn't exist", () =>
+  it.effect("returns error when file doesn't exist", () =>
     Effect.gen(function* () {
-      const result = yield* editHandler({ filePath: "/tmp/non-existent-12345.txt", oldString: "test", newString: "new" }, mockContext)
+      const result = yield* editHandler({ filePath: "/tmp/non-existent-12345.txt", oldString: "test", newString: "new" }, mockContext).pipe(
+        Effect.catch((e) => Effect.succeed(`Error: ${e}`))
+      )
       assert.isTrue(result.includes("Error"))
     }).pipe(Effect.provide(testLayer)))
 })

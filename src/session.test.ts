@@ -6,17 +6,17 @@ import { layer as bunServicesLayer } from "@effect/platform-bun/BunServices"
 
 const testLayer = SessionRepo.layer.pipe(Layer.provide(bunServicesLayer))
 
-describe("session", () => {
+const cleanupSessions = () =>
+  Effect.sync(() => {
+    const { existsSync, rmSync } = require("fs")
+    try {
+      if (existsSync(".prodigy-coder/sessions")) {
+        rmSync(".prodigy-coder/sessions", { recursive: true, force: true })
+      }
+    } catch {}
+  })
 
-  const cleanupSessions = () =>
-    Effect.sync(() => {
-      try {
-        const { existsSync, rmSync } = require("node:fs")
-        if (existsSync(".prodigy-coder/sessions")) {
-          rmSync(".prodigy-coder/sessions", { recursive: true, force: true })
-        }
-      } catch {}
-    })
+describe("session", () => {
 
   describe("createSession", () => {
     it.effect("returns session with valid UUID and empty messages", () =>

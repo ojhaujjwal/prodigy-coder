@@ -12,7 +12,7 @@ const mockContext = {
 }
 
 describe("write tool", () => {
-  it("creates new file with correct content", () =>
+  it.effect("creates new file with correct content", () =>
     Effect.gen(function* () {
       const result = yield* writeHandler({ filePath: "/tmp/test-write.txt", content: "Test content" }, mockContext)
       assert.equal(result, "Written to /tmp/test-write.txt")
@@ -21,7 +21,7 @@ describe("write tool", () => {
       assert.equal(content, "Test content")
     }).pipe(Effect.provide(testLayer)))
 
-  it("overwrites existing file", () =>
+  it.effect("overwrites existing file", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem
       yield* fs.writeFileString("/tmp/test-write2.txt", "Original")
@@ -30,7 +30,7 @@ describe("write tool", () => {
       assert.equal(content, "Updated")
     }).pipe(Effect.provide(testLayer)))
 
-  it("creates parent directories", () =>
+  it.effect("creates parent directories", () =>
     Effect.gen(function* () {
       const result = yield* writeHandler({ filePath: "/tmp/test-dir/nested/file.txt", content: "Nested" }, mockContext)
       assert.isTrue(result.includes("Written to"))
