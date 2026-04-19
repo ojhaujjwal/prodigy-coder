@@ -7,8 +7,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "oxlint --disable-nested-config",
     "lint-fix": "oxlint --disable-nested-config --fix",
-    "test": "vitest",
-    "coverage": "vitest --coverage",
+    "test": "bun vitest",
+    "coverage": "bun vitest --coverage",
     "prepare": "effect-language-service patch"
   },
   "dependencies": {
@@ -22,6 +22,7 @@
   "devDependencies": {
     "@effect/language-service": "^0.85.1",
     "@effect/vitest": "^4.0.0-beta.49",
+    "@oxlint/plugins": "^1.60.0",
     "@types/bun": "latest",
     "oxlint": "^1.60.0",
     "vitest": "^4.0.0"
