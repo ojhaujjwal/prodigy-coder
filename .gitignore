@@ -35,5 +35,6 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # Ralph Auto runtime output
 .ralph/
+.ralph-backup/
 .ralph-auto/
 progress-auto.txt
