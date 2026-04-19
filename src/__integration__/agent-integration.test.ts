@@ -168,4 +168,127 @@ describe("agent integration", () => {
     })
 
   )
+
+  it("Test 6: approvalMode none", () =>
+    Effect.gen(function* () {
+      const mockResponses: import("./helpers.ts").TurnResponse[] = [
+        [{ type: "tool-call", id: "call-1", name: "shell", params: { command: "ls" } }],
+        [{ type: "finish", reason: "stop" }],
+      ]
+
+      const { handlers } = createStubHandlers()
+      const config = createTestConfig({ approvalMode: "none" })
+      const session = createTestSession()
+      const agentConfig: AgentConfig = { session, config, handlers }
+      const mockLLMLayer = createMockLLMLayer(mockResponses)
+
+      const result = yield* runAgent("test prompt", agentConfig, mockLLMLayer)
+
+      const approvalRequests = result.filter((e) => e.type === "tool-approval-request")
+
+      assert.equal(approvalRequests.length, 0)
+    })
+
+  )
+
+  it("Test 7: approvalMode dangerous", () =>
+    Effect.gen(function* () {
+      const mockResponses: import("./helpers.ts").TurnResponse[] = [
+        [
+          { type: "tool-call", id: "call-1", name: "shell", params: { command: "ls" } },
+          { type: "tool-call", id: "call-2", name: "read", params: { filePath: "/test.txt" } },
+        ],
+        [{ type: "finish", reason: "stop" }],
+      ]
+
+      const { handlers } = createStubHandlers()
+      const config = createTestConfig({ approvalMode: "dangerous" })
+      const session = createTestSession()
+      const agentConfig: AgentConfig = { session, config, handlers }
+      const mockLLMLayer = createMockLLMLayer(mockResponses)
+
+      const result = yield* runAgent("test prompt", agentConfig, mockLLMLayer)
+
+      const approvalRequests = result.filter((e) => e.type === "tool-approval-request")
+
+      assert.equal(approvalRequests.length, 1)
+      assert.equal(approvalRequests[0].toolName, "shell")
+    })
+
+  )
+
+  it("Test 8: maxTurns 1 with tool call", () =>
+    Effect.gen(function* () {
+      const mockResponses: import("./helpers.ts").TurnResponse[] = [
+        [{ type: "tool-call", id: "call-1", name: "read", params: { filePath: "/test.txt" } }],
+      ]
+
+      const { handlers } = createStubHandlers()
+      const config = createTestConfig({ maxTurns: 1 })
+      const session = createTestSession()
+      const agentConfig: AgentConfig = { session, config, handlers }
+      const mockLLMLayer = createMockLLMLayer(mockResponses)
+
+      const result = yield* runAgent("test prompt", agentConfig, mockLLMLayer)
+
+      const errors = result.filter((e) => e.type === "error")
+
+      assert.equal(errors.length, 1)
+      assert.include(errors[0].message, "Max turns exceeded")
+    })
+
+  )
+
+  it("Test 9: System prompt prepended", () =>
+    Effect.gen(function* () {
+      const capturedPrompts: unknown[] = []
+
+      const mockResponses: import("./helpers.ts").TurnResponse[] = [
+        [
+          { type: "text-delta", delta: "Hi" },
+          { type: "finish", reason: "stop" },
+        ],
+      ]
+
+      const { handlers } = createStubHandlers()
+      const config = createTestConfig({ systemPrompt: "You are a helpful assistant." })
+      const session = createTestSession()
+      const agentConfig: AgentConfig = { session, config, handlers }
+      const mockLLMLayer = createMockLLMLayer(mockResponses, (prompt) => {
+        capturedPrompts.push(prompt)
+      })
+
+      yield* runAgent("test prompt", agentConfig, mockLLMLayer)
+
+      assert.equal(capturedPrompts.length, 1)
+      const prompt = capturedPrompts[0] as Array<{ role: string; content: string }>
+      assert.isTrue(prompt.some((m) => m.role === "system" && m.content.includes("You are a helpful assistant")))
+    })
+
+  )
+
+  it("Test 10: Session messages accumulate", () =>
+    Effect.gen(function* () {
+      const mockResponses: import("./helpers.ts").TurnResponse[] = [
+        [{ type: "tool-call", id: "call-1", name: "read", params: { filePath: "/test.txt" } }],
+        [
+          { type: "text-delta", delta: "Done" },
+          { type: "finish", reason: "stop" },
+        ],
+      ]
+
+      const { handlers } = createStubHandlers()
+      const config = createTestConfig({ approvalMode: "none" })
+      const session = createTestSession()
+      const agentConfig: AgentConfig = { session, config, handlers }
+
+      const mockLLMLayer = createMockLLMLayer(mockResponses)
+
+      yield* runAgent("test prompt", agentConfig, mockLLMLayer)
+
+      assert.isTrue(agentConfig.session.messages.length >= 2)
+      assert.isTrue(agentConfig.session.messages.some((m) => m.role === "user"))
+    })
+
+  )
 })

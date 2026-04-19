@@ -10,22 +10,22 @@ The current `index.ts` has a stub `runAgent` that prints a placeholder message a
 
 ## Requirements
 
-- [ ] Replace stub `runAgent` in `index.ts` with real agent loop wiring (provider layer + handlers + formatter)
-- [ ] Create `src/__integration__/` directory with test helpers
-- [ ] Mock LLM layer that returns configurable multi-turn responses
-- [ ] Stub tool handlers that record calls and return configurable results
-- [ ] Agent loop integration tests covering: text-only, tool calls, approval modes, max turns, errors
-- [ ] Output formatter integration tests covering: stream-json through agent, text through agent, all event types
-- [ ] Full E2E tests with mock OpenAI-compatible HTTP server exercising CLI → provider → agent → tools → output
-- [ ] All tests must pass `bun vitest run` (both unit and integration projects)
+- [x] Replace stub `runAgent` in `index.ts` with real agent loop wiring (provider layer + handlers + formatter)
+- [x] Create `src/__integration__/` directory with test helpers
+- [x] Mock LLM layer that returns configurable multi-turn responses
+- [x] Stub tool handlers that record calls and return configurable results
+- [x] Agent loop integration tests covering: text-only, tool calls, approval modes, max turns, errors
+- [x] Output formatter integration tests covering: stream-json through agent, text through agent, all event types
+- [x] Full E2E tests with mock OpenAI-compatible HTTP server exercising CLI → provider → agent → tools → output
+- [x] All tests must pass `bun vitest run` (both unit and integration projects)
 
 ## Tasks
 
 - [x] **Task 1**: Wire up real `runAgent` in `index.ts`
 - [x] **Task 2**: Create test helpers and basic agent integration tests
-- [ ] **Task 3**: Add agent integration tests for policy scenarios (approval, max turns, system prompt, session)
-- [ ] **Task 4**: Add output integration tests
-- [ ] **Task 5**: Add E2E tests with mock OpenAI-compatible HTTP server
+- [x] **Task 3**: Add agent integration tests for policy scenarios (approval, max turns, system prompt, session)
+- [x] **Task 4**: Add output integration tests
+- [x] **Task 5**: Add E2E tests with mock OpenAI-compatible HTTP server
 
 ## Implementation Details
 

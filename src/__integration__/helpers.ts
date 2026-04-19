@@ -139,3 +139,106 @@ export const createTestSession = (messages?: Message[]): Session => ({
   createdAt: new Date(),
   updatedAt: new Date(),
 })
+
+export type MockOpenAIResponse =
+  | { type: "text"; content: string }
+  | { type: "tool-call"; id: string; name: string; arguments: Record<string, unknown> }
+
+export const createMockOpenAIServer = (
+  responses: MockOpenAIResponse[][]
+): Effect.Effect<{ url: string; calls: unknown[]; cleanup: () => void }> => {
+  const calls: unknown[] = []
+  let responseIndex = 0
+
+  const server = Bun.serve({ // eslint-disable-line prodigy/no-bun-globals
+    port: 0,
+    async fetch(req) {
+      if (req.url.includes("/v1/chat/completions")) {
+        const body = await req.json()
+        calls.push(body)
+
+        if (responseIndex >= responses.length) {
+          responseIndex = responses.length - 1
+        }
+        const currentResponses = responses[responseIndex]
+        responseIndex++
+
+        const encoder = new TextEncoder()
+
+        const stream = new ReadableStream({
+          async start(controller) {
+            for (const response of currentResponses) {
+              if (response.type === "text") {
+                const chunk = `data: ${JSON.stringify({
+                  id: "chatcmpl-mock",
+                  object: "chat.completion.chunk",
+                  created: Date.now(),
+                  model: "test-model",
+                  choices: [{
+                    index: 0,
+                    delta: { content: response.content },
+                    finish_reason: null,
+                  }],
+                })}\n\n`
+                controller.enqueue(encoder.encode(chunk))
+              } else if (response.type === "tool-call") {
+                const chunk = `data: ${JSON.stringify({
+                  id: "chatcmpl-mock",
+                  object: "chat.completion.chunk",
+                  created: Date.now(),
+                  model: "test-model",
+                  choices: [{
+                    index: 0,
+                    delta: {
+                      tool_calls: [{
+                        index: 0,
+                        id: response.id,
+                        type: "function",
+                        function: {
+                          name: response.name,
+                          arguments: JSON.stringify(response.arguments),
+                        },
+                      }],
+                    },
+                    finish_reason: null,
+                  }],
+                })}\n\n`
+                controller.enqueue(encoder.encode(chunk))
+              }
+            }
+
+            const finishChunk = `data: ${JSON.stringify({
+              id: "chatcmpl-mock",
+              object: "chat.completion.chunk",
+              created: Date.now(),
+              model: "test-model",
+              choices: [{
+                index: 0,
+                delta: {},
+                finish_reason: "stop",
+              }],
+            })}\n\n`
+            controller.enqueue(encoder.encode(finishChunk))
+            controller.enqueue(encoder.encode("data: [DONE]\n\n"))
+            controller.close()
+          },
+        })
+
+        return new globalThis.Response(stream, {
+          headers: {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+          },
+        })
+      }
+      return new globalThis.Response("Not found", { status: 404 })
+    },
+  })
+
+  return Effect.sync(() => ({
+    url: `http://localhost:${server.port}/v1`,
+    calls,
+    cleanup: () => server.stop(),
+  }))
+}
