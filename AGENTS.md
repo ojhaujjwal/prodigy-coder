@@ -33,3 +33,7 @@ Patterns from `effect-solutions show <topic>` apply, but update imports:
 Use `effect-solutions show cli` for CLI patterns, but import from `effect/Unstable/Cli` not `@effect/cli`.
 
 <!-- effect-solutions:end -->
+
+## Testing with Effect and Vitest
+
+See [specs/guides/testing-with-effect.md](specs/guides/testing-with-effect.md) for testing best practices.

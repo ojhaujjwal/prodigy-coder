@@ -26,5 +26,6 @@
     "prodigy/no-process": "error",
     "prodigy/no-bun-globals": "error",
     "prodigy/no-console": "error"
+    //"prodigy/no-plain-it-with-effect": "error"
   }
 }

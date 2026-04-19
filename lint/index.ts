@@ -14,6 +14,7 @@ import noNodeImports from "./rules/no-node-imports.ts"
 import noProcess from "./rules/no-process.ts"
 import noBunGlobals from "./rules/no-bun-globals.ts"
 import noConsole from "./rules/no-console.ts"
+import noPlainItWithEffect from "./rules/no-plain-it-with-effect.ts"
 
 export default definePlugin({
   meta: { name: "prodigy" },
@@ -32,6 +33,7 @@ export default definePlugin({
     "no-node-imports": noNodeImports,
     "no-process": noProcess,
     "no-bun-globals": noBunGlobals,
-    "no-console": noConsole
+    "no-console": noConsole,
+    "no-plain-it-with-effect": noPlainItWithEffect
   }
 })
