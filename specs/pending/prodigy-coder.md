@@ -15,22 +15,22 @@ The ralph-auto.sh script currently uses `claude --dangerously-skip-permissions -
 
 ## Requirements
 
-- [ ] CLI command with `--print` and `--output-format stream-json|text` flags
-- [ ] Config file (`.prodigy-coder.json`) with env var fallbacks
-- [ ] OpenAI-compatible provider with configurable base URL
-- [ ] Tools: shell, read, write, edit, grep, glob, webfetch
-- [ ] Session persistence in `.prodigy-coder/sessions/`
-- [ ] `--session`, `--model`, `--max-turns`, `--approval-mode` flags
-- [ ] Streaming output with text and stream-json formatters
-- [ ] Agent loop: prompt → LLM → tool calls → execute → repeat until done
+- [x] CLI command with `--print` and `--output-format stream-json|text` flags
+- [x] Config file (`.prodigy-coder.json`) with env var fallbacks
+- [x] OpenAI-compatible provider with configurable base URL
+- [x] Tools: shell, read, write, edit, grep, glob, webfetch
+- [x] Session persistence in `.prodigy-coder/sessions/`
+- [x] `--session`, `--model`, `--max-turns`, `--approval-mode` flags
+- [x] Streaming output with text and stream-json formatters
+- [x] Agent loop: prompt → LLM → tool calls → execute → repeat until done
 
 ## Tasks
 
-- [ ] **Task 1**: Project setup, config schema+loader, session persistence, output formatters, and base CLI (with vitest integration tests)
+- [x] **Task 1**: Project setup, config schema+loader, session persistence, output formatters, and base CLI (with vitest integration tests)
 - [x] **Task 2**: AI provider layer construction with OpenAI-compat support (with vitest integration tests)
-- [ ] **Task 3**: Tool definitions and toolkit (all 7 tools with vitest integration tests)
-- [ ] **Task 4**: Agent loop with tool-call resolution, approval flow, and session auto-save (with vitest integration tests)
-- [ ] **Task 5**: Output formatters and final CLI wiring (with vitest integration tests)
+- [x] **Task 3**: Tool definitions and toolkit (all 7 tools with vitest integration tests)
+- [x] **Task 4**: Agent loop with tool-call resolution, approval flow, and session auto-save (with vitest integration tests)
+- [x] **Task 5**: Output formatters and final CLI wiring (with vitest integration tests)
 
 ## Implementation Details
 

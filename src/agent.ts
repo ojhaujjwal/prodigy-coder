@@ -1,0 +1,128 @@
+import * as AiError from "effect/unstable/ai/AiError"
+import * as LanguageModel from "effect/unstable/ai/LanguageModel"
+import { Effect, Layer, Stream } from "effect"
+import type { Session, Message } from "./session.ts"
+import type { ConfigData } from "./config.ts"
+import { needsApproval } from "./approval.ts"
+import type { OutputEvent } from "./output.ts"
+
+export interface AgentConfig {
+  readonly session: Session
+  readonly config: ConfigData
+  readonly handlers: Record<string, (params: unknown) => Effect.Effect<string>>
+}
+
+const executeTool = (
+  toolName: string,
+  params: unknown,
+  handlers: Record<string, (params: unknown) => Effect.Effect<string>>
+): Effect.Effect<{ result: string; isError: boolean }> => {
+  const handler = handlers[toolName]
+  if (!handler) {
+    return Effect.succeed({ result: `Unknown tool: ${toolName}`, isError: true })
+  }
+  return Effect.map(handler(params), (result) => ({ result, isError: false }))
+}
+
+const toolCallToOutputEvent = (part: any): OutputEvent => ({
+  type: "tool-call",
+  id: part.id,
+  name: part.name,
+  params: part.params,
+})
+
+const toolResultToOutputEvent = (
+  id: string,
+  name: string,
+  result: string,
+  isError: boolean
+): OutputEvent => ({
+  type: "tool-result",
+  id,
+  name,
+  result,
+  isError,
+})
+
+export const runAgent = (
+  promptText: string,
+  agentConfig: AgentConfig,
+  providerLayer: Layer.Layer<LanguageModel.LanguageModel>
+): Effect.Effect<OutputEvent[], AiError.AiError | Error> =>
+  Effect.gen(function* () {
+    const { session, config, handlers } = agentConfig
+
+    const messages: Message[] = [...session.messages]
+
+    if (messages.length === 0 && config.systemPrompt) {
+      messages.push({ role: "system", content: config.systemPrompt })
+    }
+
+    messages.push({ role: "user", content: promptText })
+
+    const outputEvents: OutputEvent[] = []
+    let turnCount = 0
+    let finished = false
+
+    while (!finished && turnCount < config.maxTurns) {
+      turnCount++
+
+      const llmStream = LanguageModel.streamText({
+        prompt: messages as any,
+        disableToolCallResolution: true,
+      } as any)
+
+      yield* llmStream.pipe(
+        Stream.runForEach((part: any) => {
+          switch (part.type) {
+            case "text-delta":
+              outputEvents.push({ type: "text-delta", delta: part.text })
+              return Effect.void
+            case "tool-call": {
+              outputEvents.push(toolCallToOutputEvent(part))
+              const approved = needsApproval(part.name, config.approvalMode)
+              if (approved && config.approvalMode !== "none") {
+                outputEvents.push({
+                  type: "tool-approval-request",
+                  id: crypto.randomUUID(),
+                  toolCallId: part.id,
+                  toolName: part.name,
+                })
+              }
+              return Effect.gen(function* () {
+                const execResult = yield* executeTool(part.name, part.params, handlers)
+                outputEvents.push(toolResultToOutputEvent(part.id, part.name, execResult.result, execResult.isError))
+              })
+            }
+            case "finish":
+              finished = true
+              outputEvents.push({ type: "finish", text: part.reason || "" })
+              return Effect.void
+            default:
+              return Effect.void
+          }
+        }),
+        Effect.provide(providerLayer)
+      )
+
+      const toolResults = outputEvents.filter((e) => e.type === "tool-result")
+      for (const toolResult of toolResults) {
+        if (toolResult.type === "tool-result") {
+          messages.push({
+            role: "assistant",
+            content: "",
+          })
+          messages.push({
+            role: "tool",
+            content: toolResult.result,
+          } as any)
+        }
+      }
+    }
+
+    if (!finished) {
+      outputEvents.push({ type: "error", message: "Max turns exceeded" })
+    }
+
+    return outputEvents
+  })
