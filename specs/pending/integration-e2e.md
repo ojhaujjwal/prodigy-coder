@@ -22,7 +22,7 @@ The current `index.ts` has a stub `runAgent` that prints a placeholder message a
 ## Tasks
 
 - [x] **Task 1**: Wire up real `runAgent` in `index.ts`
-- [ ] **Task 2**: Create test helpers and basic agent integration tests
+- [x] **Task 2**: Create test helpers and basic agent integration tests
 - [ ] **Task 3**: Add agent integration tests for policy scenarios (approval, max turns, system prompt, session)
 - [ ] **Task 4**: Add output integration tests
 - [ ] **Task 5**: Add E2E tests with mock OpenAI-compatible HTTP server
