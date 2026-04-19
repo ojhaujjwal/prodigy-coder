@@ -2,7 +2,7 @@
 
 ## Overview
 
-Build a command-line AI coding agent using Effect's AI and CLI modules that can autonomously edit code, run shell commands, and search codebases. Compatible with ralph-loop system (ralph-auto.sh) via `--print` and `--output-format stream-json` flags.
+Build a command-line AI coding agent using Effect's AI and CLI modules (`effect/Unstable/Cli`) that can autonomously edit code, run shell commands, and search codebases. Compatible with ralph-loop system (ralph-auto.sh) via `--print` and `--output-format stream-json` flags. The CLI must use `@repos/effect-smol/packages/effect/src/unstable/cli/` (imported as `effect/Unstable/Cli`) for all CLI construction.
 
 ## Background
 
@@ -15,22 +15,22 @@ The ralph-auto.sh script currently uses `claude --dangerously-skip-permissions -
 
 ## Requirements
 
-- [ ] CLI command with `--print` and `--output-format stream-json|text` flags
-- [ ] Config file (`.prodigy-coder.json`) with env var fallbacks
-- [ ] OpenAI-compatible provider with configurable base URL
-- [ ] Tools: shell, read, write, edit, grep, glob, webfetch
-- [ ] Session persistence in `.prodigy-coder/sessions/`
-- [ ] `--session`, `--model`, `--max-turns`, `--approval-mode` flags
-- [ ] Streaming output with text and stream-json formatters
-- [ ] Agent loop: prompt → LLM → tool calls → execute → repeat until done
+- [x] CLI command with `--print` and `--output-format stream-json|text` flags
+- [x] Config file (`.prodigy-coder.json`) with env var fallbacks
+- [x] OpenAI-compatible provider with configurable base URL
+- [x] Tools: shell, read, write, edit, grep, glob, webfetch
+- [x] Session persistence in `.prodigy-coder/sessions/`
+- [x] `--session`, `--model`, `--max-turns`, `--approval-mode` flags
+- [x] Streaming output with text and stream-json formatters
+- [x] Agent loop: prompt → LLM → tool calls → execute → repeat until done
 
 ## Tasks
 
-- [ ] **Task 1**: Project setup, config schema+loader, session persistence, output formatters, and base CLI (with vitest integration tests)
-- [ ] **Task 2**: AI provider layer construction with OpenAI-compat support (with vitest integration tests)
-- [ ] **Task 3**: Tool definitions and toolkit (all 7 tools with vitest integration tests)
-- [ ] **Task 4**: Agent loop with tool-call resolution, approval flow, and session auto-save (with vitest integration tests)
-- [ ] **Task 5**: Output formatters and final CLI wiring (with vitest integration tests)
+- [x] **Task 1**: Project setup, config schema+loader, session persistence, output formatters, and base CLI (with vitest integration tests)
+- [x] **Task 2**: AI provider layer construction with OpenAI-compat support (with vitest integration tests)
+- [x] **Task 3**: Tool definitions and toolkit (all 7 tools with vitest integration tests)
+- [x] **Task 4**: Agent loop with tool-call resolution, approval flow, and session auto-save (with vitest integration tests)
+- [x] **Task 5**: Output formatters and final CLI wiring (with vitest integration tests)
 
 ## Implementation Details
 
@@ -39,7 +39,7 @@ The ralph-auto.sh script currently uses `claude --dangerously-skip-permissions -
 **Files to create:**
 - `package.json` - add AI provider dependencies
 - `src/config.ts` - Config schema and loader with env var fallbacks
-- `src/session.ts` - Session type and file-based persistence
+- `src/session.ts` - Session schema and file-based persistence
 - `src/output.ts` - Text and stream-json formatters
 - `src/index.ts` - Effect CLI command with all flags
 - `tests/config.test.ts` - Config loading tests
@@ -57,64 +57,109 @@ The ralph-auto.sh script currently uses `claude --dangerously-skip-permissions -
 2. Run `bun install` to install new dependencies.
 
 3. Create `src/config.ts`:
-   - Define `Config` schema using Effect Schema with fields:
-     - `provider.type`: `"openai-compat" | "openai" | "anthropic" | "openrouter"`
-     - `provider.baseUrl`: optional string (default varies by type)
-     - `provider.apiKey`: optional string
-     - `provider.model`: string (default varies by type)
-     - `approvalMode`: `"none" | "dangerous" | "all"` (default: `"none"`)
-     - `maxTurns`: positive number (default: 50)
-     - `systemPrompt`: optional string
+   - Define config schemas using Effect Schema:
+     ```ts
+     import { Schema } from "effect"
+
+     const ProviderType = Schema.Literal("openai-compat", "openai", "anthropic", "openrouter")
+     const ApprovalMode = Schema.Literal("none", "dangerous", "all")
+
+     const ProviderConfig = Schema.Struct({
+       type: ProviderType,
+       baseUrl: Schema.Optional(Schema.String),
+       apiKey: Schema.Optional(Schema.String),
+       model: Schema.String,
+     })
+
+     const Config = Schema.Struct({
+       provider: ProviderConfig,
+       approvalMode: ApprovalMode.withDefault("none"),
+       maxTurns: Schema.Positive.withDefault(50),
+       systemPrompt: Schema.Optional(Schema.String),
+     })
+     ```
    - `loadConfig(path?: string): Effect<Config>` - loads from file paths and env vars
    - Env vars checked: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`, `PRODIGY_CODER_API_KEY`, `PRODIGY_CODER_BASE_URL`, `PRODIGY_CODER_MODEL`, `PRODIGY_CODER_APPROVAL_MODE`
+   - Use `Schema.decodeUnknown` to parse config files, `Schema.encodeUnknown` to serialize for `config show`
 
 4. Create `src/session.ts`:
-   - `Session` interface: `{ id: string, messages: Message[], createdAt: Date, updatedAt: Date }`
-   - `Message`: `{ role: "system" | "user" | "assistant", content: string }`
+   - Define session schemas using Effect Schema:
+     ```ts
+     const Message = Schema.Struct({
+       role: Schema.Literal("system", "user", "assistant"),
+       content: Schema.String,
+     })
+
+     const Session = Schema.Struct({
+       id: Schema.String,
+       messages: Schema.Array(Message),
+       createdAt: Schema.Date,
+       updatedAt: Schema.Date,
+     })
+     ```
+   - Extract inferred types using `Schema.infer` or `typeof Schema.Type<typeof Session>` pattern
    - Session directory: `.prodigy-coder/sessions/`
    - Functions:
      - `createSession(systemPrompt?: string): Effect<Session>` - creates new session with UUID
-     - `saveSession(session: Session): Effect<void>` - writes to `.prodigy-coder/sessions/<id>.json`
-     - `loadSession(id: string): Effect<Session>` - reads from file
+     - `saveSession(session: Session): Effect<void>` - writes to `.prodigy-coder/sessions/<id>.json` (serialize with `Schema.encodeUnknown`)
+     - `loadSession(id: string): Effect<Session>` - reads from file (parse with `Schema.decodeUnknown`)
      - `listSessions(): Effect<ReadonlyArray<{id: string, createdAt: Date, updatedAt: Date}>>`
      - `deleteSession(id: string): Effect<void>`
 
 5. Create `src/output.ts`:
-   - `OutputEvent` tagged union:
+   - Define output event schemas using Effect Schema:
      ```ts
-     type OutputEvent =
-       | { type: "text-delta"; delta: string }
-       | { type: "tool-call"; id: string; name: string; params: unknown }
-       | { type: "tool-result"; id: string; name: string; result: string; isError: boolean }
-       | { type: "tool-approval-request"; id: string; toolCallId: string; toolName: string }
-       | { type: "approval-response"; approved: boolean }
-       | { type: "finish"; text: string }
-       | { type: "error"; message: string }
+     const TextDelta = Schema.Struct({ type: Schema.Literal("text-delta"), delta: Schema.String })
+     const ToolCall = Schema.Struct({
+       type: Schema.Literal("tool-call"),
+       id: Schema.String,
+       name: Schema.String,
+       params: Schema.Unknown,
+     })
+     const ToolResult = Schema.Struct({
+       type: Schema.Literal("tool-result"),
+       id: Schema.String,
+       name: Schema.String,
+       result: Schema.String,
+       isError: Schema.Boolean,
+     })
+     const ToolApprovalRequest = Schema.Struct({
+       type: Schema.Literal("tool-approval-request"),
+       id: Schema.String,
+       toolCallId: Schema.String,
+       toolName: Schema.String,
+     })
+     const ApprovalResponse = Schema.Struct({ type: Schema.Literal("approval-response"), approved: Schema.Boolean })
+     const Finish = Schema.Struct({ type: Schema.Literal("finish"), text: Schema.String })
+     const Error = Schema.Struct({ type: Schema.Literal("error"), message: Schema.String })
+
+     const OutputEvent = Schema.Union(TextDelta, ToolCall, ToolResult, ToolApprovalRequest, ApprovalResponse, Finish, Error)
      ```
    - Text formatter: color-coded stdout output (blue for tool calls, red for errors)
    - Stream-json formatter: LDJSON (one JSON object per line, matches Claude Code format)
    - `createFormatter(format: "text" | "stream-json"): Formatter` - formatter interface has `format(event: OutputEvent): Effect<void>`
 
-6. Create `src/index.ts` with Effect CLI command:
-   - Main command `prodigy` with flags:
-     - `--prompt <text>` (optional, can use stdin instead)
-     - `--print` (non-interactive mode)
-     - `--output-format text|stream-json` (default: text)
-     - `--session <id>` (resume session)
-     - `--model <name>` (override model)
-     - `--max-turns <n>` (override max turns)
-     - `--approval-mode none|dangerous|all` (override approval mode)
-     - `--system-prompt <text>` (override system prompt)
-     - `--config <path>` (config file path)
-   - Subcommands:
-     - `session list` - list sessions
-     - `session delete <id>` - delete a session
-     - `config show` - print current config (mask API keys)
-   - Handler stub for now (full integration in later tasks):
-     - Load config
-     - Create/load session
-     - Provide platform layers (FileSystem, Path, ChildProcessSpawner, HttpClient, IdGenerator, Terminal)
-   - Default system prompt: `"You are a coding assistant. You have access to tools to read, write, edit files, run shell commands, search code, and fetch web content. Be concise and helpful."`
+6. Create `src/index.ts` with Effect CLI command using `effect/Unstable/Cli`:
+    - Import from `effect/Unstable/Cli` (not `@effect/cli`)
+    - Main command `prodigy` with flags:
+      - `--prompt <text>` (optional, can use stdin instead)
+      - `--print` (non-interactive mode)
+      - `--output-format text|stream-json` (default: text)
+      - `--session <id>` (resume session)
+      - `--model <name>` (override model)
+      - `--max-turns <n>` (override max turns)
+      - `--approval-mode none|dangerous|all` (override approval mode)
+      - `--system-prompt <text>` (override system prompt)
+      - `--config <path>` (config file path)
+    - Subcommands:
+      - `session list` - list sessions
+      - `session delete <id>` - delete a session
+      - `config show` - print current config (mask API keys)
+    - Handler stub for now (full integration in later tasks):
+      - Load config
+      - Create/load session
+      - Provide platform layers (FileSystem, Path, ChildProcessSpawner, HttpClient, IdGenerator, Terminal)
+    - Default system prompt: `"You are a coding assistant. You have access to tools to read, write, edit files, run shell commands, search code, and fetch web content. Be concise and helpful."`
 
 7. **Vitest integration tests for Task 1:**
 
@@ -146,7 +191,7 @@ The ralph-auto.sh script currently uses `claude --dangerously-skip-permissions -
 
 **Files to create:**
 - `src/provider.ts` - Provider layer builder
-- `tests/provider.test.ts` - Provider layer tests
+- `src/provider.test.ts` - Provider layer tests (note: vitest config includes src/**/*.test.ts)
 
 **Steps:**
 
@@ -199,39 +244,111 @@ The ralph-auto.sh script currently uses `claude --dangerously-skip-permissions -
 **Steps:**
 
 1. Create `src/tools/shell.ts`:
-   - `Tool.make("shell", { description, parameters: Schema.Struct({ command: Schema.String }), success: Schema.String })`
+   - Define tool using Effect Schema:
+     ```ts
+     const ShellParameters = Schema.Struct({ command: Schema.String })
+     const ShellTool = Tool.make("shell", {
+       description: "Execute a shell command",
+       parameters: ShellParameters,
+       success: Schema.String,
+     })
+     ```
    - Handler: uses `ChildProcessSpawner` to spawn `bash -c <command>`, 5 minute timeout
    - Captures stdout + stderr, returns combined output as string
    - Error case: command fails, return error message
 
 2. Create `src/tools/read.ts`:
-   - `Tool.make("read", { description, parameters: Schema.Struct({ filePath: Schema.String }), success: Schema.String })`
+   - Define tool using Effect Schema:
+     ```ts
+     const ReadParameters = Schema.Struct({ filePath: Schema.String })
+     const ReadTool = Tool.make("read", {
+       description: "Read a file's contents",
+       parameters: ReadParameters,
+       success: Schema.String,
+     })
+     ```
    - Handler: uses `FileSystem` to read file as string
    - Error case: file not found or read error, return error message
 
 3. Create `src/tools/write.ts`:
-   - `Tool.make("write", { description, parameters: Schema.Struct({ filePath: Schema.String, content: Schema.String }), success: Schema.String })`
+   - Define tool using Effect Schema:
+     ```ts
+     const WriteParameters = Schema.Struct({
+       filePath: Schema.String,
+       content: Schema.String,
+     })
+     const WriteTool = Tool.make("write", {
+       description: "Write content to a file",
+       parameters: WriteParameters,
+       success: Schema.String,
+     })
+     ```
    - Handler: creates parent directories via `Path`, writes file via `FileSystem`
    - Returns success message with file path
 
 4. Create `src/tools/edit.ts`:
-   - `Tool.make("edit", { description, parameters: Schema.Struct({ filePath: Schema.String, oldString: Schema.String, newString: Schema.String }), success: Schema.String })`
+   - Define tool using Effect Schema:
+     ```ts
+     const EditParameters = Schema.Struct({
+       filePath: Schema.String,
+       oldString: Schema.String,
+       newString: Schema.String,
+     })
+     const EditTool = Tool.make("edit", {
+       description: "Edit a file by replacing text",
+       parameters: EditParameters,
+       success: Schema.String,
+     })
+     ```
    - Handler: reads file, finds `oldString` exactly (must match), replaces with `newString`, writes back
    - Error case: `oldString` not found in file, return error message
 
 5. Create `src/tools/grep.ts`:
-   - `Tool.make("grep", { description, parameters: Schema.Struct({ pattern: Schema.String, path: Schema.String }), success: Schema.Array(Schema.String) })`
+   - Define tool using Effect Schema:
+     ```ts
+     const GrepParameters = Schema.Struct({
+       pattern: Schema.String,
+       path: Schema.String,
+     })
+     const GrepTool = Tool.make("grep", {
+       description: "Search for text patterns in files",
+       parameters: GrepParameters,
+       success: Schema.Array(Schema.String),
+     })
+     ```
    - Handler: runs `rg --hidden --no-heading --line-number <pattern> <path>` via shell
    - Returns array of matching lines in `file:line:content` format
    - Error case: no matches, return empty array
 
 6. Create `src/tools/glob.ts`:
-   - `Tool.make("glob", { description, parameters: Schema.Struct({ pattern: Schema.String, path: Schema.String }), success: Schema.Array(Schema.String) })`
+   - Define tool using Effect Schema:
+     ```ts
+     const GlobParameters = Schema.Struct({
+       pattern: Schema.String,
+       path: Schema.String,
+     })
+     const GlobTool = Tool.make("glob", {
+       description: "Find files matching a glob pattern",
+       parameters: GlobParameters,
+       success: Schema.Array(Schema.String),
+     })
+     ```
    - Handler: uses shell with `find <path> -name "<pattern>" -type f` (or implement with FileSystem)
    - Returns newline-separated file paths (as single string that caller splits)
 
 7. Create `src/tools/webfetch.ts`:
-   - `Tool.make("webfetch", { description, parameters: Schema.Struct({ url: Schema.String, format: Schema.Literal("markdown", "text") }), success: Schema.String })`
+   - Define tool using Effect Schema:
+     ```ts
+     const WebFetchParameters = Schema.Struct({
+       url: Schema.String,
+       format: Schema.Literal("markdown", "text"),
+     })
+     const WebFetchTool = Tool.make("webfetch", {
+       description: "Fetch web content from a URL",
+       parameters: WebFetchParameters,
+       success: Schema.String,
+     })
+     ```
    - Handler: uses `HttpClient` to GET the URL
    - Returns content as-is (markdown format just returns content, text format returns content)
    - Error case: fetch fails, return error message

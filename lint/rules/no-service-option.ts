@@ -1,6 +1,6 @@
-import type { CreateRule, ESTree, Visitor } from "oxlint"
+import { defineRule } from "@oxlint/plugins"
 
-const rule: CreateRule = {
+export default defineRule({
   meta: {
     type: "problem",
     docs: {
@@ -13,7 +13,7 @@ const rule: CreateRule = {
   },
   create(context) {
     return {
-      CallExpression(node: ESTree.CallExpression) {
+      CallExpression(node) {
         const callee = node.callee
         if (
           callee.type === "MemberExpression" &&
@@ -28,8 +28,6 @@ const rule: CreateRule = {
           })
         }
       }
-    } as Visitor
+    }
   }
-}
-
-export default rule
+})

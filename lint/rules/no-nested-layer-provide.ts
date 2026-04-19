@@ -1,6 +1,7 @@
-import type { CreateRule, ESTree, Visitor } from "oxlint"
+import type { ESTree } from "@oxlint/plugins"
+import { defineRule } from "@oxlint/plugins"
 
-const rule: CreateRule = {
+export default defineRule({
   meta: {
     type: "problem",
     docs: {
@@ -25,11 +26,11 @@ const rule: CreateRule = {
     }
 
     return {
-      CallExpression(node: ESTree.CallExpression) {
+      CallExpression(node) {
         if (!isLayerProvide(node)) return
 
         for (const arg of node.arguments) {
-          if (isLayerProvide(arg)) {
+          if (arg.type !== "SpreadElement" && isLayerProvide(arg)) {
             context.report({
               node: arg,
               messageId: "nestedProvide"
@@ -37,8 +38,6 @@ const rule: CreateRule = {
           }
         }
       }
-    } as Visitor
+    }
   }
-}
-
-export default rule
+})

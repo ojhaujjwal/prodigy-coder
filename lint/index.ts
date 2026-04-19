@@ -1,3 +1,4 @@
+import { definePlugin } from "@oxlint/plugins"
 import noEffectIgnore from "./rules/no-effect-ignore.ts"
 import noEffectCatchallcause from "./rules/no-effect-catchallcause.ts"
 import noEffectAsvoid from "./rules/no-effect-asvoid.ts"
@@ -9,8 +10,12 @@ import preferOptionFromNullable from "./rules/prefer-option-from-nullable.ts"
 import importExtensions from "./rules/import-extensions.ts"
 import noDisableValidation from "./rules/no-disable-validation.ts"
 import noVoidExpression from "./rules/no-void-expression.ts"
+import noNodeImports from "./rules/no-node-imports.ts"
+import noProcess from "./rules/no-process.ts"
+import noBunGlobals from "./rules/no-bun-globals.ts"
+import noConsole from "./rules/no-console.ts"
 
-export default {
+export default definePlugin({
   meta: { name: "prodigy" },
   rules: {
     "no-effect-ignore": noEffectIgnore,
@@ -23,6 +28,10 @@ export default {
     "prefer-option-from-nullable": preferOptionFromNullable,
     "import-extensions": importExtensions,
     "no-disable-validation": noDisableValidation,
-    "no-void-expression": noVoidExpression
+    "no-void-expression": noVoidExpression,
+    "no-node-imports": noNodeImports,
+    "no-process": noProcess,
+    "no-bun-globals": noBunGlobals,
+    "no-console": noConsole
   }
-}
+})

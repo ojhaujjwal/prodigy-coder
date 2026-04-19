@@ -1,6 +1,7 @@
-import type { CreateRule, ESTree, Visitor } from "oxlint"
+import type { ESTree } from "@oxlint/plugins"
+import { defineRule } from "@oxlint/plugins"
 
-const rule: CreateRule = {
+export default defineRule({
   meta: {
     type: "problem",
     docs: {
@@ -12,7 +13,7 @@ const rule: CreateRule = {
     schema: []
   },
   create(context) {
-    function isEffectVoidOrUnit(node: ESTree.Node | null): boolean {
+    function isEffectVoidOrUnit(node: ESTree.Node | null | undefined): boolean {
       if (!node) return false
       if (node.type === "MemberExpression") {
         return (
@@ -30,18 +31,21 @@ const rule: CreateRule = {
         if (isEffectVoidOrUnit(node.body)) {
           return true
         }
-        if (node.body.type === "BlockStatement") {
+        if (node.body && node.body.type === "BlockStatement") {
           const body = node.body.body
           if (body.length === 1 && body[0].type === "ReturnStatement") {
-            return isEffectVoidOrUnit(body[0].argument)
+            return isEffectVoidOrUnit(body[0].argument ?? null)
           }
         }
       }
 
       if (node.type === "FunctionExpression") {
-        const body = node.body.body
-        if (body.length === 1 && body[0].type === "ReturnStatement") {
-          return isEffectVoidOrUnit(body[0].argument)
+        const body = node.body
+        if (body && body.type === "BlockStatement") {
+          const stmts = body.body
+          if (stmts.length === 1 && stmts[0].type === "ReturnStatement") {
+            return isEffectVoidOrUnit(stmts[0].argument ?? null)
+          }
         }
       }
 
@@ -64,7 +68,7 @@ const rule: CreateRule = {
     }
 
     return {
-      CallExpression(node: ESTree.CallExpression) {
+      CallExpression(node) {
         const catchType = isCatchCall(node)
         if (!catchType) return
 
@@ -96,8 +100,6 @@ const rule: CreateRule = {
           })
         }
       }
-    } as Visitor
+    }
   }
-}
-
-export default rule
+})

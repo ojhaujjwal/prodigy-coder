@@ -29,9 +29,10 @@ Use these files as reference when implementing tasks. Read relevant specs before
 1. **STAY ON TOPIC**: Work only on tasks related to the focus input. Do not work on unrelated areas.
 2. **DO NOT COMMIT**: The Ralph script handles all git commits. Just write code.
 3. **CI MUST BE GREEN**: Your code MUST pass `bun run typecheck && bun run lint` before signaling completion.
-4. **ONE TASK PER ITERATION**: Complete one task, signal completion, then STOP.
+4. **ONE TASK PER ITERATION**: Complete one spec task, signal completion, then STOP.
 5. **UPDATE SPECS**: Update spec files to mark tasks complete, add new tasks, or track progress.
 6. **NEVER MOVE SPECS OUT OF PENDING**: Do not move spec files from `specs/pending/` to `specs/completed/` or any other location. Only the user will decide when a spec is complete and move it manually.
+7. **CI FIXES ARE NOT TASKS**: Fixing typecheck or lint errors is NOT a task — it is part of completing the spec task that introduced the errors. If you are only fixing CI errors without progressing a spec task, do NOT signal TASK_COMPLETE. Continue working on the spec task instead.
 
 ## Signals
 
@@ -61,13 +62,22 @@ TASK_COMPLETE: Brief description of what you implemented
 
 ### NOTHING_LEFT_TO_DO
 
-When all tasks for the focus topic are complete and there is no more work to do:
+When ALL tasks for the focus topic are complete and there is no more work to do:
 
 ```
 NOTHING_LEFT_TO_DO
 ```
 
 **After outputting NOTHING_LEFT_TO_DO, STOP IMMEDIATELY.**
+
+### Before Signaling NOTHING_LEFT_TO_DO
+
+**CRITICAL:** Before signaling `NOTHING_LEFT_TO_DO`, you MUST:
+1. Re-read the spec file(s) listed above
+2. Check every `- [ ]` (unchecked) task in the spec
+3. If ANY task is still unchecked, you MUST NOT signal `NOTHING_LEFT_TO_DO`. Instead, signal `TASK_COMPLETE` for your current work and start the remaining task in the next iteration.
+
+Signaling `NOTHING_LEFT_TO_DO` when spec tasks are still unchecked is a **CRITICAL ERROR**.
 
 ### Completing the Last Task
 
@@ -119,6 +129,12 @@ This is iteration {{ITERATION}} of the autonomous loop.
 {{CI_ERRORS}}
 
 {{PROGRESS}}
+
+## Remaining Spec Tasks
+
+There are **{{REMAINING_TASKS}}** unchecked tasks remaining in the spec files.
+
+You MUST NOT signal `NOTHING_LEFT_TO_DO` until this number reaches 0. If you have remaining tasks, continue working on them.
 
 ## Begin
 

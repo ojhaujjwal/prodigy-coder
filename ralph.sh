@@ -248,7 +248,7 @@ $lint_output
     echo "3. Vitest..."
     echo "------------"
     local vitest_output
-    if vitest_output=$(bun run test 2>&1); then
+    if vitest_output=$(bun run test -- --run 2>&1); then
         echo -e "${GREEN}Vitest passed${NC}"
     else
         echo -e "${RED}Vitest failed${NC}"
@@ -357,12 +357,15 @@ Work exclusively on this task. When the task is complete, signal TASK_COMPLETE. 
 
     local specs_list=$(find specs -name "*.md" -type f | sort | while read f; do echo "- \`$f\`"; done)
 
+    local remaining_tasks=$(grep -rh "^\- \[ \]" specs/ 2>/dev/null | wc -l | tr -d ' ')
+
     local prompt=$(cat "$PROMPT_TEMPLATE")
     prompt="${prompt//\{\{SPECS_LIST\}\}/$specs_list}"
     prompt="${prompt//\{\{ITERATION\}\}/$iteration}"
     prompt="${prompt//\{\{CI_ERRORS\}\}/$ci_errors}"
     prompt="${prompt//\{\{PROGRESS\}\}/$progress_content}"
     prompt="${prompt//\{\{FOCUS\}\}/$focus_section}"
+    prompt="${prompt//\{\{REMAINING_TASKS\}\}/$remaining_tasks}"
 
     echo "$prompt"
 }
@@ -405,7 +408,7 @@ run_iteration() {
     echo ""
 
     local agent_exit_code=0
-    if opencode run -m "$MODEL" -- "$(cat "$prompt_file")" 2>&1 | tee "$output_file"; then
+    if OPENCODE_PERMISSION='{"edit":{"*":"allow",".oxlintrc.json":"deny","lint/**":"deny","tsconfig.json":"deny"}}' opencode run -m "$MODEL" -- "$(cat "$prompt_file")" 2>&1 | tee "$output_file"; then
         echo ""
         log "SUCCESS" "Agent completed iteration $iteration"
     else
