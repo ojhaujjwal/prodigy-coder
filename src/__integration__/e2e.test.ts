@@ -1,5 +1,4 @@
-import { describe, it } from "@effect/vitest"
-import { assert } from "@effect/vitest"
+import { describe, it, expect } from "@effect/vitest"
 import { Effect, Layer } from "effect"
 import { runAgent, type AgentConfig } from "../agent.ts"
 import { createMockLLMLayer, createStubHandlers, createTestConfig, createTestSession, type TurnResponse } from "./helpers.ts"
@@ -30,8 +29,8 @@ describe("e2e", () => {
       const textDeltas = result.filter((e) => e.type === "text-delta")
       const finishes = result.filter((e) => e.type === "finish")
 
-      assert.isTrue(textDeltas.length >= 1)
-      assert.isTrue(finishes.length >= 1)
+      expect(textDeltas.length >= 1).toBe(true)
+      expect(finishes.length >= 1).toBe(true)
     })
 
   )
@@ -41,12 +40,12 @@ describe("e2e", () => {
       const repo = yield* SessionRepo
       const sessions = yield* repo.list()
 
-      assert.isTrue(Array.isArray(sessions))
+      expect(Array.isArray(sessions)).toBe(true)
     }).pipe(Effect.provide(testLayer))
 
   )
 
-  it.skip("Test 3: Session accumulates messages after agent run", () =>
+  it.effect("Test 3: Session accumulates messages after agent run", () =>
     Effect.gen(function* () {
       const mockResponses: TurnResponse[] = [
         [{ type: "tool-call", id: "call-1", name: "read", params: { filePath: "/test.txt" } }],
@@ -65,12 +64,12 @@ describe("e2e", () => {
 
       yield* runAgent("test prompt", agentConfig, mockLLMLayer)
 
-      assert.isTrue(agentConfig.session.messages.length >= 2)
+      expect(agentConfig.session.messages.length >= 2).toBe(true)
     })
 
   )
 
-  it.skip("Test 4: Multiple tool calls in sequence", () =>
+  it.effect("Test 4: Multiple tool calls in sequence", () =>
     Effect.gen(function* () {
       const mockResponses: TurnResponse[] = [
         [
@@ -89,8 +88,8 @@ describe("e2e", () => {
 
       yield* runAgent("test prompt", agentConfig, mockLLMLayer)
 
-      assert.deepEqual(calls["read"], [{ filePath: "/a.txt" }])
-      assert.deepEqual(calls["write"], [{ filePath: "/b.txt", content: "test" }])
+      expect(calls["read"]).toEqual([{ filePath: "/a.txt" }])
+      expect(calls["write"]).toEqual([{ filePath: "/b.txt", content: "test" }])
     })
 
   )

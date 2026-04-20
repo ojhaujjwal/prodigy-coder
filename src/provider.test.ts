@@ -1,5 +1,4 @@
-import { describe, it } from "@effect/vitest"
-import { assert } from "@effect/vitest"
+import { describe, it, expect } from "@effect/vitest"
 import { buildProviderLayer } from "../src/provider.ts"
 
 describe("provider", () => {
@@ -11,7 +10,7 @@ describe("provider", () => {
       model: "gpt-4o",
     }
     const layer = buildProviderLayer(config)
-    assert.isDefined(layer)
+    expect(layer).toBeDefined()
   })
 
   it("buildProviderLayer should create layer for openai type", () => {
@@ -21,7 +20,7 @@ describe("provider", () => {
       model: "gpt-4o",
     }
     const layer = buildProviderLayer(config)
-    assert.isDefined(layer)
+    expect(layer).toBeDefined()
   })
 
   it("buildProviderLayer should create layer for anthropic type", () => {
@@ -31,7 +30,7 @@ describe("provider", () => {
       model: "claude-3-5-sonnet-20241022",
     }
     const layer = buildProviderLayer(config)
-    assert.isDefined(layer)
+    expect(layer).toBeDefined()
   })
 
   it("buildProviderLayer should create layer for openrouter type", () => {
@@ -41,7 +40,7 @@ describe("provider", () => {
       model: "anthropic/claude-3-5-sonnet-20241022",
     }
     const layer = buildProviderLayer(config)
-    assert.isDefined(layer)
+    expect(layer).toBeDefined()
   })
 
   it("buildProviderLayer should use default model for openai-compat", () => {
@@ -50,7 +49,7 @@ describe("provider", () => {
       apiKey: "test-key",
     }
     const layer = buildProviderLayer(config)
-    assert.isDefined(layer)
+    expect(layer).toBeDefined()
   })
 
   it("buildProviderLayer should use default model for openai", () => {
@@ -59,7 +58,7 @@ describe("provider", () => {
       apiKey: "test-key",
     }
     const layer = buildProviderLayer(config)
-    assert.isDefined(layer)
+    expect(layer).toBeDefined()
   })
 
   it("buildProviderLayer should use default model for anthropic", () => {
@@ -68,7 +67,7 @@ describe("provider", () => {
       apiKey: "test-key",
     }
     const layer = buildProviderLayer(config)
-    assert.isDefined(layer)
+    expect(layer).toBeDefined()
   })
 
   it("buildProviderLayer should use default model for openrouter", () => {
@@ -77,6 +76,6 @@ describe("provider", () => {
       apiKey: "test-key",
     }
     const layer = buildProviderLayer(config)
-    assert.isDefined(layer)
+    expect(layer).toBeDefined()
   })
 })

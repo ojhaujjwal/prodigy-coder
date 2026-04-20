@@ -1,5 +1,4 @@
-import { describe, it } from "@effect/vitest"
-import { assert } from "@effect/vitest"
+import { describe, it, expect } from "@effect/vitest"
 import { Effect, Layer } from "effect"
 import { SessionRepo } from "./session.ts"
 import { layer as bunServicesLayer } from "@effect/platform-bun/BunServices"
@@ -25,11 +24,11 @@ describe("session", () => {
         const repo = yield* SessionRepo
         const session = yield* repo.create()
 
-        assert.isString(session.id)
-        assert.isTrue(session.id.length > 0)
-        assert.isTrue(session.messages.length === 0)
-        assert.isTrue(session.createdAt instanceof Date)
-        assert.isTrue(session.updatedAt instanceof Date)
+        expect(typeof session.id).toBe("string")
+        expect(session.id.length > 0).toBe(true)
+        expect(session.messages.length === 0).toBe(true)
+        expect(session.createdAt instanceof Date).toBe(true)
+        expect(session.updatedAt instanceof Date).toBe(true)
       }).pipe(Effect.provide(testLayer)))
 
     it.effect("createSession with systemPrompt adds it as first message", () =>
@@ -38,9 +37,9 @@ describe("session", () => {
         const repo = yield* SessionRepo
         const session = yield* repo.create("You are a helpful assistant")
 
-        assert.equal(session.messages.length, 1)
-        assert.equal(session.messages[0].role, "system")
-        assert.equal(session.messages[0].content, "You are a helpful assistant")
+        expect(session.messages.length).toBe(1)
+        expect(session.messages[0].role).toBe("system")
+        expect(session.messages[0].content).toBe("You are a helpful assistant")
       }).pipe(Effect.provide(testLayer)))
   })
 
@@ -57,14 +56,14 @@ describe("session", () => {
 
         const loaded = yield* repo.load(session.id)
 
-        assert.equal(loaded.id, session.id)
-        assert.equal(loaded.messages.length, session.messages.length)
-        assert.equal(loaded.messages[0].role, "system")
-        assert.equal(loaded.messages[0].content, "Test prompt")
-        assert.equal(loaded.messages[1].role, "user")
-        assert.equal(loaded.messages[1].content, "Hello")
-        assert.equal(loaded.messages[2].role, "assistant")
-        assert.equal(loaded.messages[2].content, "Hi there!")
+        expect(loaded.id).toBe(session.id)
+        expect(loaded.messages.length).toBe(session.messages.length)
+        expect(loaded.messages[0].role).toBe("system")
+        expect(loaded.messages[0].content).toBe("Test prompt")
+        expect(loaded.messages[1].role).toBe("user")
+        expect(loaded.messages[1].content).toBe("Hello")
+        expect(loaded.messages[2].role).toBe("assistant")
+        expect(loaded.messages[2].content).toBe("Hi there!")
       }).pipe(Effect.provide(testLayer)))
   })
 
@@ -74,8 +73,8 @@ describe("session", () => {
         yield* cleanupSessions()
         const repo = yield* SessionRepo
         const sessions = yield* repo.list()
-        assert.isTrue(Array.isArray(sessions))
-        assert.isTrue(sessions.length === 0)
+        expect(Array.isArray(sessions)).toBe(true)
+        expect(sessions.length === 0).toBe(true)
       }).pipe(Effect.provide(testLayer)))
 
     it.effect("returns created sessions", () =>
@@ -89,10 +88,10 @@ describe("session", () => {
 
         const sessions = yield* repo.list()
 
-        assert.isTrue(sessions.length >= 2)
+        expect(sessions.length >= 2).toBe(true)
         const ids: string[] = sessions.map((s) => s.id)
-        assert.isTrue(ids.includes(session1.id))
-        assert.isTrue(ids.includes(session2.id))
+        expect(ids.includes(session1.id)).toBe(true)
+        expect(ids.includes(session2.id)).toBe(true)
       }).pipe(Effect.provide(testLayer)))
   })
 
@@ -106,12 +105,12 @@ describe("session", () => {
         const sessionId = session.id
 
         const sessionsBefore = yield* repo.list()
-        assert.isTrue(sessionsBefore.some((s) => s.id === sessionId))
+        expect(sessionsBefore.some((s) => s.id === sessionId)).toBe(true)
 
         yield* repo.delete(sessionId)
 
         const sessionsAfter = yield* repo.list()
-        assert.isFalse(sessionsAfter.some((s) => s.id === sessionId))
+        expect(sessionsAfter.some((s) => s.id === sessionId)).toBe(false)
       }).pipe(Effect.provide(testLayer)))
 
     it.effect("does not throw for non-existent session", () =>
@@ -132,7 +131,7 @@ describe("session", () => {
         Effect.provide(testLayer),
         Effect.flip,
         Effect.map((error) => {
-          assert.isTrue(error !== undefined)
+          expect(error !== undefined).toBe(true)
         })
       ))
   })

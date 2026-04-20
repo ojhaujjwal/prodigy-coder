@@ -1,5 +1,4 @@
-import { describe, it } from "@effect/vitest"
-import { assert } from "@effect/vitest"
+import { describe, it, expect } from "@effect/vitest"
 import { Effect } from "effect"
 import * as FileSystem from "effect/FileSystem"
 import { layer as bunServicesLayer } from "@effect/platform-bun/BunServices"
@@ -15,10 +14,10 @@ describe("write tool", () => {
   it.effect("creates new file with correct content", () =>
     Effect.gen(function* () {
       const result = yield* writeHandler({ filePath: "/tmp/test-write.txt", content: "Test content" }, mockContext)
-      assert.equal(result, "Written to /tmp/test-write.txt")
+      expect(result).toBe("Written to /tmp/test-write.txt")
       const fs = yield* FileSystem.FileSystem
       const content = yield* fs.readFileString("/tmp/test-write.txt")
-      assert.equal(content, "Test content")
+      expect(content).toBe("Test content")
     }).pipe(Effect.provide(testLayer)))
 
   it.effect("overwrites existing file", () =>
@@ -27,15 +26,15 @@ describe("write tool", () => {
       yield* fs.writeFileString("/tmp/test-write2.txt", "Original")
       yield* writeHandler({ filePath: "/tmp/test-write2.txt", content: "Updated" }, mockContext)
       const content = yield* fs.readFileString("/tmp/test-write2.txt")
-      assert.equal(content, "Updated")
+      expect(content).toBe("Updated")
     }).pipe(Effect.provide(testLayer)))
 
   it.effect("creates parent directories", () =>
     Effect.gen(function* () {
       const result = yield* writeHandler({ filePath: "/tmp/test-dir/nested/file.txt", content: "Nested" }, mockContext)
-      assert.isTrue(result.includes("Written to"))
+      expect(result.includes("Written to")).toBe(true)
       const fs = yield* FileSystem.FileSystem
       const content = yield* fs.readFileString("/tmp/test-dir/nested/file.txt")
-      assert.equal(content, "Nested")
+      expect(content).toBe("Nested")
     }).pipe(Effect.provide(testLayer)))
 })

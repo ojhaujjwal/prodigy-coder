@@ -1,5 +1,4 @@
-import { describe, it } from "@effect/vitest"
-import { assert } from "@effect/vitest"
+import { describe, it, expect } from "@effect/vitest"
 import { Effect } from "effect"
 import * as FileSystem from "effect/FileSystem"
 import { layer as bunServicesLayer } from "@effect/platform-bun/BunServices"
@@ -17,7 +16,7 @@ describe("read tool", () => {
       const fs = yield* FileSystem.FileSystem
       yield* fs.writeFileString("/tmp/test-read.txt", "Hello, world!")
       const result = yield* readHandler({ filePath: "/tmp/test-read.txt" }, mockContext)
-      assert.equal(result, "Hello, world!")
+      expect(result).toBe("Hello, world!")
     }).pipe(Effect.provide(testLayer)))
 
   it.effect("returns error message for non-existent file", () =>
@@ -25,6 +24,6 @@ describe("read tool", () => {
       const result = yield* readHandler({ filePath: "/tmp/non-existent-file-12345.txt" }, mockContext).pipe(
         Effect.catch((e) => Effect.succeed(`Error: ${e}`))
       )
-      assert.isTrue(result.includes("Error"))
+      expect(result.includes("Error")).toBe(true)
     }).pipe(Effect.provide(testLayer)))
 })

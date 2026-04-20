@@ -15,6 +15,7 @@ import noProcess from "./rules/no-process.ts"
 import noBunGlobals from "./rules/no-bun-globals.ts"
 import noConsole from "./rules/no-console.ts"
 import noPlainItWithEffect from "./rules/no-plain-it-with-effect.ts"
+import noVitestModifiers from "./rules/no-vitest-modifiers.ts"
 
 export default definePlugin({
   meta: { name: "prodigy" },
@@ -34,6 +35,7 @@ export default definePlugin({
     "no-process": noProcess,
     "no-bun-globals": noBunGlobals,
     "no-console": noConsole,
-    "no-plain-it-with-effect": noPlainItWithEffect
+    "no-plain-it-with-effect": noPlainItWithEffect,
+    "no-vitest-modifiers": noVitestModifiers
   }
 })

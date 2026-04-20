@@ -1,37 +1,36 @@
-import { describe, it } from "@effect/vitest"
-import { assert } from "@effect/vitest"
+import { describe, it, expect } from "@effect/vitest"
 import { needsApproval } from "./approval.ts"
 
 describe("approval", () => {
   describe("needsApproval", () => {
     it('returns false for any tool in "none" mode', () => {
-      assert.isFalse(needsApproval("shell", "none"))
-      assert.isFalse(needsApproval("read", "none"))
-      assert.isFalse(needsApproval("write", "none"))
-      assert.isFalse(needsApproval("edit", "none"))
+      expect(needsApproval("shell", "none")).toBe(false)
+      expect(needsApproval("read", "none")).toBe(false)
+      expect(needsApproval("write", "none")).toBe(false)
+      expect(needsApproval("edit", "none")).toBe(false)
     })
 
     it('returns true for dangerous tools in "dangerous" mode', () => {
-      assert.isTrue(needsApproval("shell", "dangerous"))
-      assert.isTrue(needsApproval("write", "dangerous"))
-      assert.isTrue(needsApproval("edit", "dangerous"))
+      expect(needsApproval("shell", "dangerous")).toBe(true)
+      expect(needsApproval("write", "dangerous")).toBe(true)
+      expect(needsApproval("edit", "dangerous")).toBe(true)
     })
 
     it('returns false for non-dangerous tools in "dangerous" mode', () => {
-      assert.isFalse(needsApproval("read", "dangerous"))
-      assert.isFalse(needsApproval("grep", "dangerous"))
-      assert.isFalse(needsApproval("glob", "dangerous"))
-      assert.isFalse(needsApproval("webfetch", "dangerous"))
+      expect(needsApproval("read", "dangerous")).toBe(false)
+      expect(needsApproval("grep", "dangerous")).toBe(false)
+      expect(needsApproval("glob", "dangerous")).toBe(false)
+      expect(needsApproval("webfetch", "dangerous")).toBe(false)
     })
 
     it('returns true for all tools in "all" mode', () => {
-      assert.isTrue(needsApproval("shell", "all"))
-      assert.isTrue(needsApproval("read", "all"))
-      assert.isTrue(needsApproval("write", "all"))
-      assert.isTrue(needsApproval("edit", "all"))
-      assert.isTrue(needsApproval("grep", "all"))
-      assert.isTrue(needsApproval("glob", "all"))
-      assert.isTrue(needsApproval("webfetch", "all"))
+      expect(needsApproval("shell", "all")).toBe(true)
+      expect(needsApproval("read", "all")).toBe(true)
+      expect(needsApproval("write", "all")).toBe(true)
+      expect(needsApproval("edit", "all")).toBe(true)
+      expect(needsApproval("grep", "all")).toBe(true)
+      expect(needsApproval("glob", "all")).toBe(true)
+      expect(needsApproval("webfetch", "all")).toBe(true)
     })
   })
 })

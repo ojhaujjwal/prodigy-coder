@@ -20,7 +20,7 @@ const mockPartToEncoded = (part: MockPart): Response.StreamPartEncoded => {
         delta: part.delta,
       }) as Response.StreamPartEncoded
     case "tool-call":
-      return Response.toolCallPart({
+      return Response.makePart("tool-call", {
         id: part.id,
         name: part.name,
         params: part.params,

@@ -1,5 +1,4 @@
-import { describe, it } from "@effect/vitest"
-import { assert } from "@effect/vitest"
+import { describe, it, expect } from "@effect/vitest"
 import { ConfigProvider, Effect, Layer, Schema } from "effect"
 import { AppConfig, loadConfig, maskConfig, ConfigSchema } from "./config.ts"
 import * as FileSystem from "effect/FileSystem"
@@ -131,13 +130,13 @@ describe("config", () => {
         Effect.andThen(
           runWithConfig(Effect.gen(function* () {
             const config = yield* AppConfig
-            assert.equal(config.provider.type, "openai-compat")
-            assert.equal(config.provider.apiKey, "file-key")
-            assert.equal(config.provider.baseUrl, "https://custom.example.com/v1")
-            assert.equal(config.provider.model, "gpt-4o-mini")
-            assert.equal(config.approvalMode, "dangerous")
-            assert.equal(config.maxTurns, 100)
-            assert.equal(config.systemPrompt, "Custom prompt")
+            expect(config.provider.type).toBe("openai-compat")
+            expect(config.provider.apiKey).toBe("file-key")
+            expect(config.provider.baseUrl).toBe("https://custom.example.com/v1")
+            expect(config.provider.model).toBe("gpt-4o-mini")
+            expect(config.approvalMode).toBe("dangerous")
+            expect(config.maxTurns).toBe(100)
+            expect(config.systemPrompt).toBe("Custom prompt")
           }))
         ),
         Effect.ensuring(teardownTmpDir())
@@ -148,10 +147,10 @@ describe("config", () => {
         Effect.andThen(
           runWithConfig(Effect.gen(function* () {
             const config = yield* AppConfig
-            assert.equal(config.provider.type, "openai-compat")
-            assert.equal(config.provider.model, "gpt-4o")
-            assert.equal(config.approvalMode, "none")
-            assert.equal(config.maxTurns, 50)
+            expect(config.provider.type).toBe("openai-compat")
+            expect(config.provider.model).toBe("gpt-4o")
+            expect(config.approvalMode).toBe("none")
+            expect(config.maxTurns).toBe(50)
           }))
         ),
         Effect.ensuring(teardownTmpDir())
@@ -175,8 +174,8 @@ describe("config", () => {
         Effect.andThen(
           runWithConfigPath("custom-config.json", Effect.gen(function* () {
             const config = yield* AppConfig
-            assert.equal(config.provider.type, "anthropic")
-            assert.equal(config.provider.apiKey, "anthropic-key")
+            expect(config.provider.type).toBe("anthropic")
+            expect(config.provider.apiKey).toBe("anthropic-key")
           }))
         ),
         Effect.ensuring(teardownTmpDir())
@@ -191,8 +190,8 @@ describe("config", () => {
             PRODIGY_CODER_APPROVAL_MODE: "all",
           }, Effect.gen(function* () {
             const config = yield* AppConfig
-            assert.equal(config.provider.model, "gpt-4o-mini")
-            assert.equal(config.approvalMode, "all")
+            expect(config.provider.model).toBe("gpt-4o-mini")
+            expect(config.approvalMode).toBe("all")
           }))
         ),
         Effect.ensuring(teardownTmpDir())
@@ -213,7 +212,7 @@ describe("config", () => {
         systemPrompt: undefined,
       }
       const masked = maskConfig(config)
-      assert.equal(masked.provider.apiKey, "***")
+      expect(masked.provider.apiKey).toBe("***")
     })
 
     it("preserves undefined API keys", () => {
@@ -228,7 +227,7 @@ describe("config", () => {
         systemPrompt: undefined,
       }
       const masked = maskConfig(config)
-      assert.isUndefined(masked.provider.apiKey)
+      expect(masked.provider.apiKey).toBeUndefined()
     })
   })
 })

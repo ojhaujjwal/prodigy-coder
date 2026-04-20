@@ -1,5 +1,4 @@
-import { describe, it } from "@effect/vitest"
-import { assert } from "@effect/vitest"
+import { describe, it, expect } from "@effect/vitest"
 import { Effect } from "effect"
 import { runAgent, type AgentConfig } from "../agent.ts"
 import type { OutputEvent } from "../output.ts"
@@ -47,11 +46,11 @@ describe("output integration", () => {
         yield* formatter(event)
       }
 
-      assert.isTrue(events.length >= 2)
+      expect(events.length >= 2).toBe(true)
       const textDeltas = events.filter((e) => e.type === "text-delta")
       const finishes = events.filter((e) => e.type === "finish")
-      assert.isTrue(textDeltas.length >= 1)
-      assert.isTrue(finishes.length >= 1)
+      expect(textDeltas.length >= 1).toBe(true)
+      expect(finishes.length >= 1).toBe(true)
     })
 
   )
@@ -73,7 +72,7 @@ describe("output integration", () => {
       }
 
       const textDeltas = events.filter((e) => e.type === "text-delta")
-      assert.equal(textDeltas[0].delta, "Hello, world!")
+      expect(textDeltas[0].delta).toBe("Hello, world!")
     })
 
   )

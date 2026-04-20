@@ -1,5 +1,4 @@
-import { describe, it } from "@effect/vitest"
-import { assert } from "@effect/vitest"
+import { describe, it, expect } from "@effect/vitest"
 import { Effect, Layer, Stream } from "effect"
 import * as LanguageModel from "effect/unstable/ai/LanguageModel"
 import * as Response from "effect/unstable/ai/Response"
@@ -42,7 +41,7 @@ describe("agent", () => {
     }
 
     const result = runAgent("test prompt", agentConfig, mockLanguageModelLayer)
-    assert.isDefined(result)
+    expect(result).toBeDefined()
   })
 
   it("runAgent should handle empty session with systemPrompt", () => {
@@ -71,6 +70,6 @@ describe("agent", () => {
     }
 
     const result = runAgent("test prompt", agentConfig, mockLanguageModelLayer)
-    assert.isDefined(result)
+    expect(result).toBeDefined()
   })
 })

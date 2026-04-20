@@ -1,5 +1,4 @@
-import { describe, it } from "@effect/vitest"
-import { assert } from "@effect/vitest"
+import { describe, it, expect } from "@effect/vitest"
 import { Effect, Schema } from "effect"
 import * as TestConsole from "effect/testing/TestConsole"
 import {
@@ -88,13 +87,13 @@ describe("output", () => {
         const event: OutputEvent = { type: "text-delta", delta: "Hello" }
         yield* formatter(event)
         const outputs = yield* TestConsole.logLines
-        assert.equal(outputs.length, 1)
+        expect(outputs.length).toBe(1)
         const parsed = parseJson(outputs[0] as string)
-        assert.equal(parsed.type, "content")
-        assert.isArray(parsed.content)
+        expect(parsed.type).toBe("content")
+        expect(Array.isArray(parsed.content)).toBe(true)
         const content = parsed.content as Array<{ type: string; text: string }>
-        assert.equal(content[0].type, "text")
-        assert.equal(content[0].text, "Hello")
+        expect(content[0].type).toBe("text")
+        expect(content[0].text).toBe("Hello")
       }).pipe(Effect.provide(testLayer)))
 
     it.effect("stream-json formatter outputs valid LDJSON for tool-call", () =>
@@ -108,11 +107,11 @@ describe("output", () => {
         }
         yield* formatter(event)
         const outputs = yield* TestConsole.logLines
-        assert.equal(outputs.length, 1)
+        expect(outputs.length).toBe(1)
         const parsed = parseJson(outputs[0] as string)
-        assert.equal(parsed.type, "tool_use")
-        assert.equal(parsed.name, "read")
-        assert.deepEqual(parsed.input, { filePath: "/test.txt" })
+        expect(parsed.type).toBe("tool_use")
+        expect(parsed.name).toBe("read")
+        expect(parsed.input).toEqual({ filePath: "/test.txt" })
       }).pipe(Effect.provide(testLayer)))
 
     it.effect("stream-json formatter outputs valid LDJSON for tool-result", () =>
@@ -127,11 +126,11 @@ describe("output", () => {
         }
         yield* formatter(event)
         const outputs = yield* TestConsole.logLines
-        assert.equal(outputs.length, 1)
+        expect(outputs.length).toBe(1)
         const parsed = parseJson(outputs[0] as string)
-        assert.equal(parsed.type, "tool_result")
-        assert.equal(parsed.content, "file contents")
-        assert.equal(parsed.is_error, false)
+        expect(parsed.type).toBe("tool_result")
+        expect(parsed.content).toBe("file contents")
+        expect(parsed.is_error).toBe(false)
       }).pipe(Effect.provide(testLayer)))
 
     it.effect("stream-json formatter outputs valid LDJSON for finish", () =>
@@ -140,10 +139,10 @@ describe("output", () => {
         const event: OutputEvent = { type: "finish", text: "Done" }
         yield* formatter(event)
         const outputs = yield* TestConsole.logLines
-        assert.equal(outputs.length, 1)
+        expect(outputs.length).toBe(1)
         const parsed = parseJson(outputs[0] as string)
-        assert.equal(parsed.type, "final")
-        assert.equal(parsed.content, "Done")
+        expect(parsed.type).toBe("final")
+        expect(parsed.content).toBe("Done")
       }).pipe(Effect.provide(testLayer)))
 
     it.effect("stream-json formatter outputs valid LDJSON for error", () =>
@@ -152,10 +151,10 @@ describe("output", () => {
         const event: OutputEvent = { type: "error", message: "Failed" }
         yield* formatter(event)
         const outputs = yield* TestConsole.logLines
-        assert.equal(outputs.length, 1)
+        expect(outputs.length).toBe(1)
         const parsed = parseJson(outputs[0] as string)
-        assert.equal(parsed.type, "error")
-        assert.equal(parsed.message, "Failed")
+        expect(parsed.type).toBe("error")
+        expect(parsed.message).toBe("Failed")
       }).pipe(Effect.provide(testLayer)))
 
     it.effect("stream-json formatter outputs valid LDJSON for approval-request", () =>
@@ -169,10 +168,10 @@ describe("output", () => {
         }
         yield* formatter(event)
         const outputs = yield* TestConsole.logLines
-        assert.equal(outputs.length, 1)
+        expect(outputs.length).toBe(1)
         const parsed = parseJson(outputs[0] as string)
-        assert.equal(parsed.type, "approval_required")
-        assert.equal(parsed.tool_name, "shell")
+        expect(parsed.type).toBe("approval_required")
+        expect(parsed.tool_name).toBe("shell")
       }).pipe(Effect.provide(testLayer)))
 
     it.effect("stream-json formatter outputs valid LDJSON for approval-response", () =>
@@ -181,10 +180,10 @@ describe("output", () => {
         const event: OutputEvent = { type: "approval-response", approved: true }
         yield* formatter(event)
         const outputs = yield* TestConsole.logLines
-        assert.equal(outputs.length, 1)
+        expect(outputs.length).toBe(1)
         const parsed = parseJson(outputs[0] as string)
-        assert.equal(parsed.type, "approval_response")
-        assert.equal(parsed.approved, true)
+        expect(parsed.type).toBe("approval_response")
+        expect(parsed.approved).toBe(true)
       }).pipe(Effect.provide(testLayer)))
 
     it.effect("all event types are handled without errors", () =>

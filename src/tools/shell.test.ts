@@ -1,5 +1,4 @@
-import { describe, it } from "@effect/vitest"
-import { assert } from "@effect/vitest"
+import { describe, it, expect } from "@effect/vitest"
 import { Effect } from "effect"
 import { layer as bunServicesLayer } from "@effect/platform-bun/BunServices"
 import { shellHandler } from "./shell.ts"
@@ -14,20 +13,20 @@ describe("shell tool", () => {
   it.effect("executes echo hello and returns output", () =>
     Effect.gen(function* () {
       const result = yield* shellHandler({ command: "echo hello" }, mockContext)
-      assert.equal(result, "hello\n")
+      expect(result).toBe("hello\n")
     }).pipe(Effect.provide(testLayer)))
 
   it.effect("command fails with non-zero exit, returns error message", () =>
     Effect.gen(function* () {
       const result = yield* shellHandler({ command: "exit 1" }, mockContext)
-      assert.isTrue(result.includes("Command failed"))
-      assert.isTrue(result.includes("exit code 1"))
+      expect(result.includes("Command failed")).toBe(true)
+      expect(result.includes("exit code 1")).toBe(true)
     }).pipe(Effect.provide(testLayer)))
 
-  it.skip("captures both stdout and stderr", () =>
+  it.effect("captures both stdout and stderr", () =>
     Effect.gen(function* () {
       const result = yield* shellHandler({ command: "echo stdout; echo stderr >&2" }, mockContext)
-      assert.isTrue(result.includes("stdout"))
-      assert.isTrue(result.includes("stderr"))
+      expect(result.includes("stdout")).toBe(true)
+      expect(result.includes("stderr")).toBe(true)
     }).pipe(Effect.provide(testLayer)))
 })
