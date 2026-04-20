@@ -1,38 +1,38 @@
-import { Config, Context, Data, Effect, Layer, Option, Redacted, Schema } from "effect"
-import * as FileSystem from "effect/FileSystem"
+import { Config, Context, Data, Effect, Layer, Option, Redacted, Schema } from "effect";
+import * as FileSystem from "effect/FileSystem";
 
 export class ConfigValidationError extends Data.TaggedError("ConfigValidationError")<{
-  readonly message: string
-  readonly cause?: Error
+  readonly message: string;
+  readonly cause?: Error;
 }> {}
 
-export const ProviderType = Schema.Literals(["openai-compat", "openai", "anthropic", "openrouter", "bedrock"])
-export type ProviderType = typeof ProviderType.Type
+export const ProviderType = Schema.Literals(["openai-compat", "openai", "anthropic", "openrouter", "bedrock"]);
+export type ProviderType = typeof ProviderType.Type;
 
-export const ApprovalMode = Schema.Literals(["none", "dangerous", "all"])
-export type ApprovalMode = typeof ApprovalMode.Type
+export const ApprovalMode = Schema.Literals(["none", "dangerous", "all"]);
+export type ApprovalMode = typeof ApprovalMode.Type;
 
 export const ProviderConfig = Schema.Struct({
   type: ProviderType,
   baseUrl: Schema.optional(Schema.String),
   apiKey: Schema.optional(Schema.String),
   model: Schema.optional(Schema.String),
-  region: Schema.optional(Schema.String),
-})
-export type ProviderConfig = typeof ProviderConfig.Type
+  region: Schema.optional(Schema.String)
+});
+export type ProviderConfig = typeof ProviderConfig.Type;
 
 export const ConfigSchema = Schema.Struct({
   provider: ProviderConfig,
   approvalMode: Schema.Literals(["none", "dangerous", "all"]),
   maxTurns: Schema.Number,
-  systemPrompt: Schema.optional(Schema.String),
-})
-export type ConfigData = typeof ConfigSchema.Type
+  systemPrompt: Schema.optional(Schema.String)
+});
+export type ConfigData = typeof ConfigSchema.Type;
 
 export interface Config extends ConfigData {}
 
 const bedrockBaseUrl = (region: string | undefined) =>
-  region ? `https://bedrock-mantle.${region}.api.aws/v1` : undefined
+  region ? `https://bedrock-mantle.${region}.api.aws/v1` : undefined;
 
 const envOverrides = (
   config: ConfigData,
@@ -40,71 +40,68 @@ const envOverrides = (
   baseUrl: string | undefined,
   model: string | undefined,
   approvalMode: string | undefined,
-  bedrockRegion: string | undefined,
+  bedrockRegion: string | undefined
 ): ConfigData => {
-  const finalBaseUrl = baseUrl ?? config.provider.baseUrl ?? bedrockBaseUrl(bedrockRegion)
+  const finalBaseUrl = baseUrl ?? config.provider.baseUrl ?? bedrockBaseUrl(bedrockRegion);
   return {
     ...config,
     provider: {
       ...config.provider,
       apiKey: apiKey ?? config.provider.apiKey,
       baseUrl: finalBaseUrl,
-      model: model ?? config.provider.model,
+      model: model ?? config.provider.model
     },
-    approvalMode: (approvalMode ?? config.approvalMode) as ApprovalMode,
-  }
-}
+    approvalMode: (approvalMode ?? config.approvalMode) as ApprovalMode
+  };
+};
 
 const defaultConfig = (apiKey?: string, model?: string): ConfigData => ({
   provider: {
     type: "openai-compat" as const,
     apiKey: apiKey,
     baseUrl: "https://api.openai.com/v1",
-    model: model ?? "gpt-4o",
+    model: model ?? "gpt-4o"
   },
   approvalMode: "none" as const,
   maxTurns: 50,
-  systemPrompt: undefined,
-})
+  systemPrompt: undefined
+});
 
-const HOME_CONFIG_PATHS = [".prodigy-coder.json", ".config/prodigy-coder.json"]
+const HOME_CONFIG_PATHS = [".prodigy-coder.json", ".config/prodigy-coder.json"];
 
 const findConfigFile = Effect.fnUntraced(function* (explicitPath: Option.Option<string>) {
-  const fs = yield* FileSystem.FileSystem
-  const home = yield* Config.string("HOME").pipe(
-    Config.orElse(() => Config.succeed("/"))
-  )
+  const fs = yield* FileSystem.FileSystem;
+  const home = yield* Config.string("HOME").pipe(Config.orElse(() => Config.succeed("/")));
 
   if (Option.isSome(explicitPath)) {
-    const exists = yield* fs.exists(explicitPath.value)
-    if (exists) return Option.some(explicitPath.value)
-    return Option.none()
+    const exists = yield* fs.exists(explicitPath.value);
+    if (exists) return Option.some(explicitPath.value);
+    return Option.none();
   }
 
   for (const configPath of HOME_CONFIG_PATHS) {
-    const fullPath = `${home}/${configPath}`
-    const exists = yield* fs.exists(fullPath)
-    if (exists) return Option.some(fullPath)
+    const fullPath = `${home}/${configPath}`;
+    const exists = yield* fs.exists(fullPath);
+    if (exists) return Option.some(fullPath);
   }
 
-  const cwdExists = yield* fs.exists(".prodigy-coder.json")
-  if (cwdExists) return Option.some(".prodigy-coder.json")
+  const cwdExists = yield* fs.exists(".prodigy-coder.json");
+  if (cwdExists) return Option.some(".prodigy-coder.json");
 
-  return Option.none()
-})
+  return Option.none();
+});
 
 const readConfigFile = Effect.fnUntraced(function* (path: string) {
-  const fs = yield* FileSystem.FileSystem
-  const content = yield* fs.readFileString(path)
+  const fs = yield* FileSystem.FileSystem;
+  const content = yield* fs.readFileString(path);
   return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(ConfigSchema))(content).pipe(
-    Effect.mapError((e) => new ConfigValidationError({ message: String(e), cause: e instanceof Error ? e : new Error(String(e)) }))
-  )
-})
+    Effect.mapError(
+      (e) => new ConfigValidationError({ message: String(e), cause: e instanceof Error ? e : new Error(String(e)) })
+    )
+  );
+});
 
-class AppConfig extends Context.Service<
-  AppConfig,
-  ConfigData
->()("AppConfig") {
+class AppConfig extends Context.Service<AppConfig, ConfigData>()("AppConfig") {
   static readonly layer = Layer.effect(
     AppConfig,
     Effect.gen(function* () {
@@ -115,33 +112,47 @@ class AppConfig extends Context.Service<
           Config.orElse(() => Config.redacted("OPENROUTER_API_KEY")),
           Config.orElse(() => Config.redacted("BEDROCK_API_KEY"))
         )
-      )
-      const baseUrl = yield* Config.option(Config.string("PRODIGY_CODER_BASE_URL"))
-      const model = yield* Config.option(Config.string("PRODIGY_CODER_MODEL"))
-      const approvalMode = yield* Config.option(Config.string("PRODIGY_CODER_APPROVAL_MODE"))
-      const bedrockRegion = yield* Config.option(Config.string("BEDROCK_REGION"))
+      );
+      const baseUrl = yield* Config.option(Config.string("PRODIGY_CODER_BASE_URL"));
+      const model = yield* Config.option(Config.string("PRODIGY_CODER_MODEL"));
+      const approvalMode = yield* Config.option(Config.string("PRODIGY_CODER_APPROVAL_MODE"));
+      const bedrockRegion = yield* Config.option(Config.string("BEDROCK_REGION"));
 
-        const apiKeyValue = Option.map(apiKey, Redacted.value)
-      const modelValue = Option.getOrUndefined(model)
+      const apiKeyValue = Option.map(apiKey, Redacted.value);
+      const modelValue = Option.getOrUndefined(model);
 
-      let loadedConfig = defaultConfig(Option.getOrUndefined(apiKeyValue), modelValue)
+      let loadedConfig = defaultConfig(Option.getOrUndefined(apiKeyValue), modelValue);
 
-      const configPath = yield* findConfigFile(Option.none())
+      const configPath = yield* findConfigFile(Option.none());
       if (Option.isSome(configPath)) {
-        const fileConfig = yield* readConfigFile(configPath.value)
-        loadedConfig = envOverrides(fileConfig, Option.getOrUndefined(apiKeyValue), Option.getOrUndefined(baseUrl), modelValue, Option.getOrUndefined(approvalMode), Option.getOrUndefined(bedrockRegion))
+        const fileConfig = yield* readConfigFile(configPath.value);
+        loadedConfig = envOverrides(
+          fileConfig,
+          Option.getOrUndefined(apiKeyValue),
+          Option.getOrUndefined(baseUrl),
+          modelValue,
+          Option.getOrUndefined(approvalMode),
+          Option.getOrUndefined(bedrockRegion)
+        );
       } else {
-        loadedConfig = envOverrides(loadedConfig, Option.getOrUndefined(apiKeyValue), Option.getOrUndefined(baseUrl), modelValue ?? loadedConfig.provider.model, Option.getOrUndefined(approvalMode), Option.getOrUndefined(bedrockRegion))
+        loadedConfig = envOverrides(
+          loadedConfig,
+          Option.getOrUndefined(apiKeyValue),
+          Option.getOrUndefined(baseUrl),
+          modelValue ?? loadedConfig.provider.model,
+          Option.getOrUndefined(approvalMode),
+          Option.getOrUndefined(bedrockRegion)
+        );
       }
 
       return yield* Schema.decodeUnknownEffect(ConfigSchema)(loadedConfig).pipe(
         Effect.mapError((e) => {
-          const err = e instanceof Error ? e : new Error(String(e))
-          return new ConfigValidationError({ message: err.message, cause: err })
+          const err = e instanceof Error ? e : new Error(String(e));
+          return new ConfigValidationError({ message: err.message, cause: err });
         })
-      )
+      );
     })
-  )
+  );
 
   static readonly layerWithPath = (path: string) =>
     Layer.effect(
@@ -154,46 +165,58 @@ class AppConfig extends Context.Service<
             Config.orElse(() => Config.redacted("OPENROUTER_API_KEY")),
             Config.orElse(() => Config.redacted("BEDROCK_API_KEY"))
           )
-        )
-        const baseUrl = yield* Config.option(Config.string("PRODIGY_CODER_BASE_URL"))
-        const model = yield* Config.option(Config.string("PRODIGY_CODER_MODEL"))
-        const approvalMode = yield* Config.option(Config.string("PRODIGY_CODER_APPROVAL_MODE"))
-        const bedrockRegion = yield* Config.option(Config.string("BEDROCK_REGION"))
+        );
+        const baseUrl = yield* Config.option(Config.string("PRODIGY_CODER_BASE_URL"));
+        const model = yield* Config.option(Config.string("PRODIGY_CODER_MODEL"));
+        const approvalMode = yield* Config.option(Config.string("PRODIGY_CODER_APPROVAL_MODE"));
+        const bedrockRegion = yield* Config.option(Config.string("BEDROCK_REGION"));
 
-        const apiKeyValue = Option.map(apiKey, Redacted.value)
-        const modelValue = Option.getOrUndefined(model)
+        const apiKeyValue = Option.map(apiKey, Redacted.value);
+        const modelValue = Option.getOrUndefined(model);
 
-        let loadedConfig = defaultConfig(Option.getOrUndefined(apiKeyValue), modelValue)
+        let loadedConfig = defaultConfig(Option.getOrUndefined(apiKeyValue), modelValue);
 
-        const configPath = yield* findConfigFile(Option.some(path))
+        const configPath = yield* findConfigFile(Option.some(path));
         if (Option.isSome(configPath)) {
-          const fileConfig = yield* readConfigFile(configPath.value)
-          loadedConfig = envOverrides(fileConfig, Option.getOrUndefined(apiKeyValue), Option.getOrUndefined(baseUrl), modelValue, Option.getOrUndefined(approvalMode), Option.getOrUndefined(bedrockRegion))
+          const fileConfig = yield* readConfigFile(configPath.value);
+          loadedConfig = envOverrides(
+            fileConfig,
+            Option.getOrUndefined(apiKeyValue),
+            Option.getOrUndefined(baseUrl),
+            modelValue,
+            Option.getOrUndefined(approvalMode),
+            Option.getOrUndefined(bedrockRegion)
+          );
         } else {
-          loadedConfig = envOverrides(loadedConfig, Option.getOrUndefined(apiKeyValue), Option.getOrUndefined(baseUrl), modelValue ?? loadedConfig.provider.model, Option.getOrUndefined(approvalMode), Option.getOrUndefined(bedrockRegion))
+          loadedConfig = envOverrides(
+            loadedConfig,
+            Option.getOrUndefined(apiKeyValue),
+            Option.getOrUndefined(baseUrl),
+            modelValue ?? loadedConfig.provider.model,
+            Option.getOrUndefined(approvalMode),
+            Option.getOrUndefined(bedrockRegion)
+          );
         }
 
         return yield* Schema.decodeUnknownEffect(ConfigSchema)(loadedConfig).pipe(
           Effect.mapError((e) => {
-            const err = e instanceof Error ? e : new Error(String(e))
-            return new ConfigValidationError({ message: err.message, cause: err })
+            const err = e instanceof Error ? e : new Error(String(e));
+            return new ConfigValidationError({ message: err.message, cause: err });
           })
-        )
+        );
       })
-  )
+    );
 }
 
 export const loadConfig = (explicitPath?: string) =>
-  explicitPath
-    ? AppConfig.layerWithPath(explicitPath)
-    : AppConfig.layer
+  explicitPath ? AppConfig.layerWithPath(explicitPath) : AppConfig.layer;
 
 export const maskConfig = (config: ConfigData): ConfigData => ({
   ...config,
   provider: {
     ...config.provider,
-    apiKey: config.provider.apiKey ? "***" : undefined,
-  },
-})
+    apiKey: config.provider.apiKey ? "***" : undefined
+  }
+});
 
-export { AppConfig }
+export { AppConfig };

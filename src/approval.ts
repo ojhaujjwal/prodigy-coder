@@ -1,14 +1,14 @@
-import type { ApprovalMode } from "./config.ts"
+import type { ApprovalMode } from "./config.ts";
 
-const DANGEROUS_TOOLS = new Set(["shell", "write", "edit"])
+const DANGEROUS_TOOLS = new Set(["shell", "write", "edit"]);
 
 export const needsApproval = (toolName: string, mode: ApprovalMode): boolean => {
   switch (mode) {
     case "none":
-      return false
+      return false;
     case "dangerous":
-      return DANGEROUS_TOOLS.has(toolName)
+      return DANGEROUS_TOOLS.has(toolName);
     case "all":
-      return true
+      return true;
   }
-}
+};

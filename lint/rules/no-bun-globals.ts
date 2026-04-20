@@ -1,4 +1,4 @@
-import { defineRule } from "@oxlint/plugins"
+import { defineRule } from "@oxlint/plugins";
 
 const FORBIDDEN_BUN_APIS: ReadonlySet<string> = new Set([
   "env",
@@ -17,15 +17,14 @@ const FORBIDDEN_BUN_APIS: ReadonlySet<string> = new Set([
   "password",
   "resolve",
   "sleepSync",
-  "which",
-])
+  "which"
+]);
 
 export default defineRule({
   meta: {
     type: "problem",
     docs: {
-      description:
-        "Disallow Bun globals. Use @effect/platform services for platform-agnostic code."
+      description: "Disallow Bun globals. Use @effect/platform services for platform-agnostic code."
     },
     messages: {
       noBunGlobal:
@@ -46,9 +45,9 @@ export default defineRule({
             node,
             messageId: "noBunGlobal",
             data: { prop: node.property.name }
-          })
+          });
         }
       }
-    }
+    };
   }
-})
+});

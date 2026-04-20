@@ -1,12 +1,14 @@
 {
   "name": "prodigy-coder",
-  "type": "module",
   "private": true,
+  "type": "module",
   "main": "src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit",
     "lint": "bun --bun oxlint --disable-nested-config",
     "lint-fix": "bun --bun oxlint --disable-nested-config --fix",
+    "format": "bun oxfmt --check",
+    "format-fix": "bun oxfmt --write",
     "test": "bun vitest",
     "coverage": "bun vitest --coverage",
     "prepare": "effect-language-service patch"
@@ -24,6 +26,7 @@
     "@effect/vitest": "^4.0.0-beta.49",
     "@oxlint/plugins": "^1.60.0",
     "@types/bun": "latest",
+    "oxfmt": "^0.45.0",
     "oxlint": "^1.60.0",
     "vitest": "^4.0.0"
   },

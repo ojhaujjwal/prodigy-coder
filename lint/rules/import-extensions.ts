@@ -1,5 +1,5 @@
-import type { ESTree } from "@oxlint/plugins"
-import { defineRule } from "@oxlint/plugins"
+import type { ESTree } from "@oxlint/plugins";
+import { defineRule } from "@oxlint/plugins";
 
 export default defineRule({
   meta: {
@@ -16,51 +16,51 @@ export default defineRule({
   },
   create(context) {
     function checkImportSource(node: ESTree.Node, source: string | null | undefined) {
-      if (!source || typeof source !== "string") return
+      if (!source || typeof source !== "string") return;
 
-      const isRelative = source.startsWith("./") || source.startsWith("../")
+      const isRelative = source.startsWith("./") || source.startsWith("../");
 
       if (isRelative) {
-        if (source.includes("?")) return
+        if (source.includes("?")) return;
 
         if (source.endsWith(".js") || source.endsWith(".jsx")) {
-          const fixed = source.replace(/\.jsx?$/, ".ts")
+          const fixed = source.replace(/\.jsx?$/, ".ts");
           context.report({
             node,
             messageId: "relativeNoJs",
             data: { source, fixed }
-          })
+          });
         } else if (!source.endsWith(".ts") && !source.endsWith(".tsx") && !source.endsWith(".json")) {
           context.report({
             node,
             messageId: "relativeRequiresTs",
             data: { source }
-          })
+          });
         }
       } else {
         if (source.endsWith(".ts") || source.endsWith(".tsx") || source.endsWith(".js") || source.endsWith(".jsx")) {
-          const fixed = source.replace(/\.(tsx?|jsx?)$/, "")
+          const fixed = source.replace(/\.(tsx?|jsx?)$/, "");
           context.report({
             node,
             messageId: "packageNoExtension",
             data: { source, fixed }
-          })
+          });
         }
       }
     }
 
     return {
       ImportDeclaration(node) {
-        checkImportSource(node, node.source.value)
+        checkImportSource(node, node.source.value);
       },
       ExportNamedDeclaration(node) {
         if (node.source) {
-          checkImportSource(node, node.source.value)
+          checkImportSource(node, node.source.value);
         }
       },
       ExportAllDeclaration(node) {
-        checkImportSource(node, node.source.value)
+        checkImportSource(node, node.source.value);
       }
-    }
+    };
   }
-})
+});

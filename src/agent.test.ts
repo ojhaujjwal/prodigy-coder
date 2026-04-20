@@ -1,17 +1,17 @@
-import { describe, it, expect } from "@effect/vitest"
-import { Effect, Layer, Stream } from "effect"
-import * as LanguageModel from "effect/unstable/ai/LanguageModel"
-import * as Response from "effect/unstable/ai/Response"
-import * as AiError from "effect/unstable/ai/AiError"
-import { runAgent, type AgentConfig } from "../src/agent.ts"
+import { describe, it, expect } from "@effect/vitest";
+import { Effect, Layer, Stream } from "effect";
+import * as LanguageModel from "effect/unstable/ai/LanguageModel";
+import * as Response from "effect/unstable/ai/Response";
+import * as AiError from "effect/unstable/ai/AiError";
+import { runAgent, type AgentConfig } from "../src/agent.ts";
 
 const mockLanguageModelLayer = Layer.effect(
   LanguageModel.LanguageModel,
   LanguageModel.make({
     streamText: () => Stream.empty as Stream.Stream<Response.StreamPartEncoded, AiError.AiError>,
-    generateText: () => Effect.succeed([]),
+    generateText: () => Effect.succeed([])
   })
-)
+);
 
 describe("agent", () => {
   it("runAgent should have correct type signature", () => {
@@ -19,15 +19,15 @@ describe("agent", () => {
       type: "openai-compat" as const,
       apiKey: "test-key",
       baseUrl: "https://api.openai.com/v1",
-      model: "gpt-4o",
-    }
+      model: "gpt-4o"
+    };
 
     const session = {
       id: "test-session",
       messages: [],
       createdAt: new Date(),
-      updatedAt: new Date(),
-    }
+      updatedAt: new Date()
+    };
 
     const agentConfig: AgentConfig = {
       session,
@@ -35,28 +35,28 @@ describe("agent", () => {
         provider: config,
         approvalMode: "none",
         maxTurns: 10,
-        systemPrompt: undefined,
+        systemPrompt: undefined
       },
-      handlers: {},
-    }
+      handlers: {}
+    };
 
-    const result = runAgent("test prompt", agentConfig, mockLanguageModelLayer)
-    expect(result).toBeDefined()
-  })
+    const result = runAgent("test prompt", agentConfig, mockLanguageModelLayer);
+    expect(result).toBeDefined();
+  });
 
   it("runAgent should handle empty session with systemPrompt", () => {
     const config = {
       type: "openai-compat" as const,
       apiKey: "test-key",
-      model: "gpt-4o",
-    }
+      model: "gpt-4o"
+    };
 
     const session = {
       id: "test-session",
       messages: [],
       createdAt: new Date(),
-      updatedAt: new Date(),
-    }
+      updatedAt: new Date()
+    };
 
     const agentConfig: AgentConfig = {
       session,
@@ -64,12 +64,12 @@ describe("agent", () => {
         provider: config,
         approvalMode: "none",
         maxTurns: 5,
-        systemPrompt: "You are a helpful assistant.",
+        systemPrompt: "You are a helpful assistant."
       },
-      handlers: {},
-    }
+      handlers: {}
+    };
 
-    const result = runAgent("test prompt", agentConfig, mockLanguageModelLayer)
-    expect(result).toBeDefined()
-  })
-})
+    const result = runAgent("test prompt", agentConfig, mockLanguageModelLayer);
+    expect(result).toBeDefined();
+  });
+});

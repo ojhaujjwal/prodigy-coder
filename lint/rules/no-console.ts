@@ -1,15 +1,13 @@
-import { defineRule } from "@oxlint/plugins"
+import { defineRule } from "@oxlint/plugins";
 
 export default defineRule({
   meta: {
     type: "problem",
     docs: {
-      description:
-        "Disallow console methods. Use Effect.Console or Effect.log instead."
+      description: "Disallow console methods. Use Effect.Console or Effect.log instead."
     },
     messages: {
-      noConsole:
-        "Do not use 'console.{{ method }}'. Use Effect.Console or Effect.log instead."
+      noConsole: "Do not use 'console.{{ method }}'. Use Effect.Console or Effect.log instead."
     },
     schema: []
   },
@@ -25,9 +23,9 @@ export default defineRule({
             node,
             messageId: "noConsole",
             data: { method: node.property.name }
-          })
+          });
         }
       }
-    }
+    };
   }
-})
+});

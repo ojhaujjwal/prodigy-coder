@@ -1,4 +1,4 @@
-import { defineRule } from "@oxlint/plugins"
+import { defineRule } from "@oxlint/plugins";
 
 export default defineRule({
   meta: {
@@ -7,14 +7,15 @@ export default defineRule({
       description: "Disallow .pipe() with more than 20 arguments"
     },
     messages: {
-      tooManyArgs: ".pipe() has {{count}} arguments. Consider splitting into multiple .pipe() calls for readability (max 20)."
+      tooManyArgs:
+        ".pipe() has {{count}} arguments. Consider splitting into multiple .pipe() calls for readability (max 20)."
     },
     schema: []
   },
   create(context) {
     return {
       CallExpression(node) {
-        const callee = node.callee
+        const callee = node.callee;
         if (
           callee.type === "MemberExpression" &&
           callee.property.type === "Identifier" &&
@@ -25,10 +26,10 @@ export default defineRule({
               node,
               messageId: "tooManyArgs",
               data: { count: node.arguments.length }
-            })
+            });
           }
         }
       }
-    }
+    };
   }
-})
+});

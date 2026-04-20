@@ -1,5 +1,5 @@
-import type { ESTree } from "@oxlint/plugins"
-import { defineRule } from "@oxlint/plugins"
+import type { ESTree } from "@oxlint/plugins";
+import { defineRule } from "@oxlint/plugins";
 
 export default defineRule({
   meta: {
@@ -14,37 +14,37 @@ export default defineRule({
   },
   create(context) {
     function checkImportSource(node: ESTree.Node, source: string | null | undefined) {
-      if (!source || typeof source !== "string") return
+      if (!source || typeof source !== "string") return;
 
       if (source.startsWith("node:")) {
         context.report({
           node,
           messageId: "noNodeImport"
-        })
+        });
       }
     }
 
     return {
       ImportDeclaration(node) {
-        checkImportSource(node, node.source.value)
+        checkImportSource(node, node.source.value);
       },
       ExportNamedDeclaration(node) {
         if (node.source) {
-          checkImportSource(node, node.source.value)
+          checkImportSource(node, node.source.value);
         }
       },
       ExportAllDeclaration(node) {
-        checkImportSource(node, node.source.value)
+        checkImportSource(node, node.source.value);
       },
       CallExpression(node) {
-        const callee = node.callee
+        const callee = node.callee;
         if (callee.type === "Identifier" && callee.name === "require") {
-          const arg = node.arguments[0]
+          const arg = node.arguments[0];
           if (arg && arg.type === "Literal" && typeof arg.value === "string") {
-            checkImportSource(node, arg.value)
+            checkImportSource(node, arg.value);
           }
         }
       }
-    }
+    };
   }
-})
+});

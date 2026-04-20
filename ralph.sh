@@ -228,7 +228,7 @@ $typecheck_output
     echo "2. Linting..."
     echo "-------------"
     local lint_output
-    if lint_output=$(bun run lint 2>&1); then
+    if lint_output=$(bun run lint-fix 2>&1); then
         echo -e "${GREEN}Lint passed${NC}"
     else
         echo -e "${RED}Lint failed${NC}"
@@ -245,7 +245,29 @@ $lint_output
     fi
 
     echo ""
-    echo "3. Vitest..."
+    echo "3. Formatting..."
+    echo "----------------"
+    local format_output
+    if format_output=$(bun run format 2>&1); then
+        echo -e "${GREEN}Format passed${NC}"
+    else
+        echo -e "${RED}Format failed${NC}"
+        ci_failed=1
+        error_output+="## Format Failed
+
+Command: \`bun run format\`
+
+Run \`bun run format-fix\` to fix formatting issues.
+
+\`\`\`
+$format_output
+\`\`\`
+
+"
+    fi
+
+    echo ""
+    echo "4. Vitest..."
     echo "------------"
     local vitest_output
     if vitest_output=$(bun run test -- --run 2>&1); then

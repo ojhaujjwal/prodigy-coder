@@ -1,21 +1,21 @@
-import { definePlugin } from "@oxlint/plugins"
-import noEffectIgnore from "./rules/no-effect-ignore.ts"
-import noEffectCatchallcause from "./rules/no-effect-catchallcause.ts"
-import noEffectAsvoid from "./rules/no-effect-asvoid.ts"
-import noSilentErrorSwallow from "./rules/no-silent-error-swallow.ts"
-import noServiceOption from "./rules/no-service-option.ts"
-import noNestedLayerProvide from "./rules/no-nested-layer-provide.ts"
-import pipeMaxArguments from "./rules/pipe-max-arguments.ts"
-import preferOptionFromNullable from "./rules/prefer-option-from-nullable.ts"
-import importExtensions from "./rules/import-extensions.ts"
-import noDisableValidation from "./rules/no-disable-validation.ts"
-import noVoidExpression from "./rules/no-void-expression.ts"
-import noNodeImports from "./rules/no-node-imports.ts"
-import noProcess from "./rules/no-process.ts"
-import noBunGlobals from "./rules/no-bun-globals.ts"
-import noConsole from "./rules/no-console.ts"
-import noPlainItWithEffect from "./rules/no-plain-it-with-effect.ts"
-import noVitestModifiers from "./rules/no-vitest-modifiers.ts"
+import { definePlugin } from "@oxlint/plugins";
+import noEffectIgnore from "./rules/no-effect-ignore.ts";
+import noEffectCatchallcause from "./rules/no-effect-catchallcause.ts";
+import noEffectAsvoid from "./rules/no-effect-asvoid.ts";
+import noSilentErrorSwallow from "./rules/no-silent-error-swallow.ts";
+import noServiceOption from "./rules/no-service-option.ts";
+import noNestedLayerProvide from "./rules/no-nested-layer-provide.ts";
+import pipeMaxArguments from "./rules/pipe-max-arguments.ts";
+import preferOptionFromNullable from "./rules/prefer-option-from-nullable.ts";
+import importExtensions from "./rules/import-extensions.ts";
+import noDisableValidation from "./rules/no-disable-validation.ts";
+import noVoidExpression from "./rules/no-void-expression.ts";
+import noNodeImports from "./rules/no-node-imports.ts";
+import noProcess from "./rules/no-process.ts";
+import noBunGlobals from "./rules/no-bun-globals.ts";
+import noConsole from "./rules/no-console.ts";
+import noPlainItWithEffect from "./rules/no-plain-it-with-effect.ts";
+import noVitestModifiers from "./rules/no-vitest-modifiers.ts";
 
 export default definePlugin({
   meta: { name: "prodigy" },
@@ -38,4 +38,4 @@ export default definePlugin({
     "no-plain-it-with-effect": noPlainItWithEffect,
     "no-vitest-modifiers": noVitestModifiers
   }
-})
+});

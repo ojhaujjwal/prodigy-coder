@@ -1,4 +1,4 @@
-import { defineRule } from "@oxlint/plugins"
+import { defineRule } from "@oxlint/plugins";
 
 export default defineRule({
   meta: {
@@ -7,7 +7,8 @@ export default defineRule({
       description: "Disallow Effect.asVoid - it is usually unnecessary"
     },
     messages: {
-      noEffectAsVoid: "Effect.asVoid is usually unnecessary. The `void` return type already allows any value to be returned from an effect. Remove it."
+      noEffectAsVoid:
+        "Effect.asVoid is usually unnecessary. The `void` return type already allows any value to be returned from an effect. Remove it."
     },
     schema: []
   },
@@ -23,9 +24,9 @@ export default defineRule({
           context.report({
             node,
             messageId: "noEffectAsVoid"
-          })
+          });
         }
       }
-    }
+    };
   }
-})
+});
