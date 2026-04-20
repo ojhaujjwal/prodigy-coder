@@ -2,44 +2,17 @@ import * as AiError from "effect/unstable/ai/AiError"
 import * as LanguageModel from "effect/unstable/ai/LanguageModel"
 import * as Prompt from "effect/unstable/ai/Prompt"
 import * as Response from "effect/unstable/ai/Response"
-import * as Tool from "effect/unstable/ai/Tool"
-import * as Toolkit from "effect/unstable/ai/Toolkit"
-import { Effect, Layer, Schema, Stream } from "effect"
+import { Effect, Layer, Stream } from "effect"
 import type { Session, Message } from "./session.ts"
 import type { ConfigData } from "./config.ts"
 import { needsApproval } from "./approval.ts"
 import type { OutputEvent } from "./output.ts"
+import { MyToolkit } from "./tools/index.ts"
 
 export interface AgentConfig {
   readonly session: Session
   readonly config: ConfigData
   readonly handlers: Record<string, (params: unknown) => Effect.Effect<string, AiError.AiError>>
-}
-
-const buildToolkit = (handlers: Record<string, (params: unknown) => Effect.Effect<string, AiError.AiError>>) => {
-  const toolDefs = Object.entries(handlers).map(([name]) =>
-    Tool.dynamic(name, {
-      parameters: Schema.Unknown,
-      success: Schema.String,
-    })
-  )
-  const toolkit = Toolkit.make(...toolDefs)
-  const handlerEntries = Object.entries(handlers).map(([name, handler]) => [
-    name,
-    (params: unknown) =>
-      Stream.succeed(handler(params).pipe(
-        Effect.match({
-          onSuccess: (result) => ({ _tag: "Success" as const, value: result, metadata: {} }),
-          onFailure: (error) => ({ _tag: "Failure" as const, error: error instanceof Error ? error.message : String(error), metadata: {} }),
-        }),
-      )),
-  ])
-  const handlerMap = Object.fromEntries(handlerEntries) as Record<string, (params: unknown) => Stream.Stream<{ _tag: "Success"; value: string; metadata: Record<string, unknown> } | { _tag: "Failure"; error: string; metadata: Record<string, unknown> }, never>>
-
-  return {
-    tools: toolkit.tools,
-    handle: (name: string, params: unknown) => handlerMap[name](params),
-  } as unknown as Toolkit.WithHandler<typeof toolkit.tools>
 }
 
 const executeTool = (
@@ -94,7 +67,7 @@ export const runAgent = (
   promptText: string,
   agentConfig: AgentConfig,
   providerLayer: Layer.Layer<LanguageModel.LanguageModel>
-): Effect.Effect<OutputEvent[], AiError.AiError | Error> =>
+) =>
   Effect.gen(function* () {
     const { session, config, handlers } = agentConfig
 
@@ -110,8 +83,6 @@ export const runAgent = (
     let turnCount = 0
     let finished = false
 
-    const toolkit = buildToolkit(handlers)
-
     while (!finished && turnCount < config.maxTurns) {
       turnCount++
 
@@ -120,7 +91,7 @@ export const runAgent = (
       const llmStream = LanguageModel.streamText({
         prompt: promptMessages,
         disableToolCallResolution: true,
-        toolkit,
+        toolkit: MyToolkit,
       })
 
       yield* llmStream.pipe(

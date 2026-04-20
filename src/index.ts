@@ -77,30 +77,36 @@ const outputFormatFlag = Flag.choice("output-format", ["text", "stream-json"]).p
 
 const sessionFlag = Flag.string("session").pipe(
   Flag.withAlias("s"),
-  Flag.withDescription("Session ID to load")
+  Flag.withDescription("Session ID to load"),
+  Flag.optional
 )
 
 const modelFlag = Flag.string("model").pipe(
   Flag.withAlias("m"),
-  Flag.withDescription("Model name")
+  Flag.withDescription("Model name"),
+  Flag.optional
 )
 
 const maxTurnsFlag = Flag.integer("max-turns").pipe(
   Flag.withAlias("t"),
-  Flag.withDescription("Maximum number of turns")
+  Flag.withDescription("Maximum number of turns"),
+  Flag.optional
 )
 
 const approvalModeFlag = Flag.choice("approval-mode", ["none", "dangerous", "all"]).pipe(
   Flag.withAlias("a"),
-  Flag.withDescription("Approval mode")
+  Flag.withDescription("Approval mode"),
+  Flag.optional
 )
 
 const systemPromptFlag = Flag.string("system-prompt").pipe(
-  Flag.withDescription("System prompt")
+  Flag.withDescription("System prompt"),
+  Flag.optional
 )
 
 const configFlag = Flag.string("config").pipe(
-  Flag.withDescription("Config file path")
+  Flag.withDescription("Config file path"),
+  Flag.optional
 )
 
 const mainCommand = Command.make(
@@ -119,7 +125,7 @@ const mainCommand = Command.make(
   ({ prompt, outputFormat, session, model: _model, maxTurns: _maxTurns, approvalMode: _approvalMode, systemPrompt: _systemPrompt, config }) =>
     Effect.gen(function* () {
       const appConfig = yield* AppConfig
-      const sessionId = session ? Option.some(session) : Option.none<string>()
+      const sessionId = session
 
       const promptText = Option.getOrElse(prompt, () => "")
       if (!promptText) {
@@ -136,7 +142,7 @@ const mainCommand = Command.make(
       }
     }).pipe(
       Effect.provide(
-        (config ? loadConfig(config) : loadConfig()).pipe(
+        (Option.getOrElse(config, () => "") ? loadConfig(Option.getOrElse(config, () => "")) : loadConfig()).pipe(
           Layer.merge(SessionRepo.layer)
         )
       )

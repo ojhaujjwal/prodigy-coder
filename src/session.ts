@@ -1,4 +1,5 @@
-import { Clock, Context, Effect, FileSystem, Layer, Option, Schema } from "effect"
+import { Clock, Context, Effect, Layer, Option, Schema } from "effect"
+import * as FileSystem from "effect/FileSystem"
 
 export const Message = Schema.Struct({
   role: Schema.Literals(["system", "user", "assistant"]),
@@ -14,7 +15,7 @@ export const SessionSchema = Schema.Struct({
 })
 export type Session = typeof SessionSchema.Type
 
-const SESSION_DIR = ".prodigy-coder/sessions"
+const SESSION_DIR: string = ".prodigy-coder/sessions"
 
 class SessionRepo extends Context.Service<
   SessionRepo,
