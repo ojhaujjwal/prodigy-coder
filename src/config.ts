@@ -105,7 +105,7 @@ class AppConfig extends Context.Service<
       const approvalMode = yield* Config.option(Config.string("PRODIGY_CODER_APPROVAL_MODE"))
 
         const apiKeyValue = Option.map(apiKey, Redacted.value)
-      const modelValue = Option.getOrElse(model, () => "gpt-4o")
+      const modelValue = Option.getOrUndefined(model)
 
       let loadedConfig = defaultConfig(Option.getOrUndefined(apiKeyValue), modelValue)
 
@@ -114,7 +114,7 @@ class AppConfig extends Context.Service<
         const fileConfig = yield* readConfigFile(configPath.value)
         loadedConfig = envOverrides(fileConfig, Option.getOrUndefined(apiKeyValue), Option.getOrUndefined(baseUrl), modelValue, Option.getOrUndefined(approvalMode))
       } else {
-        loadedConfig = envOverrides(loadedConfig, Option.getOrUndefined(apiKeyValue), Option.getOrUndefined(baseUrl), modelValue, Option.getOrUndefined(approvalMode))
+        loadedConfig = envOverrides(loadedConfig, Option.getOrUndefined(apiKeyValue), Option.getOrUndefined(baseUrl), modelValue ?? loadedConfig.provider.model, Option.getOrUndefined(approvalMode))
       }
 
       return Schema.decodeUnknownSync(ConfigSchema)(loadedConfig) as ConfigData
@@ -137,7 +137,7 @@ class AppConfig extends Context.Service<
         const approvalMode = yield* Config.option(Config.string("PRODIGY_CODER_APPROVAL_MODE"))
 
       const apiKeyValue = Option.map(apiKey, Redacted.value)
-        const modelValue = Option.getOrElse(model, () => "gpt-4o")
+        const modelValue = Option.getOrUndefined(model)
 
         let loadedConfig = defaultConfig(Option.getOrUndefined(apiKeyValue), modelValue)
 
@@ -146,7 +146,7 @@ class AppConfig extends Context.Service<
           const fileConfig = yield* readConfigFile(configPath.value)
           loadedConfig = envOverrides(fileConfig, Option.getOrUndefined(apiKeyValue), Option.getOrUndefined(baseUrl), modelValue, Option.getOrUndefined(approvalMode))
         } else {
-          loadedConfig = envOverrides(loadedConfig, Option.getOrUndefined(apiKeyValue), Option.getOrUndefined(baseUrl), modelValue, Option.getOrUndefined(approvalMode))
+          loadedConfig = envOverrides(loadedConfig, Option.getOrUndefined(apiKeyValue), Option.getOrUndefined(baseUrl), modelValue ?? loadedConfig.provider.model, Option.getOrUndefined(approvalMode))
         }
 
         return Schema.decodeUnknownSync(ConfigSchema)(loadedConfig) as ConfigData
