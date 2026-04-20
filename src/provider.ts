@@ -18,12 +18,13 @@ const DEFAULT_MODELS = {
   openai: "gpt-4o",
   anthropic: "claude-3-5-sonnet-20241022",
   openrouter: "anthropic/claude-3-5-sonnet-20241022",
+  bedrock: "anthropic.claude-3-5-sonnet-20241022",
 } as const
 
 const getDefaultModel = (type: ProviderConfig["type"]): string => DEFAULT_MODELS[type]
 
 type BuildProviderLayerReturn = Model.Model<
-  "openai-compat" | "openai" | "anthropic" | "openrouter",
+  "openai-compat" | "openai" | "anthropic" | "openrouter" | "bedrock",
   LanguageModel.LanguageModel,
   HttpClient.HttpClient
 >
@@ -75,6 +76,18 @@ export const buildProviderLayer = (config: ProviderConfig): BuildProviderLayerRe
         })
         const combined = languageModelLayer.pipe(Layer.provide(clientLayer))
         return Model.make("openrouter", modelName, combined)
+      }
+      case "bedrock": {
+        const baseUrl = config.baseUrl ?? "https://bedrock-mantle.us-east-1.api.aws/v1"
+        const clientLayer = OpenAiClient.layer({
+          apiKey,
+          apiUrl: baseUrl,
+        })
+        const languageModelLayer = OpenAiLanguageModel.layer({
+          model: modelName,
+        })
+        const combined = languageModelLayer.pipe(Layer.provide(clientLayer))
+        return Model.make("bedrock", modelName, combined)
       }
     }
   })()
