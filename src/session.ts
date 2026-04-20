@@ -9,8 +9,8 @@ export type Message = typeof Message.Type
 export const SessionSchema = Schema.Struct({
   id: Schema.String,
   messages: Schema.mutable(Schema.Array(Message)),
-  createdAt: Schema.Date,
-  updatedAt: Schema.Date,
+  createdAt: Schema.DateFromString,
+  updatedAt: Schema.DateFromString,
 })
 export type Session = typeof SessionSchema.Type
 

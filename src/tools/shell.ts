@@ -23,7 +23,6 @@ export const shellHandler = (
 ) =>
   Effect.gen(function* () {
     const handle = yield* ChildProcess.make`bash -c ${command}`
-    const exitCode = yield* handle.exitCode
 
     const outputChunks: string[] = []
     const errorChunks: string[] = []
@@ -46,6 +45,7 @@ export const shellHandler = (
       errorChunks.push(...chunks)
     }
 
+    const exitCode = yield* handle.exitCode
     const combined = outputChunks.join("") + errorChunks.join("")
 
     if (exitCode === 0) {

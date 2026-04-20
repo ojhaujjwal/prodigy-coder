@@ -35,6 +35,15 @@ export default defineRule({
       },
       ExportAllDeclaration(node) {
         checkImportSource(node, node.source.value)
+      },
+      CallExpression(node) {
+        const callee = node.callee
+        if (callee.type === "Identifier" && callee.name === "require") {
+          const arg = node.arguments[0]
+          if (arg && arg.type === "Literal" && typeof arg.value === "string") {
+            checkImportSource(node, arg.value)
+          }
+        }
       }
     }
   }
