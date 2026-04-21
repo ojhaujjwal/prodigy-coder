@@ -58,10 +58,7 @@ export const runAgent = (
       const turnOutputEvents: OutputEvent[] = [];
       const toolCallNames = new Map<string, string>();
 
-      const fullLayer = Layer.merge(
-        providerLayer,
-        Layer.merge(BunServices.layer, FetchHttpClient.layer)
-      );
+      const fullLayer = Layer.merge(providerLayer, Layer.merge(BunServices.layer, FetchHttpClient.layer));
 
       yield* llmStream.pipe(
         Stream.runForEach((part) => {

@@ -125,9 +125,7 @@ describe("agent integration", () => {
       const agentConfig: AgentConfig = { session, config };
       const mockLLMLayer = createMockLLMLayer(mockResponses);
 
-      const error = yield* runAgent("test prompt", agentConfig, Layer.merge(mockLLMLayer, layer)).pipe(
-        Effect.flip
-      );
+      const error = yield* runAgent("test prompt", agentConfig, Layer.merge(mockLLMLayer, layer)).pipe(Effect.flip);
 
       expect(error._tag).toBe("AiError");
     })

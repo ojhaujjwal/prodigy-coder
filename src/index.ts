@@ -30,10 +30,7 @@ const runAgent = (
     const session = yield* sessionEffect;
 
     const agentConfig: AgentConfig = { session, config };
-    const providerLayer = Layer.merge(
-      buildProviderLayer(config.provider),
-      MyToolkitLayer
-    ).pipe(
+    const providerLayer = Layer.merge(buildProviderLayer(config.provider), MyToolkitLayer).pipe(
       Layer.provide(FetchHttpClient.layer)
     );
 
