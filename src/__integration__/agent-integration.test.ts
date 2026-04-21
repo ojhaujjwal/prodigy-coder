@@ -202,7 +202,7 @@ describe("agent integration", () => {
 
   it.effect("Test 9: System prompt prepended", () =>
     Effect.gen(function* () {
-      const capturedPrompts: unknown[] = [];
+      const capturedPrompts: Array<{ content: Array<{ role: string; content: unknown }> }> = [];
 
       const mockResponses: import("./helpers.ts").TurnResponse[] = [
         [
@@ -216,13 +216,13 @@ describe("agent integration", () => {
       const session = createTestSession();
       const agentConfig: AgentConfig = { session, config };
       const mockLLMLayer = createMockLLMLayer(mockResponses, (prompt) => {
-        capturedPrompts.push(prompt);
+        capturedPrompts.push(JSON.parse(JSON.stringify(prompt)));
       });
 
       yield* runAgent("test prompt", agentConfig, Layer.merge(mockLLMLayer, layer));
 
       expect(capturedPrompts.length).toBe(1);
-      const prompt = capturedPrompts[0] as { content: Array<{ role: string; content: unknown }> };
+      const prompt = capturedPrompts[0];
       expect(
         prompt.content.some(
           (m) =>

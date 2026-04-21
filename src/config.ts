@@ -34,6 +34,11 @@ export interface Config extends ConfigData {}
 const bedrockBaseUrl = (region: string | undefined) =>
   region ? `https://bedrock-mantle.${region}.api.aws/v1` : undefined;
 
+const parseApprovalMode = (value: string | undefined): ApprovalMode | undefined => {
+  if (value === "none" || value === "dangerous" || value === "all") return value;
+  return undefined;
+};
+
 const envOverrides = (
   config: ConfigData,
   apiKey: string | undefined,
@@ -51,7 +56,7 @@ const envOverrides = (
       baseUrl: finalBaseUrl,
       model: model ?? config.provider.model
     },
-    approvalMode: (approvalMode ?? config.approvalMode) as ApprovalMode
+    approvalMode: parseApprovalMode(approvalMode) ?? config.approvalMode
   };
 };
 

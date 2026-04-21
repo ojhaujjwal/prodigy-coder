@@ -3,8 +3,14 @@ import { Effect, Schema } from "effect";
 import * as TestConsole from "effect/testing/TestConsole";
 import { makeTextFormatter, makeStreamJsonFormatter, type OutputEvent } from "./output.ts";
 
-const parseJson = (input: string) =>
-  Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Unknown))(input) as Record<string, unknown>;
+const parseJson = (input: string): Record<string, unknown> =>
+  Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Record(Schema.String, Schema.Unknown)))(input);
+
+const unsafeHead = <A>(as: ReadonlyArray<A>): A => {
+  const a = as[0];
+  if (a === undefined) throw new Error("empty array");
+  return a;
+};
 
 const testLayer = TestConsole.layer;
 
@@ -89,14 +95,11 @@ describe("output", () => {
         const formatter = makeStreamJsonFormatter();
         const event: OutputEvent = { type: "text-delta", delta: "Hello" };
         yield* formatter(event);
-        const outputs = yield* TestConsole.logLines;
+        const outputs = yield* TestConsole.logLines.pipe(Effect.map((lines) => lines.map(String)));
         expect(outputs.length).toBe(1);
-        const parsed = parseJson(outputs[0] as string);
+        const parsed = parseJson(unsafeHead(outputs));
         expect(parsed.type).toBe("content");
-        expect(Array.isArray(parsed.content)).toBe(true);
-        const content = parsed.content as Array<{ type: string; text: string }>;
-        expect(content[0].type).toBe("text");
-        expect(content[0].text).toBe("Hello");
+        expect(parsed.content).toEqual([{ type: "text", text: "Hello" }]);
       }).pipe(Effect.provide(testLayer))
     );
 
@@ -110,9 +113,9 @@ describe("output", () => {
           params: { filePath: "/test.txt" }
         };
         yield* formatter(event);
-        const outputs = yield* TestConsole.logLines;
+        const outputs = yield* TestConsole.logLines.pipe(Effect.map((lines) => lines.map(String)));
         expect(outputs.length).toBe(1);
-        const parsed = parseJson(outputs[0] as string);
+        const parsed = parseJson(unsafeHead(outputs));
         expect(parsed.type).toBe("tool_use");
         expect(parsed.name).toBe("read");
         expect(parsed.input).toEqual({ filePath: "/test.txt" });
@@ -130,9 +133,9 @@ describe("output", () => {
           isError: false
         };
         yield* formatter(event);
-        const outputs = yield* TestConsole.logLines;
+        const outputs = yield* TestConsole.logLines.pipe(Effect.map((lines) => lines.map(String)));
         expect(outputs.length).toBe(1);
-        const parsed = parseJson(outputs[0] as string);
+        const parsed = parseJson(unsafeHead(outputs));
         expect(parsed.type).toBe("tool_result");
         expect(parsed.content).toBe("file contents");
         expect(parsed.is_error).toBe(false);
@@ -144,9 +147,9 @@ describe("output", () => {
         const formatter = makeStreamJsonFormatter();
         const event: OutputEvent = { type: "finish", text: "Done" };
         yield* formatter(event);
-        const outputs = yield* TestConsole.logLines;
+        const outputs = yield* TestConsole.logLines.pipe(Effect.map((lines) => lines.map(String)));
         expect(outputs.length).toBe(1);
-        const parsed = parseJson(outputs[0] as string);
+        const parsed = parseJson(unsafeHead(outputs));
         expect(parsed.type).toBe("final");
         expect(parsed.content).toBe("Done");
       }).pipe(Effect.provide(testLayer))
@@ -157,9 +160,9 @@ describe("output", () => {
         const formatter = makeStreamJsonFormatter();
         const event: OutputEvent = { type: "error", message: "Failed" };
         yield* formatter(event);
-        const outputs = yield* TestConsole.logLines;
+        const outputs = yield* TestConsole.logLines.pipe(Effect.map((lines) => lines.map(String)));
         expect(outputs.length).toBe(1);
-        const parsed = parseJson(outputs[0] as string);
+        const parsed = parseJson(unsafeHead(outputs));
         expect(parsed.type).toBe("error");
         expect(parsed.message).toBe("Failed");
       }).pipe(Effect.provide(testLayer))
@@ -175,9 +178,9 @@ describe("output", () => {
           toolName: "shell"
         };
         yield* formatter(event);
-        const outputs = yield* TestConsole.logLines;
+        const outputs = yield* TestConsole.logLines.pipe(Effect.map((lines) => lines.map(String)));
         expect(outputs.length).toBe(1);
-        const parsed = parseJson(outputs[0] as string);
+        const parsed = parseJson(unsafeHead(outputs));
         expect(parsed.type).toBe("approval_required");
         expect(parsed.tool_name).toBe("shell");
       }).pipe(Effect.provide(testLayer))
@@ -188,9 +191,9 @@ describe("output", () => {
         const formatter = makeStreamJsonFormatter();
         const event: OutputEvent = { type: "approval-response", approved: true };
         yield* formatter(event);
-        const outputs = yield* TestConsole.logLines;
+        const outputs = yield* TestConsole.logLines.pipe(Effect.map((lines) => lines.map(String)));
         expect(outputs.length).toBe(1);
-        const parsed = parseJson(outputs[0] as string);
+        const parsed = parseJson(unsafeHead(outputs));
         expect(parsed.type).toBe("approval_response");
         expect(parsed.approved).toBe(true);
       }).pipe(Effect.provide(testLayer))

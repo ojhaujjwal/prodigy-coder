@@ -1,4 +1,3 @@
-import type * as LanguageModel from "effect/unstable/ai/LanguageModel";
 import * as Model from "effect/unstable/ai/Model";
 import * as OpenAiClient from "@effect/ai-openai-compat/OpenAiClient";
 import * as OpenAiLanguageModel from "@effect/ai-openai-compat/OpenAiLanguageModel";
@@ -8,7 +7,6 @@ import * as AnthropicClient from "@effect/ai-anthropic/AnthropicClient";
 import * as AnthropicLanguageModel from "@effect/ai-anthropic/AnthropicLanguageModel";
 import * as OpenRouterClient from "@effect/ai-openrouter/OpenRouterClient";
 import * as OpenRouterLanguageModel from "@effect/ai-openrouter/OpenRouterLanguageModel";
-import * as HttpClient from "effect/unstable/http/HttpClient";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import type { ProviderConfig } from "./config.ts";
@@ -23,13 +21,7 @@ const DEFAULT_MODELS = {
 
 const getDefaultModel = (type: ProviderConfig["type"]): string => DEFAULT_MODELS[type];
 
-type BuildProviderLayerReturn = Model.Model<
-  "openai-compat" | "openai" | "anthropic" | "openrouter" | "bedrock",
-  LanguageModel.LanguageModel,
-  HttpClient.HttpClient
->;
-
-export const buildProviderLayer = (config: ProviderConfig): BuildProviderLayerReturn => {
+export const buildProviderLayer = (config: ProviderConfig) => {
   const modelName = config.model ?? getDefaultModel(config.type);
   const apiKey = config.apiKey ? Redacted.make(config.apiKey) : Redacted.make("");
 
@@ -92,5 +84,5 @@ export const buildProviderLayer = (config: ProviderConfig): BuildProviderLayerRe
     }
   })();
 
-  return result as BuildProviderLayerReturn;
+  return result;
 };

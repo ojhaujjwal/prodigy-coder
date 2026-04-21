@@ -74,7 +74,7 @@ export interface StubToolkit {
   calls: Record<string, unknown[]>;
 }
 
-export const createStubToolkit = (overrides?: Record<string, string | Error>): StubToolkit => {
+export const createStubToolkit = (overrides?: Record<string, Error>): StubToolkit => {
   const calls: Record<string, unknown[]> = {};
 
   const makeHandler = <A>(toolName: string, defaultResult: A) => {
@@ -93,9 +93,6 @@ export const createStubToolkit = (overrides?: Record<string, string | Error>): S
             reason: new AiError.UnknownError({ description: override.message })
           })
         );
-      }
-      if (override !== undefined) {
-        return Effect.succeed(override as A);
       }
       return Effect.succeed(defaultResult);
     };

@@ -72,55 +72,53 @@ const truncate = (str: string, maxLen: number): string => {
 export const makeTextFormatter =
   (): OutputFormatter =>
   (event: OutputEvent): Effect.Effect<void> => {
-    const e = event as TextDelta | ToolCall | ToolResult | ToolApprovalRequest | ApprovalResponse | Finish | ErrorEvent;
-    switch (e.type) {
+    switch (event.type) {
       case "text-delta":
-        return Console.log(e.delta);
+        return Console.log(event.delta);
       case "tool-call": {
-        const paramsStr = JSON.stringify(e.params);
-        const display = `> ${e.name}(${truncate(paramsStr, 100)})`;
+        const paramsStr = JSON.stringify(event.params);
+        const display = `> ${event.name}(${truncate(paramsStr, 100)})`;
         return Console.log(textColor(34, display));
       }
       case "tool-result":
-        return Console.log(textColor(90, truncate(e.result, 500)));
+        return Console.log(textColor(90, truncate(event.result, 500)));
       case "tool-approval-request":
-        return Console.log(textColor(33, `Tool ${e.toolName} requires approval. Allow? (y/n) `));
+        return Console.log(textColor(33, `Tool ${event.toolName} requires approval. Allow? (y/n) `));
       case "approval-response":
-        return Console.log(textColor(90, e.approved ? "Approved" : "Rejected"));
+        return Console.log(textColor(90, event.approved ? "Approved" : "Rejected"));
       case "finish":
-        return Console.log("\n" + e.text + "\n");
+        return Console.log("\n" + event.text + "\n");
       case "error":
-        return Console.log(textColor(31, `Error: ${e.message}`));
+        return Console.log(textColor(31, `Error: ${event.message}`));
     }
   };
 
 export const makeStreamJsonFormatter =
   (): OutputFormatter =>
   (event: OutputEvent): Effect.Effect<void> => {
-    const e = event as TextDelta | ToolCall | ToolResult | ToolApprovalRequest | ApprovalResponse | Finish | ErrorEvent;
-    let output: Record<string, unknown> = { type: e.type };
+    let output: Record<string, unknown> = { type: event.type };
 
-    switch (e.type) {
+    switch (event.type) {
       case "text-delta":
-        output = { type: "content", content: [{ type: "text", text: e.delta }] };
+        output = { type: "content", content: [{ type: "text", text: event.delta }] };
         break;
       case "tool-call":
-        output = { type: "tool_use", name: e.name, input: e.params };
+        output = { type: "tool_use", name: event.name, input: event.params };
         break;
       case "tool-result":
-        output = { type: "tool_result", content: e.result, is_error: e.isError };
+        output = { type: "tool_result", content: event.result, is_error: event.isError };
         break;
       case "tool-approval-request":
-        output = { type: "approval_required", tool_name: e.toolName };
+        output = { type: "approval_required", tool_name: event.toolName };
         break;
       case "approval-response":
-        output = { type: "approval_response", approved: e.approved };
+        output = { type: "approval_response", approved: event.approved };
         break;
       case "finish":
-        output = { type: "final", content: e.text };
+        output = { type: "final", content: event.text };
         break;
       case "error":
-        output = { type: "error", message: e.message };
+        output = { type: "error", message: event.message };
         break;
     }
 

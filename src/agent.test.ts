@@ -9,7 +9,10 @@ import { MyToolkit } from "../src/tools/index.ts";
 const mockLanguageModelLayer = Layer.effect(
   LanguageModel.LanguageModel,
   LanguageModel.make({
-    streamText: () => Stream.empty as Stream.Stream<Response.StreamPartEncoded, AiError.AiError>,
+    streamText: () => {
+      const empty: Stream.Stream<Response.StreamPartEncoded, AiError.AiError> = Stream.empty;
+      return empty;
+    },
     generateText: () => Effect.succeed([])
   })
 );

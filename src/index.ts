@@ -3,7 +3,7 @@ import { Argument, Command, Flag } from "effect/unstable/cli";
 import { Console, Effect, Layer, Option, Schema } from "effect";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import { AppConfig, loadConfig, maskConfig } from "./config.ts";
-import { SessionRepo, createSession, loadSession, type Session } from "./session.ts";
+import { SessionRepo, createSession, loadSession } from "./session.ts";
 import { createFormatter, type OutputEvent } from "./output.ts";
 import { runAgent as runAgentLoop } from "./agent.ts";
 import type { AgentConfig } from "./agent.ts";
@@ -11,14 +11,19 @@ import { MyToolkitLayer } from "./tools/index.ts";
 import { buildProviderLayer } from "./provider.ts";
 import * as AiError from "effect/unstable/ai/AiError";
 
+class SessionLoadError {
+  readonly _tag = "SessionLoadError" as const;
+  constructor(readonly cause: unknown) {}
+}
+
 const runAgent = (
   prompt: string,
   sessionId: Option.Option<string>,
   config: import("./config.ts").ConfigData
-): Effect.Effect<OutputEvent[], AiError.AiError | Error> => {
-  const sessionEffect: Effect.Effect<Session, never> = Option.match(sessionId, {
-    onNone: () => createSession(config.systemPrompt) as Effect.Effect<Session, never>,
-    onSome: (id) => loadSession(id) as Effect.Effect<Session, never>
+): Effect.Effect<OutputEvent[], AiError.AiError | SessionLoadError> => {
+  const sessionEffect = Option.match(sessionId, {
+    onNone: () => createSession(config.systemPrompt),
+    onSome: (id) => loadSession(id).pipe(Effect.mapError((e) => new SessionLoadError(e)))
   });
 
   return Effect.gen(function* () {
@@ -103,8 +108,7 @@ const mainCommand = Command.make(
         return;
       }
 
-      const format = outputFormat as "text" | "stream-json";
-      const formatter = createFormatter(format);
+      const formatter = createFormatter(outputFormat);
       const outputEvents = yield* runAgent(promptText, sessionId, appConfig);
 
       for (const event of outputEvents) {
