@@ -3,7 +3,7 @@ import { Effect, Layer } from "effect";
 import { runAgent, type AgentConfig } from "../agent.ts";
 import {
   createMockLLMLayer,
-  createStubHandlers,
+  createStubToolkit,
   createTestConfig,
   createTestSession,
   type TurnResponse
@@ -25,12 +25,12 @@ describe("e2e", () => {
 
       const config = createTestConfig();
       const session = createTestSession();
-      const { handlers } = createStubHandlers();
+      const { layer } = createStubToolkit();
 
-      const agentConfig: AgentConfig = { session, config, handlers };
+      const agentConfig: AgentConfig = { session, config };
       const mockLLMLayer = createMockLLMLayer(mockResponses);
 
-      const result = yield* runAgent("test prompt", agentConfig, mockLLMLayer);
+      const result = yield* runAgent("test prompt", agentConfig, Layer.merge(mockLLMLayer, layer));
 
       const textDeltas = result.filter((e) => e.type === "text-delta");
       const finishes = result.filter((e) => e.type === "finish");
@@ -61,12 +61,12 @@ describe("e2e", () => {
 
       const config = createTestConfig({ approvalMode: "none" });
       const session = createTestSession();
-      const { handlers } = createStubHandlers();
+      const { layer } = createStubToolkit();
 
-      const agentConfig: AgentConfig = { session, config, handlers };
+      const agentConfig: AgentConfig = { session, config };
       const mockLLMLayer = createMockLLMLayer(mockResponses);
 
-      yield* runAgent("test prompt", agentConfig, mockLLMLayer);
+      yield* runAgent("test prompt", agentConfig, Layer.merge(mockLLMLayer, layer));
 
       expect(agentConfig.session.messages.length >= 2).toBe(true);
     })
@@ -84,12 +84,12 @@ describe("e2e", () => {
 
       const config = createTestConfig({ approvalMode: "none" });
       const session = createTestSession();
-      const { handlers, calls } = createStubHandlers();
+      const { layer, calls } = createStubToolkit();
 
-      const agentConfig: AgentConfig = { session, config, handlers };
+      const agentConfig: AgentConfig = { session, config };
       const mockLLMLayer = createMockLLMLayer(mockResponses);
 
-      yield* runAgent("test prompt", agentConfig, mockLLMLayer);
+      yield* runAgent("test prompt", agentConfig, Layer.merge(mockLLMLayer, layer));
 
       expect(calls["read"]).toEqual([{ filePath: "/a.txt" }]);
       expect(calls["write"]).toEqual([{ filePath: "/b.txt", content: "test" }]);

@@ -1,7 +1,8 @@
 import { describe, it, expect } from "@effect/vitest";
 import { Effect } from "effect";
 import { runAgent, type AgentConfig } from "../agent.ts";
-import { createMockLLMLayer, createStubHandlers, createTestConfig, createTestSession } from "./helpers.ts";
+import { createMockLLMLayer, createStubToolkit, createTestConfig, createTestSession } from "./helpers.ts";
+import { Layer } from "effect";
 
 class TestError extends Error {
   readonly _tag = "TestError";
@@ -14,17 +15,16 @@ const runAgentWithMocks = (
 ) => {
   const config = createTestConfig(configOverrides);
   const session = createTestSession(sessionMessages);
-  const { handlers } = createStubHandlers();
+  const { layer } = createStubToolkit();
 
   const agentConfig: AgentConfig = {
     session,
-    config,
-    handlers
+    config
   };
 
   const mockLLMLayer = createMockLLMLayer(mockResponses);
 
-  return runAgent("test prompt", agentConfig, mockLLMLayer);
+  return runAgent("test prompt", agentConfig, Layer.merge(mockLLMLayer, layer));
 };
 
 describe("agent integration", () => {
@@ -62,13 +62,13 @@ describe("agent integration", () => {
         ]
       ];
 
-      const { handlers } = createStubHandlers();
+      const { layer } = createStubToolkit();
       const config = createTestConfig({ approvalMode: "none" });
       const session = createTestSession();
-      const agentConfig: AgentConfig = { session, config, handlers };
+      const agentConfig: AgentConfig = { session, config };
       const mockLLMLayer = createMockLLMLayer(mockResponses);
 
-      const result = yield* runAgent("test prompt", agentConfig, mockLLMLayer);
+      const result = yield* runAgent("test prompt", agentConfig, Layer.merge(mockLLMLayer, layer));
 
       const toolCalls = result.filter((e) => e.type === "tool-call");
       const toolResults = result.filter((e) => e.type === "tool-result");
@@ -93,13 +93,13 @@ describe("agent integration", () => {
         [{ type: "finish", reason: "stop" }]
       ];
 
-      const { handlers, calls } = createStubHandlers();
+      const { layer, calls } = createStubToolkit();
       const config = createTestConfig({ approvalMode: "none" });
       const session = createTestSession();
-      const agentConfig: AgentConfig = { session, config, handlers };
+      const agentConfig: AgentConfig = { session, config };
       const mockLLMLayer = createMockLLMLayer(mockResponses);
 
-      const result = yield* runAgent("test prompt", agentConfig, mockLLMLayer);
+      const result = yield* runAgent("test prompt", agentConfig, Layer.merge(mockLLMLayer, layer));
 
       const toolCalls = result.filter((e) => e.type === "tool-call");
       const toolResults = result.filter((e) => e.type === "tool-result");
@@ -112,49 +112,24 @@ describe("agent integration", () => {
     })
   );
 
-  it.effect("Test 4: Unknown tool", () =>
-    Effect.gen(function* () {
-      const mockResponses: import("./helpers.ts").TurnResponse[] = [
-        [{ type: "tool-call", id: "call-1", name: "read", params: { filePath: "/test.txt" } }],
-        [{ type: "finish", reason: "stop" }]
-      ];
-
-      const { handlers } = createStubHandlers({ read: new TestError("handler removed") });
-      const config = createTestConfig({ approvalMode: "none" });
-      const session = createTestSession();
-      const agentConfig: AgentConfig = { session, config, handlers };
-      const mockLLMLayer = createMockLLMLayer(mockResponses);
-
-      const result = yield* runAgent("test prompt", agentConfig, mockLLMLayer);
-
-      const toolResults = result.filter((e) => e.type === "tool-result");
-
-      expect(toolResults.length).toBe(1);
-      expect(toolResults[0].isError).toBe(true);
-      expect(toolResults[0].result).toContain("handler removed");
-    })
-  );
-
-  it.effect("Test 5: Tool execution error", () =>
+  it.effect("Test 5: Tool execution error fails the stream", () =>
     Effect.gen(function* () {
       const mockResponses: import("./helpers.ts").TurnResponse[] = [
         [{ type: "tool-call", id: "call-1", name: "read", params: { filePath: "/bad" } }],
         [{ type: "finish", reason: "stop" }]
       ];
 
-      const { handlers } = createStubHandlers({ read: new TestError("file not found") });
+      const { layer } = createStubToolkit({ read: new TestError("file not found") });
       const config = createTestConfig({ approvalMode: "none" });
       const session = createTestSession();
-      const agentConfig: AgentConfig = { session, config, handlers };
+      const agentConfig: AgentConfig = { session, config };
       const mockLLMLayer = createMockLLMLayer(mockResponses);
 
-      const result = yield* runAgent("test prompt", agentConfig, mockLLMLayer);
+      const error = yield* runAgent("test prompt", agentConfig, Layer.merge(mockLLMLayer, layer)).pipe(
+        Effect.flip
+      );
 
-      const toolResults = result.filter((e) => e.type === "tool-result");
-
-      expect(toolResults.length).toBe(1);
-      expect(toolResults[0].isError).toBe(true);
-      expect(toolResults[0].result).toContain("file not found");
+      expect(error._tag).toBe("AiError");
     })
   );
 
@@ -165,13 +140,13 @@ describe("agent integration", () => {
         [{ type: "finish", reason: "stop" }]
       ];
 
-      const { handlers } = createStubHandlers();
+      const { layer } = createStubToolkit();
       const config = createTestConfig({ approvalMode: "none" });
       const session = createTestSession();
-      const agentConfig: AgentConfig = { session, config, handlers };
+      const agentConfig: AgentConfig = { session, config };
       const mockLLMLayer = createMockLLMLayer(mockResponses);
 
-      const result = yield* runAgent("test prompt", agentConfig, mockLLMLayer);
+      const result = yield* runAgent("test prompt", agentConfig, Layer.merge(mockLLMLayer, layer));
 
       const approvalRequests = result.filter((e) => e.type === "tool-approval-request");
 
@@ -189,13 +164,13 @@ describe("agent integration", () => {
         [{ type: "finish", reason: "stop" }]
       ];
 
-      const { handlers } = createStubHandlers();
+      const { layer } = createStubToolkit();
       const config = createTestConfig({ approvalMode: "dangerous" });
       const session = createTestSession();
-      const agentConfig: AgentConfig = { session, config, handlers };
+      const agentConfig: AgentConfig = { session, config };
       const mockLLMLayer = createMockLLMLayer(mockResponses);
 
-      const result = yield* runAgent("test prompt", agentConfig, mockLLMLayer);
+      const result = yield* runAgent("test prompt", agentConfig, Layer.merge(mockLLMLayer, layer));
 
       const approvalRequests = result.filter((e) => e.type === "tool-approval-request");
 
@@ -210,13 +185,13 @@ describe("agent integration", () => {
         [{ type: "tool-call", id: "call-1", name: "read", params: { filePath: "/test.txt" } }]
       ];
 
-      const { handlers } = createStubHandlers();
-      const config = createTestConfig({ maxTurns: 1 });
+      const { layer } = createStubToolkit();
+      const config = createTestConfig({ approvalMode: "none" });
       const session = createTestSession();
-      const agentConfig: AgentConfig = { session, config, handlers };
+      const agentConfig: AgentConfig = { session, config };
       const mockLLMLayer = createMockLLMLayer(mockResponses);
 
-      const result = yield* runAgent("test prompt", agentConfig, mockLLMLayer);
+      const result = yield* runAgent("test prompt", agentConfig, Layer.merge(mockLLMLayer, layer));
 
       const errors = result.filter((e) => e.type === "error");
 
@@ -236,15 +211,15 @@ describe("agent integration", () => {
         ]
       ];
 
-      const { handlers } = createStubHandlers();
+      const { layer } = createStubToolkit();
       const config = createTestConfig({ systemPrompt: "You are a helpful assistant." });
       const session = createTestSession();
-      const agentConfig: AgentConfig = { session, config, handlers };
+      const agentConfig: AgentConfig = { session, config };
       const mockLLMLayer = createMockLLMLayer(mockResponses, (prompt) => {
         capturedPrompts.push(prompt);
       });
 
-      yield* runAgent("test prompt", agentConfig, mockLLMLayer);
+      yield* runAgent("test prompt", agentConfig, Layer.merge(mockLLMLayer, layer));
 
       expect(capturedPrompts.length).toBe(1);
       const prompt = capturedPrompts[0] as { content: Array<{ role: string; content: unknown }> };
@@ -267,14 +242,14 @@ describe("agent integration", () => {
         ]
       ];
 
-      const { handlers } = createStubHandlers();
+      const { layer } = createStubToolkit();
       const config = createTestConfig({ approvalMode: "none" });
       const session = createTestSession();
-      const agentConfig: AgentConfig = { session, config, handlers };
+      const agentConfig: AgentConfig = { session, config };
 
       const mockLLMLayer = createMockLLMLayer(mockResponses);
 
-      yield* runAgent("test prompt", agentConfig, mockLLMLayer);
+      yield* runAgent("test prompt", agentConfig, Layer.merge(mockLLMLayer, layer));
 
       expect(agentConfig.session.messages.length >= 2).toBe(true);
       expect(agentConfig.session.messages.some((m) => m.role === "user")).toBe(true);

@@ -2,8 +2,10 @@ import { Effect, Layer, Stream } from "effect";
 import * as LanguageModel from "effect/unstable/ai/LanguageModel";
 import * as Response from "effect/unstable/ai/Response";
 import * as AiError from "effect/unstable/ai/AiError";
+import { Tool } from "effect/unstable/ai";
 import type { ConfigData } from "../config.ts";
 import type { Session, Message } from "../session.ts";
+import { MyToolkit } from "../tools/index.ts";
 
 export type MockPart =
   | { type: "text-delta"; delta: string }
@@ -18,26 +20,28 @@ export type TurnResponse = MockPart[];
 const mockPartToEncoded = (part: MockPart): Response.StreamPartEncoded => {
   switch (part.type) {
     case "text-delta":
-      return Response.makePart("text-delta", {
+      return {
+        type: "text-delta",
         id: "mock-id",
         delta: part.delta
-      }) as Response.StreamPartEncoded;
+      };
     case "tool-call":
-      return Response.makePart("tool-call", {
+      return {
+        type: "tool-call",
         id: part.id,
         name: part.name,
-        params: part.params,
-        providerExecuted: false
-      }) as Response.StreamPartEncoded;
+        params: part.params
+      };
     case "finish":
-      return Response.makePart("finish", {
+      return {
+        type: "finish",
         reason: part.reason,
         usage: {
           inputTokens: { uncached: 0, total: 1, cacheRead: 0, cacheWrite: undefined },
           outputTokens: { total: 1, text: 1, reasoning: 0 }
         },
         response: undefined
-      }) as Response.StreamPartEncoded;
+      };
   }
 };
 
@@ -65,20 +69,20 @@ export const createMockLLMLayer = (
   return Layer.effect(LanguageModel.LanguageModel, service);
 };
 
-export interface StubHandlers {
-  handlers: Record<string, (params: unknown) => Effect.Effect<string, AiError.AiError>>;
+export interface StubToolkit {
+  layer: Layer.Layer<Tool.HandlersFor<typeof MyToolkit.tools>>;
   calls: Record<string, unknown[]>;
 }
 
-export const createStubHandlers = (overrides?: Record<string, string | Error>): StubHandlers => {
+export const createStubToolkit = (overrides?: Record<string, string | Error>): StubToolkit => {
   const calls: Record<string, unknown[]> = {};
 
-  const makeHandler = (toolName: string) => {
-    return (params: unknown): Effect.Effect<string, AiError.AiError> => {
+  const makeHandler = <A>(toolName: string, defaultResult: A) => {
+    return (_params: unknown, _context: unknown): Effect.Effect<A, AiError.AiError, never> => {
       if (!calls[toolName]) {
         calls[toolName] = [];
       }
-      calls[toolName].push(params);
+      calls[toolName].push(_params);
 
       const override = overrides?.[toolName];
       if (override instanceof Error) {
@@ -91,23 +95,23 @@ export const createStubHandlers = (overrides?: Record<string, string | Error>): 
         );
       }
       if (override !== undefined) {
-        return Effect.succeed(override);
+        return Effect.succeed(override as A);
       }
-      return Effect.succeed(`stub ${toolName} result`);
+      return Effect.succeed(defaultResult);
     };
   };
 
-  const handlers: Record<string, (params: unknown) => Effect.Effect<string, AiError.AiError>> = {
-    shell: makeHandler("shell"),
-    read: makeHandler("read"),
-    write: makeHandler("write"),
-    edit: makeHandler("edit"),
-    grep: makeHandler("grep"),
-    glob: makeHandler("glob"),
-    webfetch: makeHandler("webfetch")
-  };
+  const layer = MyToolkit.toLayer({
+    shell: makeHandler("shell", "stub shell result"),
+    read: makeHandler("read", "stub read result"),
+    write: makeHandler("write", "stub write result"),
+    edit: makeHandler("edit", "stub edit result"),
+    grep: makeHandler("grep", ["stub grep result"]),
+    glob: makeHandler("glob", ["stub glob result"]),
+    webfetch: makeHandler("webfetch", "stub webfetch result")
+  });
 
-  return { handlers, calls };
+  return { layer, calls };
 };
 
 export const createTestConfig = (overrides?: Partial<ConfigData>): ConfigData => ({
@@ -140,8 +144,8 @@ export const createMockOpenAIServer = (
   const calls: unknown[] = [];
   let responseIndex = 0;
 
+  // oxlint-disable-next-line prodigy/no-bun-globals
   const server = Bun.serve({
-    // eslint-disable-line prodigy/no-bun-globals
     port: 0,
     async fetch(req) {
       if (req.url.includes("/v1/chat/completions")) {

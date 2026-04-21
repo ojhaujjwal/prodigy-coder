@@ -1,9 +1,9 @@
 import { describe, it, expect } from "@effect/vitest";
-import { Effect } from "effect";
+import { Effect, Layer } from "effect";
 import { runAgent, type AgentConfig } from "../agent.ts";
 import type { OutputEvent } from "../output.ts";
 import { makeTextFormatter, makeStreamJsonFormatter } from "../output.ts";
-import { createMockLLMLayer, createStubHandlers, createTestConfig, createTestSession } from "./helpers.ts";
+import { createMockLLMLayer, createStubToolkit, createTestConfig, createTestSession } from "./helpers.ts";
 
 const runAgentWithMocks = (
   mockResponses: import("./helpers.ts").TurnResponse[],
@@ -11,17 +11,16 @@ const runAgentWithMocks = (
 ) => {
   const config = createTestConfig(configOverrides);
   const session = createTestSession();
-  const { handlers } = createStubHandlers();
+  const { layer } = createStubToolkit();
 
   const agentConfig: AgentConfig = {
     session,
-    config,
-    handlers
+    config
   };
 
   const mockLLMLayer = createMockLLMLayer(mockResponses);
 
-  return runAgent("test prompt", agentConfig, mockLLMLayer);
+  return runAgent("test prompt", agentConfig, Layer.merge(mockLLMLayer, layer));
 };
 
 describe("output integration", () => {

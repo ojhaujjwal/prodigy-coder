@@ -1,8 +1,9 @@
-import * as AiError from "effect/unstable/ai/AiError";
 import * as LanguageModel from "effect/unstable/ai/LanguageModel";
 import * as Prompt from "effect/unstable/ai/Prompt";
-import * as Response from "effect/unstable/ai/Response";
 import { Effect, Layer, Stream } from "effect";
+import { Tool } from "effect/unstable/ai";
+import { BunServices } from "@effect/platform-bun";
+import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import type { Session, Message } from "./session.ts";
 import type { ConfigData } from "./config.ts";
 import { needsApproval } from "./approval.ts";
@@ -12,41 +13,7 @@ import { MyToolkit } from "./tools/index.ts";
 export interface AgentConfig {
   readonly session: Session;
   readonly config: ConfigData;
-  readonly handlers: Record<string, (params: unknown) => Effect.Effect<string, AiError.AiError>>;
 }
-
-const executeTool = (
-  toolName: string,
-  params: unknown,
-  handlers: Record<string, (params: unknown) => Effect.Effect<string, AiError.AiError>>
-): Effect.Effect<{ result: string; isError: boolean }> => {
-  const handler = handlers[toolName];
-  if (!handler) {
-    return Effect.succeed({ result: `Unknown tool: ${toolName}`, isError: true });
-  }
-  return Effect.matchEffect(handler(params), {
-    onSuccess: (result) => Effect.succeed({ result, isError: false }),
-    onFailure: (error) => {
-      const message = error.reason instanceof Error ? error.reason.message : "Unknown error";
-      return Effect.succeed({ result: `Tool error: ${message}`, isError: true });
-    }
-  });
-};
-
-const toolCallToOutputEvent = (part: Response.ToolCallPart<string, unknown>): OutputEvent => ({
-  type: "tool-call",
-  id: part.id,
-  name: part.name,
-  params: part.params
-});
-
-const toolResultToOutputEvent = (id: string, name: string, result: string, isError: boolean): OutputEvent => ({
-  type: "tool-result",
-  id,
-  name,
-  result,
-  isError
-});
 
 const messageToEncoded = (msg: Message): Prompt.MessageEncoded => {
   if (msg.role === "system") {
@@ -61,10 +28,10 @@ const messageToEncoded = (msg: Message): Prompt.MessageEncoded => {
 export const runAgent = (
   promptText: string,
   agentConfig: AgentConfig,
-  providerLayer: Layer.Layer<LanguageModel.LanguageModel>
+  providerLayer: Layer.Layer<LanguageModel.LanguageModel | Tool.HandlersFor<typeof MyToolkit.tools>>
 ) =>
   Effect.gen(function* () {
-    const { session, config, handlers } = agentConfig;
+    const { session, config } = agentConfig;
 
     const messages: Message[] = [...session.messages];
 
@@ -85,45 +52,80 @@ export const runAgent = (
 
       const llmStream = LanguageModel.streamText({
         prompt: promptMessages,
-        disableToolCallResolution: true,
         toolkit: MyToolkit
       });
 
+      const turnOutputEvents: OutputEvent[] = [];
+      const toolCallNames = new Map<string, string>();
+
+      const fullLayer = Layer.merge(
+        providerLayer,
+        Layer.merge(BunServices.layer, FetchHttpClient.layer)
+      );
+
       yield* llmStream.pipe(
-        Stream.mapEffect((part: Response.AnyPart) => Effect.succeed(part)),
         Stream.runForEach((part) => {
           switch (part.type) {
             case "text-delta":
-              outputEvents.push({ type: "text-delta", delta: part.delta });
+              turnOutputEvents.push({ type: "text-delta", delta: part.delta });
               return Effect.void;
             case "tool-call": {
-              outputEvents.push(toolCallToOutputEvent(part));
+              turnOutputEvents.push({ type: "tool-call", id: part.id, name: part.name, params: part.params });
+              toolCallNames.set(part.id, part.name);
               const approved = needsApproval(part.name, config.approvalMode);
               if (approved && config.approvalMode !== "none") {
-                outputEvents.push({
+                turnOutputEvents.push({
                   type: "tool-approval-request",
                   id: crypto.randomUUID(),
                   toolCallId: part.id,
                   toolName: part.name
                 });
               }
-              return Effect.gen(function* () {
-                const execResult = yield* executeTool(part.name, part.params, handlers);
-                outputEvents.push(toolResultToOutputEvent(part.id, part.name, execResult.result, execResult.isError));
-              });
+              return Effect.void;
             }
+            case "tool-result": {
+              if (part.preliminary) {
+                return Effect.void;
+              }
+              let resultStr: string;
+              if (Array.isArray(part.encodedResult)) {
+                resultStr = part.encodedResult.join("\n");
+              } else if (typeof part.encodedResult === "string") {
+                resultStr = part.encodedResult;
+              } else {
+                resultStr = JSON.stringify(part.encodedResult);
+              }
+              turnOutputEvents.push({
+                type: "tool-result",
+                id: part.id,
+                name: part.name,
+                result: resultStr,
+                isError: part.isFailure
+              });
+              return Effect.void;
+            }
+            case "tool-approval-request":
+              turnOutputEvents.push({
+                type: "tool-approval-request",
+                id: part.approvalId,
+                toolCallId: part.toolCallId,
+                toolName: toolCallNames.get(part.toolCallId) ?? ""
+              });
+              return Effect.void;
             case "finish":
               finished = true;
-              outputEvents.push({ type: "finish", text: part.reason || "" });
+              turnOutputEvents.push({ type: "finish", text: part.reason || "" });
               return Effect.void;
             default:
               return Effect.void;
           }
         }),
-        Effect.provide(providerLayer)
+        Effect.provide(fullLayer)
       );
 
-      const toolResults = outputEvents.filter((e) => e.type === "tool-result");
+      outputEvents.push(...turnOutputEvents);
+
+      const toolResults = turnOutputEvents.filter((e) => e.type === "tool-result");
       for (const toolResult of toolResults) {
         if (toolResult.type === "tool-result") {
           messages.push({

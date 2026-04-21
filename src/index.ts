@@ -7,51 +7,9 @@ import { SessionRepo, createSession, loadSession, type Session } from "./session
 import { createFormatter, type OutputEvent } from "./output.ts";
 import { runAgent as runAgentLoop } from "./agent.ts";
 import type { AgentConfig } from "./agent.ts";
-import { shellHandler } from "./tools/shell.ts";
-import { readHandler } from "./tools/read.ts";
-import { writeHandler } from "./tools/write.ts";
-import { editHandler } from "./tools/edit.ts";
-import { grepHandler } from "./tools/grep.ts";
-import { globHandler } from "./tools/glob.ts";
-import { webfetchHandler } from "./tools/webfetch.ts";
+import { MyToolkitLayer } from "./tools/index.ts";
 import { buildProviderLayer } from "./provider.ts";
 import * as AiError from "effect/unstable/ai/AiError";
-
-const mockContext = { preliminary: () => Effect.void } as unknown;
-
-export const createHandlers = (): Record<string, (params: unknown) => Effect.Effect<string>> => ({
-  shell: (p) =>
-    shellHandler(p as Parameters<typeof shellHandler>[0], mockContext as Parameters<typeof shellHandler>[1]).pipe(
-      Effect.provide(BunServices.layer)
-    ) as unknown as Effect.Effect<string>,
-  read: (p) =>
-    readHandler(p as Parameters<typeof readHandler>[0], mockContext as Parameters<typeof readHandler>[1]).pipe(
-      Effect.provide(BunServices.layer)
-    ) as unknown as Effect.Effect<string>,
-  write: (p) =>
-    writeHandler(p as Parameters<typeof writeHandler>[0], mockContext as Parameters<typeof writeHandler>[1]).pipe(
-      Effect.provide(BunServices.layer)
-    ) as unknown as Effect.Effect<string>,
-  edit: (p) =>
-    editHandler(p as Parameters<typeof editHandler>[0], mockContext as Parameters<typeof editHandler>[1]).pipe(
-      Effect.provide(BunServices.layer)
-    ) as unknown as Effect.Effect<string>,
-  grep: (p) =>
-    grepHandler(p as Parameters<typeof grepHandler>[0], mockContext as Parameters<typeof grepHandler>[1]).pipe(
-      Effect.provide(BunServices.layer),
-      Effect.map((lines) => lines.join("\n"))
-    ) as unknown as Effect.Effect<string>,
-  glob: (p) =>
-    globHandler(p as Parameters<typeof globHandler>[0], mockContext as Parameters<typeof globHandler>[1]).pipe(
-      Effect.provide(BunServices.layer),
-      Effect.map((files) => files.join("\n"))
-    ) as unknown as Effect.Effect<string>,
-  webfetch: (p) =>
-    webfetchHandler(
-      p as Parameters<typeof webfetchHandler>[0],
-      mockContext as Parameters<typeof webfetchHandler>[1]
-    ).pipe(Effect.provide(BunServices.layer)) as unknown as Effect.Effect<string>
-});
 
 const runAgent = (
   prompt: string,
@@ -66,10 +24,11 @@ const runAgent = (
   return Effect.gen(function* () {
     const session = yield* sessionEffect;
 
-    const handlers = createHandlers();
-    const agentConfig: AgentConfig = { session, config, handlers };
-    const providerLayer = buildProviderLayer(config.provider).pipe(
-      Layer.provide(BunServices.layer),
+    const agentConfig: AgentConfig = { session, config };
+    const providerLayer = Layer.merge(
+      buildProviderLayer(config.provider),
+      MyToolkitLayer
+    ).pipe(
       Layer.provide(FetchHttpClient.layer)
     );
 

@@ -4,6 +4,7 @@ import * as LanguageModel from "effect/unstable/ai/LanguageModel";
 import * as Response from "effect/unstable/ai/Response";
 import * as AiError from "effect/unstable/ai/AiError";
 import { runAgent, type AgentConfig } from "../src/agent.ts";
+import { MyToolkit } from "../src/tools/index.ts";
 
 const mockLanguageModelLayer = Layer.effect(
   LanguageModel.LanguageModel,
@@ -12,6 +13,16 @@ const mockLanguageModelLayer = Layer.effect(
     generateText: () => Effect.succeed([])
   })
 );
+
+const mockToolkitLayer = MyToolkit.toLayer({
+  shell: () => Effect.succeed(""),
+  read: () => Effect.succeed(""),
+  write: () => Effect.succeed(""),
+  edit: () => Effect.succeed(""),
+  grep: () => Effect.succeed([]),
+  glob: () => Effect.succeed([]),
+  webfetch: () => Effect.succeed("")
+});
 
 describe("agent", () => {
   it("runAgent should have correct type signature", () => {
@@ -36,11 +47,10 @@ describe("agent", () => {
         approvalMode: "none",
         maxTurns: 10,
         systemPrompt: undefined
-      },
-      handlers: {}
+      }
     };
 
-    const result = runAgent("test prompt", agentConfig, mockLanguageModelLayer);
+    const result = runAgent("test prompt", agentConfig, Layer.merge(mockLanguageModelLayer, mockToolkitLayer));
     expect(result).toBeDefined();
   });
 
@@ -65,11 +75,10 @@ describe("agent", () => {
         approvalMode: "none",
         maxTurns: 5,
         systemPrompt: "You are a helpful assistant."
-      },
-      handlers: {}
+      }
     };
 
-    const result = runAgent("test prompt", agentConfig, mockLanguageModelLayer);
+    const result = runAgent("test prompt", agentConfig, Layer.merge(mockLanguageModelLayer, mockToolkitLayer));
     expect(result).toBeDefined();
   });
 });
