@@ -29,7 +29,7 @@ The project currently has 77 passing tests across 16 test files. Core modules li
 
 - [x] **Task 1**: Export CLI command effects from `src/index.ts` and add CLI integration tests
 - [x] **Task 2**: Extend `MockPart` in integration helpers and add agent integration edge-case tests
-- [ ] **Task 3**: Add E2E test using mock OpenAI HTTP server
+- [x] **Task 3**: Add E2E test using mock OpenAI HTTP server
 - [ ] **Task 4**: Add bedrock provider and config unit tests
 - [ ] **Task 5**: Add session and tool edge-case unit tests
 
