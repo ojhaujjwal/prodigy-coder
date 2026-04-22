@@ -1,4 +1,8 @@
-# Agents
+## AI Agentic Coding CLI
+This project uses the following tools:
+- Bun for runtime
+- Vitest for running tests
+- Effect TypeScript Library. Run `effect-solutions show basics` for basics on how Effect works.
 
 <!-- effect-solutions:start -->
 
@@ -36,4 +40,5 @@ Use `effect-solutions show cli` for CLI patterns, but import from `effect/Unstab
 
 ## Testing with Effect and Vitest
 
-See [specs/guides/testing-with-effect.md](specs/guides/testing-with-effect.md) for testing best practices.
+See [specs/guides/testing-with-effect.md](specs/guides/testing-with-effect.md) for testing best practices.\
+⚠️ NEVER use `bun test` to run tests — always use `bun run test --run`.
