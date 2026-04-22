@@ -1,8 +1,13 @@
-import { Effect, Layer, Stream } from "effect";
+import { Context, Effect, Layer, Scope, Stream } from "effect";
 import * as LanguageModel from "effect/unstable/ai/LanguageModel";
 import * as Response from "effect/unstable/ai/Response";
 import * as AiError from "effect/unstable/ai/AiError";
 import { Tool } from "effect/unstable/ai";
+import * as HttpRouter from "effect/unstable/http/HttpRouter";
+import * as HttpServer from "effect/unstable/http/HttpServer";
+import * as HttpServerRequest from "effect/unstable/http/HttpServerRequest";
+import * as HttpServerResponse from "effect/unstable/http/HttpServerResponse";
+import * as BunHttpServer from "@effect/platform-bun/BunHttpServer";
 import type { ConfigData } from "../config.ts";
 import type { Session, Message } from "../session.ts";
 import { MyToolkit, withApproval } from "../tools/index.ts";
@@ -145,110 +150,89 @@ export type MockOpenAIResponse =
   | { type: "text"; content: string }
   | { type: "tool-call"; id: string; name: string; arguments: Record<string, unknown> };
 
+const buildSSEChunks = (responses: MockOpenAIResponse[]): Uint8Array[] => {
+  const chunks: Uint8Array[] = [];
+  const encoder = new TextEncoder();
+
+  for (const response of responses) {
+    if (response.type === "text") {
+      const chunk = `data: ${JSON.stringify({
+        id: "chatcmpl-mock",
+        object: "chat.completion.chunk",
+        created: Date.now(),
+        model: "test-model",
+        choices: [{ index: 0, delta: { content: response.content }, finish_reason: null }]
+      })}\n\n`;
+      chunks.push(encoder.encode(chunk));
+    } else if (response.type === "tool-call") {
+      const chunk = `data: ${JSON.stringify({
+        id: "chatcmpl-mock",
+        object: "chat.completion.chunk",
+        created: Date.now(),
+        model: "test-model",
+        choices: [{
+          index: 0,
+          delta: {
+            tool_calls: [{
+              index: 0,
+              id: response.id,
+              type: "function",
+              function: { name: response.name, arguments: JSON.stringify(response.arguments) }
+            }]
+          },
+          finish_reason: null
+        }]
+      })}\n\n`;
+      chunks.push(encoder.encode(chunk));
+    }
+  }
+
+  const finishChunk = `data: ${JSON.stringify({
+    id: "chatcmpl-mock",
+    object: "chat.completion.chunk",
+    created: Date.now(),
+    model: "test-model",
+    choices: [{ index: 0, delta: {}, finish_reason: "stop" }]
+  })}\n\n`;
+  chunks.push(encoder.encode(finishChunk));
+  chunks.push(encoder.encode("data: [DONE]\n\n"));
+
+  return chunks;
+};
+
 export const createMockOpenAIServer = (
   responses: MockOpenAIResponse[][]
-): Effect.Effect<{ url: string; calls: unknown[]; cleanup: () => void }> => {
+): Effect.Effect<{ url: string; calls: unknown[] }, never, Scope.Scope> => {
   const calls: unknown[] = [];
   let responseIndex = 0;
 
-  // oxlint-disable-next-line prodigy/no-bun-globals
-  const server = Bun.serve({
-    port: 0,
-    async fetch(req) {
-      if (req.url.includes("/v1/chat/completions")) {
-        const body = await req.json();
-        calls.push(body);
+  const routeEffect = Effect.gen(function*() {
+    const request = yield* HttpServerRequest.HttpServerRequest;
+    const body = yield* request.json;
+    calls.push(body);
 
-        if (responseIndex >= responses.length) {
-          responseIndex = responses.length - 1;
-        }
-        const currentResponses = responses[responseIndex];
-        responseIndex++;
-
-        const encoder = new TextEncoder();
-
-        const stream = new ReadableStream({
-          async start(controller) {
-            for (const response of currentResponses) {
-              if (response.type === "text") {
-                const chunk = `data: ${JSON.stringify({
-                  id: "chatcmpl-mock",
-                  object: "chat.completion.chunk",
-                  created: Date.now(),
-                  model: "test-model",
-                  choices: [
-                    {
-                      index: 0,
-                      delta: { content: response.content },
-                      finish_reason: null
-                    }
-                  ]
-                })}\n\n`;
-                controller.enqueue(encoder.encode(chunk));
-              } else if (response.type === "tool-call") {
-                const chunk = `data: ${JSON.stringify({
-                  id: "chatcmpl-mock",
-                  object: "chat.completion.chunk",
-                  created: Date.now(),
-                  model: "test-model",
-                  choices: [
-                    {
-                      index: 0,
-                      delta: {
-                        tool_calls: [
-                          {
-                            index: 0,
-                            id: response.id,
-                            type: "function",
-                            function: {
-                              name: response.name,
-                              arguments: JSON.stringify(response.arguments)
-                            }
-                          }
-                        ]
-                      },
-                      finish_reason: null
-                    }
-                  ]
-                })}\n\n`;
-                controller.enqueue(encoder.encode(chunk));
-              }
-            }
-
-            const finishChunk = `data: ${JSON.stringify({
-              id: "chatcmpl-mock",
-              object: "chat.completion.chunk",
-              created: Date.now(),
-              model: "test-model",
-              choices: [
-                {
-                  index: 0,
-                  delta: {},
-                  finish_reason: "stop"
-                }
-              ]
-            })}\n\n`;
-            controller.enqueue(encoder.encode(finishChunk));
-            controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-            controller.close();
-          }
-        });
-
-        return new globalThis.Response(stream, {
-          headers: {
-            "Content-Type": "text/event-stream",
-            "Cache-Control": "no-cache",
-            Connection: "keep-alive"
-          }
-        });
-      }
-      return new globalThis.Response("Not found", { status: 404 });
+    if (responseIndex >= responses.length) {
+      responseIndex = responses.length - 1;
     }
+    const currentResponses = responses[responseIndex];
+    responseIndex++;
+
+    const chunks = buildSSEChunks(currentResponses);
+    const stream = Stream.fromIterable(chunks);
+    return HttpServerResponse.stream(stream, { contentType: "text/event-stream" });
   });
 
-  return Effect.sync(() => ({
-    url: `http://localhost:${server.port}/v1`,
-    calls,
-    cleanup: () => server.stop()
-  }));
+  const appLayer = HttpRouter.add("POST", "/v1/chat/completions", routeEffect);
+
+  const serverLayer = HttpRouter.serve(appLayer, { disableListenLog: true }).pipe(
+    Layer.provideMerge(BunHttpServer.layer({ port: 0 }))
+  );
+
+  return Effect.flatMap(Layer.build(serverLayer), (context) =>
+    Effect.sync(() => {
+      const server = Context.get(context, HttpServer.HttpServer);
+      const port = server.address._tag === "TcpAddress" ? server.address.port : 0;
+      return { url: `http://localhost:${port}/v1`, calls };
+    })
+  );
 };

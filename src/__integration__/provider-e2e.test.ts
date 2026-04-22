@@ -27,9 +27,7 @@ describe("provider e2e", () => {
         Layer.provide(FetchHttpClient.layer)
       );
 
-      const result = yield* runAgent("test", agentConfig, providerLayer).pipe(
-        Effect.ensuring(Effect.sync(() => server.cleanup()))
-      );
+      const result = yield* runAgent("test", agentConfig, providerLayer);
 
       const textDeltas = result.filter((e) => e.type === "text-delta");
       const finishes = result.filter((e) => e.type === "finish");
@@ -71,9 +69,7 @@ describe("provider e2e", () => {
         Layer.provide(FetchHttpClient.layer)
       );
 
-      const result = yield* runAgent("test", agentConfig, providerLayer).pipe(
-        Effect.ensuring(Effect.sync(() => server.cleanup()))
-      );
+      const result = yield* runAgent("test", agentConfig, providerLayer);
 
       const toolCalls = result.filter((e) => e.type === "tool-call");
       const toolResults = result.filter((e) => e.type === "tool-result");
