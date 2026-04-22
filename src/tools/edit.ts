@@ -13,6 +13,7 @@ export const EditTool = Tool.make("edit", {
   description: "Edit a file by replacing text",
   parameters: EditParameters,
   success: Schema.String,
+  failureMode: "return",
   dependencies: [FileSystem.FileSystem]
 });
 

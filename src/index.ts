@@ -7,32 +7,28 @@ import { SessionRepo, createSession, loadSession } from "./session.ts";
 import { createFormatter, type OutputEvent } from "./output.ts";
 import { runAgent as runAgentLoop } from "./agent.ts";
 import type { AgentConfig } from "./agent.ts";
-import { MyToolkitLayer } from "./tools/index.ts";
+import { makeToolkitLayer } from "./tools/index.ts";
 import { buildProviderLayer } from "./provider.ts";
 import * as AiError from "effect/unstable/ai/AiError";
-
-class SessionLoadError {
-  readonly _tag = "SessionLoadError" as const;
-  constructor(readonly cause: unknown) {}
-}
 
 const runAgent = (
   prompt: string,
   sessionId: Option.Option<string>,
   config: import("./config.ts").ConfigData
-): Effect.Effect<OutputEvent[], AiError.AiError | SessionLoadError> => {
+): Effect.Effect<OutputEvent[], AiError.AiError | Error> => {
   const sessionEffect = Option.match(sessionId, {
     onNone: () => createSession(config.systemPrompt),
-    onSome: (id) => loadSession(id).pipe(Effect.mapError((e) => new SessionLoadError(e)))
+    onSome: (id) => loadSession(id).pipe(Effect.orDie)
   });
 
   return Effect.gen(function* () {
     const session = yield* sessionEffect;
 
     const agentConfig: AgentConfig = { session, config };
-    const providerLayer = Layer.merge(buildProviderLayer(config.provider), MyToolkitLayer).pipe(
-      Layer.provide(FetchHttpClient.layer)
-    );
+    const providerLayer = Layer.merge(
+      buildProviderLayer(config.provider),
+      makeToolkitLayer({ approvalMode: config.approvalMode, nonInteractive: config.nonInteractive ?? false })
+    ).pipe(Layer.provide(FetchHttpClient.layer));
 
     return yield* runAgentLoop(prompt, agentConfig, providerLayer);
   }).pipe(Effect.provide(SessionRepo.layer.pipe(Layer.provide(BunServices.layer))));
@@ -72,7 +68,13 @@ const systemPromptFlag = Flag.string("system-prompt").pipe(Flag.withDescription(
 
 const configFlag = Flag.string("config").pipe(Flag.withDescription("Config file path"), Flag.optional);
 
-export const mainCommand = Command.make(
+const nonInteractiveFlag = Flag.boolean("non-interactive").pipe(
+  Flag.withAlias("n"),
+  Flag.withDescription("Run in non-interactive mode (deny all approvals, disable ask_user)"),
+  Flag.withDefault(false)
+);
+
+const mainCommand = Command.make(
   "prodigy",
   {
     prompt: promptArg,
@@ -83,7 +85,8 @@ export const mainCommand = Command.make(
     maxTurns: maxTurnsFlag,
     approvalMode: approvalModeFlag,
     systemPrompt: systemPromptFlag,
-    config: configFlag
+    config: configFlag,
+    nonInteractive: nonInteractiveFlag
   },
   ({
     prompt,
@@ -93,6 +96,7 @@ export const mainCommand = Command.make(
     maxTurns: _maxTurns,
     approvalMode: _approvalMode,
     systemPrompt: _systemPrompt,
+    nonInteractive,
     config
   }) =>
     Effect.gen(function* () {
@@ -105,8 +109,11 @@ export const mainCommand = Command.make(
         return;
       }
 
-      const formatter = createFormatter(outputFormat);
-      const outputEvents = yield* runAgent(promptText, sessionId, appConfig);
+      const finalConfig = { ...appConfig, nonInteractive: nonInteractive || appConfig.nonInteractive };
+
+      const format: "text" | "stream-json" = outputFormat satisfies "text" | "stream-json";
+      const formatter = createFormatter(format);
+      const outputEvents = yield* runAgent(promptText, sessionId, finalConfig);
 
       for (const event of outputEvents) {
         yield* formatter(event);
@@ -120,7 +127,7 @@ export const mainCommand = Command.make(
     )
 ).pipe(Command.withDescription("Run the AI coder"));
 
-export const listSessionsCommand = Command.make("list", {}, () =>
+const listSessionsCommand = Command.make("list", {}, () =>
   Effect.gen(function* () {
     const repo = yield* SessionRepo;
     const sessions = yield* repo.list();
@@ -139,7 +146,7 @@ export const listSessionsCommand = Command.make("list", {}, () =>
 
 const deleteSessionArg = Argument.string("id").pipe(Argument.withDescription("Session ID to delete"));
 
-export const deleteSessionCommand = Command.make("delete", { id: deleteSessionArg }, ({ id }) =>
+const deleteSessionCommand = Command.make("delete", { id: deleteSessionArg }, ({ id }) =>
   Effect.gen(function* () {
     const repo = yield* SessionRepo;
     yield* repo.delete(id);
@@ -152,7 +159,7 @@ const sessionCommand = Command.make("session", {}, () => Effect.void).pipe(
   Command.withDescription("Manage sessions")
 );
 
-export const configShowCommand = Command.make("show", {}, () =>
+const configShowCommand = Command.make("show", {}, () =>
   Effect.gen(function* () {
     const config = yield* AppConfig;
     const masked = maskConfig(config);

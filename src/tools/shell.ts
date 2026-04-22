@@ -12,6 +12,7 @@ export const ShellTool = Tool.make("shell", {
   description: "Execute a shell command",
   parameters: ShellParameters,
   success: Schema.String,
+  failureMode: "return",
   dependencies: [ChildProcessSpawner]
 });
 

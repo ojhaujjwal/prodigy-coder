@@ -15,6 +15,7 @@ export const AskUserTool = Tool.make("ask_user", {
     "Ask the user a free-text question and return their answer. Use this when you need clarification or additional information from the user.",
   parameters: AskUserParameters,
   success: Schema.String,
+  failureMode: "return",
   dependencies: [Terminal.Terminal, FileSystem.FileSystem, Path.Path]
 });
 

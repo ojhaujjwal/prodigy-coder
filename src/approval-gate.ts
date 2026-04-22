@@ -1,13 +1,14 @@
 import { Context, Effect, Layer } from "effect";
 import * as Prompt from "effect/unstable/cli/Prompt";
 import * as AiError from "effect/unstable/ai/AiError";
+import { BunServices } from "@effect/platform-bun";
 import { needsApproval } from "./approval.ts";
 import type { ConfigData } from "./config.ts";
 
 export class ApprovalGate extends Context.Service<
   ApprovalGate,
   {
-    readonly approve: (toolName: string, params: unknown) => Effect.Effect<boolean, never, Prompt.Environment>;
+    readonly approve: (toolName: string, params: unknown) => Effect.Effect<boolean, never, never>;
   }
 >()("ApprovalGate") {}
 
@@ -22,7 +23,7 @@ export const makeApprovalGateLayer = (config: ConfigData): Layer.Layer<ApprovalG
   Layer.effect(
     ApprovalGate,
     Effect.sync(() => {
-      const approve = (toolName: string, params: unknown): Effect.Effect<boolean, never, Prompt.Environment> => {
+      const approve = (toolName: string, params: unknown): Effect.Effect<boolean, never, never> => {
         if (config.nonInteractive) {
           return Effect.succeed(false);
         }
@@ -41,7 +42,10 @@ export const makeApprovalGateLayer = (config: ConfigData): Layer.Layer<ApprovalG
             message: `Allow ${toolName}(${JSON.stringify(params)})?`,
             initial: false
           })
-        ).pipe(Effect.orElseSucceed(() => false));
+        ).pipe(
+          Effect.orElseSucceed(() => false),
+          Effect.provide(BunServices.layer)
+        );
       };
 
       return ApprovalGate.of({ approve });

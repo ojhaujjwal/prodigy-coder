@@ -275,7 +275,7 @@ $format_output
         ci_failed=1
         error_output+="## Vitest Failed
 
-Command: \`bun run test\`
+Command: \`bun run test --run \`
 
 \`\`\`
 $vitest_output

@@ -11,6 +11,7 @@ export const ReadTool = Tool.make("read", {
   description: "Read a file's contents",
   parameters: ReadParameters,
   success: Schema.String,
+  failureMode: "return",
   dependencies: [FileSystem.FileSystem]
 });
 

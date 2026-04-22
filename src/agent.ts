@@ -6,9 +6,9 @@ import { BunServices } from "@effect/platform-bun";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import type { Session, Message } from "./session.ts";
 import type { ConfigData } from "./config.ts";
-import { needsApproval } from "./approval.ts";
 import type { OutputEvent } from "./output.ts";
 import { MyToolkit } from "./tools/index.ts";
+import { makeApprovalGateLayer } from "./approval-gate.ts";
 
 export interface AgentConfig {
   readonly session: Session;
@@ -56,9 +56,9 @@ export const runAgent = (
       });
 
       const turnOutputEvents: OutputEvent[] = [];
-      const toolCallNames = new Map<string, string>();
 
-      const fullLayer = Layer.merge(providerLayer, Layer.merge(BunServices.layer, FetchHttpClient.layer));
+      const approvalGateLayer = makeApprovalGateLayer(config);
+      const fullLayer = Layer.mergeAll(approvalGateLayer, BunServices.layer, FetchHttpClient.layer, providerLayer);
 
       yield* llmStream.pipe(
         Stream.runForEach((part) => {
@@ -68,16 +68,6 @@ export const runAgent = (
               return Effect.void;
             case "tool-call": {
               turnOutputEvents.push({ type: "tool-call", id: part.id, name: part.name, params: part.params });
-              toolCallNames.set(part.id, part.name);
-              const approved = needsApproval(part.name, config.approvalMode);
-              if (approved && config.approvalMode !== "none") {
-                turnOutputEvents.push({
-                  type: "tool-approval-request",
-                  id: crypto.randomUUID(),
-                  toolCallId: part.id,
-                  toolName: part.name
-                });
-              }
               return Effect.void;
             }
             case "tool-result": {
@@ -101,14 +91,6 @@ export const runAgent = (
               });
               return Effect.void;
             }
-            case "tool-approval-request":
-              turnOutputEvents.push({
-                type: "tool-approval-request",
-                id: part.approvalId,
-                toolCallId: part.toolCallId,
-                toolName: toolCallNames.get(part.toolCallId) ?? ""
-              });
-              return Effect.void;
             case "finish":
               finished = true;
               turnOutputEvents.push({ type: "finish", text: part.reason || "" });
@@ -141,7 +123,8 @@ export const runAgent = (
       outputEvents.push({ type: "error", message: "Max turns exceeded" });
     }
 
-    Object.assign(session, { messages });
+    // oxlint-disable-next-line typescript/consistent-type-assertions
+    (session as { messages: Message[] }).messages = messages;
 
     return outputEvents;
   });

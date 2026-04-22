@@ -23,20 +23,6 @@ export const ToolResult = Schema.Struct({
 });
 export type ToolResult = typeof ToolResult.Type;
 
-export const ToolApprovalRequest = Schema.Struct({
-  type: Schema.Literal("tool-approval-request"),
-  id: Schema.String,
-  toolCallId: Schema.String,
-  toolName: Schema.String
-});
-export type ToolApprovalRequest = typeof ToolApprovalRequest.Type;
-
-export const ApprovalResponse = Schema.Struct({
-  type: Schema.Literal("approval-response"),
-  approved: Schema.Boolean
-});
-export type ApprovalResponse = typeof ApprovalResponse.Type;
-
 export const Finish = Schema.Struct({
   type: Schema.Literal("finish"),
   text: Schema.String
@@ -49,15 +35,7 @@ export const ErrorEvent = Schema.Struct({
 });
 export type ErrorEvent = typeof ErrorEvent.Type;
 
-export const OutputEvent = Schema.Union([
-  TextDelta,
-  ToolCall,
-  ToolResult,
-  ToolApprovalRequest,
-  ApprovalResponse,
-  Finish,
-  ErrorEvent
-]);
+export const OutputEvent = Schema.Union([TextDelta, ToolCall, ToolResult, Finish, ErrorEvent]);
 export type OutputEvent = typeof OutputEvent.Type;
 
 export type OutputFormatter = (event: OutputEvent) => Effect.Effect<void>;
@@ -82,10 +60,6 @@ export const makeTextFormatter =
       }
       case "tool-result":
         return Console.log(textColor(90, truncate(event.result, 500)));
-      case "tool-approval-request":
-        return Console.log(textColor(33, `Tool ${event.toolName} requires approval. Allow? (y/n) `));
-      case "approval-response":
-        return Console.log(textColor(90, event.approved ? "Approved" : "Rejected"));
       case "finish":
         return Console.log("\n" + event.text + "\n");
       case "error":
@@ -107,12 +81,6 @@ export const makeStreamJsonFormatter =
         break;
       case "tool-result":
         output = { type: "tool_result", content: event.result, is_error: event.isError };
-        break;
-      case "tool-approval-request":
-        output = { type: "approval_required", tool_name: event.toolName };
-        break;
-      case "approval-response":
-        output = { type: "approval_response", approved: event.approved };
         break;
       case "finish":
         output = { type: "final", content: event.text };

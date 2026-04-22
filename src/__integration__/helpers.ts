@@ -5,19 +5,11 @@ import * as AiError from "effect/unstable/ai/AiError";
 import { Tool } from "effect/unstable/ai";
 import type { ConfigData } from "../config.ts";
 import type { Session, Message } from "../session.ts";
-import { MyToolkit } from "../tools/index.ts";
+import { MyToolkit, withApproval } from "../tools/index.ts";
 
 export type MockPart =
   | { type: "text-delta"; delta: string }
   | { type: "tool-call"; id: string; name: string; params: unknown }
-  | {
-      type: "tool-result";
-      id: string;
-      name: string;
-      result: unknown;
-      isFailure?: boolean;
-      preliminary?: boolean;
-    }
   | {
       type: "finish";
       reason: "stop" | "length" | "content-filter" | "tool-calls" | "error" | "pause" | "other" | "unknown";
@@ -39,15 +31,6 @@ const mockPartToEncoded = (part: MockPart): Response.StreamPartEncoded => {
         id: part.id,
         name: part.name,
         params: part.params
-      };
-    case "tool-result":
-      return {
-        type: "tool-result",
-        id: part.id,
-        name: part.name,
-        result: part.result,
-        isFailure: part.isFailure ?? false,
-        preliminary: part.preliminary ?? false
       };
     case "finish":
       return {
@@ -91,7 +74,10 @@ export interface StubToolkit {
   calls: Record<string, unknown[]>;
 }
 
-export const createStubToolkit = (overrides?: Record<string, Error>): StubToolkit => {
+export const createStubToolkit = (
+  overrides?: Record<string, string | Error>,
+  config?: { approvalMode: "none" | "dangerous" | "all"; nonInteractive: boolean }
+): StubToolkit => {
   const calls: Record<string, unknown[]> = {};
 
   const makeHandler = <A>(toolName: string, defaultResult: A) => {
@@ -111,19 +97,25 @@ export const createStubToolkit = (overrides?: Record<string, Error>): StubToolki
           })
         );
       }
+      if (override !== undefined) {
+        // oxlint-disable-next-line typescript/consistent-type-assertions
+        return Effect.succeed(override as unknown as A);
+      }
       return Effect.succeed(defaultResult);
     };
   };
 
+  const toolConfig = config ?? { approvalMode: "none" as const, nonInteractive: false };
+
   const layer = MyToolkit.toLayer({
-    shell: makeHandler("shell", "stub shell result"),
-    read: makeHandler("read", "stub read result"),
-    write: makeHandler("write", "stub write result"),
-    edit: makeHandler("edit", "stub edit result"),
-    grep: makeHandler("grep", ["stub grep result"]),
-    glob: makeHandler("glob", ["stub glob result"]),
-    webfetch: makeHandler("webfetch", "stub webfetch result"),
-    ask_user: makeHandler("ask_user", "stub ask result")
+    shell: withApproval("shell", toolConfig, makeHandler("shell", "stub shell result")),
+    read: withApproval("read", toolConfig, makeHandler("read", "stub read result")),
+    write: withApproval("write", toolConfig, makeHandler("write", "stub write result")),
+    edit: withApproval("edit", toolConfig, makeHandler("edit", "stub edit result")),
+    grep: withApproval("grep", toolConfig, makeHandler("grep", ["stub grep result"])),
+    glob: withApproval("glob", toolConfig, makeHandler("glob", ["stub glob result"])),
+    webfetch: withApproval("webfetch", toolConfig, makeHandler("webfetch", "stub webfetch result")),
+    ask_user: withApproval("ask_user", toolConfig, makeHandler("ask_user", "stub ask result"))
   });
 
   return { layer, calls };
@@ -139,7 +131,6 @@ export const createTestConfig = (overrides?: Partial<ConfigData>): ConfigData =>
   approvalMode: "none",
   maxTurns: 10,
   systemPrompt: undefined,
-  nonInteractive: false,
   ...overrides
 });
 

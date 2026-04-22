@@ -3,14 +3,10 @@ import { Effect, Schema } from "effect";
 import * as TestConsole from "effect/testing/TestConsole";
 import { makeTextFormatter, makeStreamJsonFormatter, type OutputEvent } from "./output.ts";
 
-const parseJson = (input: string): Record<string, unknown> =>
-  Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Record(Schema.String, Schema.Unknown)))(input);
-
-const unsafeHead = <A>(as: ReadonlyArray<A>): A => {
-  const a = as[0];
-  if (a === undefined) throw new Error("empty array");
-  return a;
-};
+const JsonRecord = Schema.Record(Schema.String, Schema.Unknown);
+// oxlint-disable-next-line typescript/consistent-type-assertions
+const parseJson = (input: string) =>
+  Schema.decodeUnknownSync(Schema.fromJsonString(JsonRecord))(input) as Record<string, unknown>;
 
 const testLayer = TestConsole.layer;
 
@@ -66,27 +62,6 @@ describe("output", () => {
         yield* formatter(event);
       }).pipe(Effect.provide(testLayer))
     );
-
-    it.effect("text formatter processes tool-approval-request event", () =>
-      Effect.gen(function* () {
-        const formatter = makeTextFormatter();
-        const event: OutputEvent = {
-          type: "tool-approval-request",
-          id: "approval-1",
-          toolCallId: "tool-1",
-          toolName: "shell"
-        };
-        yield* formatter(event);
-      }).pipe(Effect.provide(testLayer))
-    );
-
-    it.effect("text formatter processes approval-response event", () =>
-      Effect.gen(function* () {
-        const formatter = makeTextFormatter();
-        const event: OutputEvent = { type: "approval-response", approved: true };
-        yield* formatter(event);
-      }).pipe(Effect.provide(testLayer))
-    );
   });
 
   describe("stream-json formatter", () => {
@@ -95,11 +70,16 @@ describe("output", () => {
         const formatter = makeStreamJsonFormatter();
         const event: OutputEvent = { type: "text-delta", delta: "Hello" };
         yield* formatter(event);
-        const outputs = yield* TestConsole.logLines.pipe(Effect.map((lines) => lines.map(String)));
+        const outputs = yield* TestConsole.logLines;
         expect(outputs.length).toBe(1);
-        const parsed = parseJson(unsafeHead(outputs));
+        const outputStr = String(outputs[0]);
+        const parsed = parseJson(outputStr);
         expect(parsed.type).toBe("content");
-        expect(parsed.content).toEqual([{ type: "text", text: "Hello" }]);
+        expect(Array.isArray(parsed.content)).toBe(true);
+        // oxlint-disable-next-line typescript/consistent-type-assertions
+        const content = parsed.content as Array<{ type: string; text: string }>;
+        expect(content[0].type).toBe("text");
+        expect(content[0].text).toBe("Hello");
       }).pipe(Effect.provide(testLayer))
     );
 
@@ -113,9 +93,9 @@ describe("output", () => {
           params: { filePath: "/test.txt" }
         };
         yield* formatter(event);
-        const outputs = yield* TestConsole.logLines.pipe(Effect.map((lines) => lines.map(String)));
+        const outputs = yield* TestConsole.logLines;
         expect(outputs.length).toBe(1);
-        const parsed = parseJson(unsafeHead(outputs));
+        const parsed = parseJson(String(outputs[0]));
         expect(parsed.type).toBe("tool_use");
         expect(parsed.name).toBe("read");
         expect(parsed.input).toEqual({ filePath: "/test.txt" });
@@ -133,9 +113,9 @@ describe("output", () => {
           isError: false
         };
         yield* formatter(event);
-        const outputs = yield* TestConsole.logLines.pipe(Effect.map((lines) => lines.map(String)));
+        const outputs = yield* TestConsole.logLines;
         expect(outputs.length).toBe(1);
-        const parsed = parseJson(unsafeHead(outputs));
+        const parsed = parseJson(String(outputs[0]));
         expect(parsed.type).toBe("tool_result");
         expect(parsed.content).toBe("file contents");
         expect(parsed.is_error).toBe(false);
@@ -147,9 +127,9 @@ describe("output", () => {
         const formatter = makeStreamJsonFormatter();
         const event: OutputEvent = { type: "finish", text: "Done" };
         yield* formatter(event);
-        const outputs = yield* TestConsole.logLines.pipe(Effect.map((lines) => lines.map(String)));
+        const outputs = yield* TestConsole.logLines;
         expect(outputs.length).toBe(1);
-        const parsed = parseJson(unsafeHead(outputs));
+        const parsed = parseJson(String(outputs[0]));
         expect(parsed.type).toBe("final");
         expect(parsed.content).toBe("Done");
       }).pipe(Effect.provide(testLayer))
@@ -160,42 +140,11 @@ describe("output", () => {
         const formatter = makeStreamJsonFormatter();
         const event: OutputEvent = { type: "error", message: "Failed" };
         yield* formatter(event);
-        const outputs = yield* TestConsole.logLines.pipe(Effect.map((lines) => lines.map(String)));
+        const outputs = yield* TestConsole.logLines;
         expect(outputs.length).toBe(1);
-        const parsed = parseJson(unsafeHead(outputs));
+        const parsed = parseJson(String(outputs[0]));
         expect(parsed.type).toBe("error");
         expect(parsed.message).toBe("Failed");
-      }).pipe(Effect.provide(testLayer))
-    );
-
-    it.effect("stream-json formatter outputs valid LDJSON for approval-request", () =>
-      Effect.gen(function* () {
-        const formatter = makeStreamJsonFormatter();
-        const event: OutputEvent = {
-          type: "tool-approval-request",
-          id: "approval-1",
-          toolCallId: "tool-1",
-          toolName: "shell"
-        };
-        yield* formatter(event);
-        const outputs = yield* TestConsole.logLines.pipe(Effect.map((lines) => lines.map(String)));
-        expect(outputs.length).toBe(1);
-        const parsed = parseJson(unsafeHead(outputs));
-        expect(parsed.type).toBe("approval_required");
-        expect(parsed.tool_name).toBe("shell");
-      }).pipe(Effect.provide(testLayer))
-    );
-
-    it.effect("stream-json formatter outputs valid LDJSON for approval-response", () =>
-      Effect.gen(function* () {
-        const formatter = makeStreamJsonFormatter();
-        const event: OutputEvent = { type: "approval-response", approved: true };
-        yield* formatter(event);
-        const outputs = yield* TestConsole.logLines.pipe(Effect.map((lines) => lines.map(String)));
-        expect(outputs.length).toBe(1);
-        const parsed = parseJson(unsafeHead(outputs));
-        expect(parsed.type).toBe("approval_response");
-        expect(parsed.approved).toBe(true);
       }).pipe(Effect.provide(testLayer))
     );
 
@@ -206,8 +155,6 @@ describe("output", () => {
           { type: "text-delta", delta: "test" },
           { type: "tool-call", id: "1", name: "test", params: {} },
           { type: "tool-result", id: "1", name: "test", result: "ok", isError: false },
-          { type: "tool-approval-request", id: "1", toolCallId: "1", toolName: "test" },
-          { type: "approval-response", approved: true },
           { type: "finish", text: "done" },
           { type: "error", message: "err" }
         ];

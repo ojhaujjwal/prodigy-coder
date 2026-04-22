@@ -75,8 +75,6 @@ describe("output integration", () => {
         { type: "text-delta", delta: "Hello" },
         { type: "tool-call", id: "call-1", name: "read", params: { filePath: "/test.txt" } },
         { type: "tool-result", id: "call-1", name: "read", result: "file content", isError: false },
-        { type: "tool-approval-request", id: "approval-1", toolCallId: "call-1", toolName: "shell" },
-        { type: "approval-response", approved: true },
         { type: "finish", text: "Done" },
         { type: "error", message: "Failed" }
       ];

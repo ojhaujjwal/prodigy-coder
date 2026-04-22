@@ -16,19 +16,19 @@ To fix this, we gate execution inside the dangerous tool handlers themselves. Wh
 
 ## Requirements
 
-- [ ] `ask_user` tool is available to the LLM for asking free-text questions
-- [ ] Tool approval actually blocks execution (not just emits events)
-- [ ] Approval prompt shows tool name **and** its parameters
-- [ ] Denied tools return an error to the LLM so it can try something else
-- [ ] `--non-interactive` / `-n` CLI flag disables all interactive prompts (approvals denied, AskUserTool errors)
-- [ ] When stdin is not a TTY and `--non-interactive` is not explicitly set, approvals default to denied and AskUserTool errors
-- [ ] Existing `approval-mode` config still works (`none`, `dangerous`, `all`)
-- [ ] All existing tests pass; new tests cover approval granted, approval denied, and AskUserTool behavior
+- [x] `ask_user` tool is available to the LLM for asking free-text questions
+- [x] Tool approval actually blocks execution (not just emits events)
+- [x] Approval prompt shows tool name **and** its parameters
+- [x] Denied tools return an error to the LLM so it can try something else
+- [x] `--non-interactive` / `-n` CLI flag disables all interactive prompts (approvals denied, AskUserTool errors)
+- [x] When stdin is not a TTY and `--non-interactive` is not explicitly set, approvals default to denied and AskUserTool errors
+- [x] Existing `approval-mode` config still works (`none`, `dangerous`, `all`)
+- [x] All existing tests pass; new tests cover approval granted, approval denied, and AskUserTool behavior
 
 ## Tasks
 
 - [x] **Task 1**: Create AskUserTool, non-interactive config, ApprovalGate service, and register in toolkit
-- [ ] **Task 2**: Integrate approval gating into handlers, agent, output, CLI, and update all tests
+- [x] **Task 2**: Integrate approval gating into handlers, agent, output, CLI, and update all tests
 
 ## Implementation Details
 
@@ -270,14 +270,14 @@ Rewrite the approval-related tests to assert on real behavior:
 
 Before signaling `TASK_COMPLETE`, verify:
 
-- [ ] `bun run typecheck` passes with zero errors
-- [ ] `bun run test` passes with zero failures
-- [ ] Approval prompt displays tool name **and** parameters (e.g., `Allow shell({"command":"ls"})?`)
-- [ ] Denied tools produce `tool-result` with `isError: true` and message "Tool X was denied approval"
-- [ ] `--non-interactive` flag prevents all interactive prompts (both approval and ask_user)
-- [ ] `ask_user` tool is listed in the toolkit and callable by the LLM
-- [ ] No `tool-approval-request` or `approval-response` events are emitted from the agent
-- [ ] Old `tool-approval-request` / `approval-response` formatter cases are removed
+- [x] `bun run typecheck` passes with zero errors
+- [x] `bun run test` passes with zero failures
+- [x] Approval prompt displays tool name **and** parameters (e.g., `Allow shell({"command":"ls"})?`)
+- [x] Denied tools produce `tool-result` with `isError: true` and message "Tool X was denied approval"
+- [x] `--non-interactive` flag prevents all interactive prompts (both approval and ask_user)
+- [x] `ask_user` tool is listed in the toolkit and callable by the LLM
+- [x] No `tool-approval-request` or `approval-response` events are emitted from the agent
+- [x] Old `tool-approval-request` / `approval-response` formatter cases are removed
 
 ## Rollback Plan
 

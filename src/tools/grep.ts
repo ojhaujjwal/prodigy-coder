@@ -13,6 +13,7 @@ export const GrepTool = Tool.make("grep", {
   description: "Search for text patterns in files",
   parameters: GrepParameters,
   success: Schema.Array(Schema.String),
+  failureMode: "return",
   dependencies: [ChildProcessSpawner]
 });
 

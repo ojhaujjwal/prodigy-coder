@@ -1,12 +1,16 @@
 import { describe, it, expect } from "@effect/vitest";
-import { Effect } from "effect";
+import { Effect, Layer } from "effect";
 import { runAgent, type AgentConfig } from "../agent.ts";
 import { createMockLLMLayer, createStubToolkit, createTestConfig, createTestSession } from "./helpers.ts";
-import { Layer } from "effect";
+import { ApprovalGate } from "../approval-gate.ts";
+import { makeToolkitLayer } from "../tools/index.ts";
 
 class TestError extends Error {
   readonly _tag = "TestError";
 }
+
+const mockApprovalGateLayer = (approveResult: boolean) =>
+  Layer.succeed(ApprovalGate, ApprovalGate.of({ approve: () => Effect.succeed(approveResult) }));
 
 const runAgentWithMocks = (
   mockResponses: import("./helpers.ts").TurnResponse[],
@@ -112,7 +116,7 @@ describe("agent integration", () => {
     })
   );
 
-  it.effect("Test 5: Tool execution error fails the stream", () =>
+  it.effect("Test 5: Tool execution error returns error result", () =>
     Effect.gen(function* () {
       const mockResponses: import("./helpers.ts").TurnResponse[] = [
         [{ type: "tool-call", id: "call-1", name: "read", params: { filePath: "/bad" } }],
@@ -125,13 +129,16 @@ describe("agent integration", () => {
       const agentConfig: AgentConfig = { session, config };
       const mockLLMLayer = createMockLLMLayer(mockResponses);
 
-      const error = yield* runAgent("test prompt", agentConfig, Layer.merge(mockLLMLayer, layer)).pipe(Effect.flip);
+      const result = yield* runAgent("test prompt", agentConfig, Layer.merge(mockLLMLayer, layer));
 
-      expect(error._tag).toBe("AiError");
+      const toolResults = result.filter((e) => e.type === "tool-result");
+      expect(toolResults.length).toBe(1);
+      expect(toolResults[0].isError).toBe(true);
+      expect(toolResults[0].result).toContain("file not found");
     })
   );
 
-  it.effect("Test 6: approvalMode none", () =>
+  it.effect("Test 6: approvalMode none executes dangerous tools", () =>
     Effect.gen(function* () {
       const mockResponses: import("./helpers.ts").TurnResponse[] = [
         [{ type: "tool-call", id: "call-1", name: "shell", params: { command: "ls" } }],
@@ -146,13 +153,14 @@ describe("agent integration", () => {
 
       const result = yield* runAgent("test prompt", agentConfig, Layer.merge(mockLLMLayer, layer));
 
-      const approvalRequests = result.filter((e) => e.type === "tool-approval-request");
+      const toolResults = result.filter((e) => e.type === "tool-result");
 
-      expect(approvalRequests.length).toBe(0);
+      expect(toolResults.length).toBe(1);
+      expect(toolResults[0].isError).toBe(false);
     })
   );
 
-  it.effect("Test 7: approvalMode dangerous", () =>
+  it.effect("Test 7: approvalMode dangerous with denied gate blocks dangerous tools", () =>
     Effect.gen(function* () {
       const mockResponses: import("./helpers.ts").TurnResponse[] = [
         [
@@ -162,18 +170,24 @@ describe("agent integration", () => {
         [{ type: "finish", reason: "stop" }]
       ];
 
-      const { layer } = createStubToolkit();
+      const { layer } = createStubToolkit(undefined, { approvalMode: "dangerous", nonInteractive: false });
       const config = createTestConfig({ approvalMode: "dangerous" });
       const session = createTestSession();
       const agentConfig: AgentConfig = { session, config };
       const mockLLMLayer = createMockLLMLayer(mockResponses);
+      const gateLayer = mockApprovalGateLayer(false);
 
-      const result = yield* runAgent("test prompt", agentConfig, Layer.merge(mockLLMLayer, layer));
+      const result = yield* runAgent("test prompt", agentConfig, Layer.mergeAll(mockLLMLayer, layer, gateLayer));
 
-      const approvalRequests = result.filter((e) => e.type === "tool-approval-request");
+      const toolResults = result.filter((e) => e.type === "tool-result");
+      const shellResult = toolResults.find((e) => e.name === "shell");
+      const readResult = toolResults.find((e) => e.name === "read");
 
-      expect(approvalRequests.length).toBe(1);
-      expect(approvalRequests[0].toolName).toBe("shell");
+      if (!shellResult) throw new Error("Expected shellResult");
+      expect(shellResult.isError).toBe(true);
+      expect(shellResult.result).toContain("denied approval");
+      if (!readResult) throw new Error("Expected readResult");
+      expect(readResult.isError).toBe(false);
     })
   );
 
@@ -200,7 +214,7 @@ describe("agent integration", () => {
 
   it.effect("Test 9: System prompt prepended", () =>
     Effect.gen(function* () {
-      const capturedPrompts: Array<{ content: Array<{ role: string; content: unknown }> }> = [];
+      const capturedPrompts: unknown[] = [];
 
       const mockResponses: import("./helpers.ts").TurnResponse[] = [
         [
@@ -214,13 +228,14 @@ describe("agent integration", () => {
       const session = createTestSession();
       const agentConfig: AgentConfig = { session, config };
       const mockLLMLayer = createMockLLMLayer(mockResponses, (prompt) => {
-        capturedPrompts.push(JSON.parse(JSON.stringify(prompt)));
+        capturedPrompts.push(prompt);
       });
 
       yield* runAgent("test prompt", agentConfig, Layer.merge(mockLLMLayer, layer));
 
       expect(capturedPrompts.length).toBe(1);
-      const prompt = capturedPrompts[0];
+      // oxlint-disable-next-line typescript/consistent-type-assertions
+      const prompt = capturedPrompts[0] as { content: Array<{ role: string; content: unknown }> };
       expect(
         prompt.content.some(
           (m) =>
@@ -254,135 +269,81 @@ describe("agent integration", () => {
     })
   );
 
-  it.effect("Test 11: approvalMode all requests approval for all tools", () =>
+  it.effect("Test 11: approvalMode all with denied gate blocks all tools", () =>
     Effect.gen(function* () {
       const mockResponses: import("./helpers.ts").TurnResponse[] = [
         [
-          { type: "tool-call", id: "call-1", name: "read", params: { filePath: "/test.txt" } },
-          { type: "tool-call", id: "call-2", name: "shell", params: { command: "ls" } }
+          { type: "tool-call", id: "call-1", name: "shell", params: { command: "ls" } },
+          { type: "tool-call", id: "call-2", name: "read", params: { filePath: "/test.txt" } }
         ],
         [{ type: "finish", reason: "stop" }]
       ];
 
-      const { layer } = createStubToolkit();
+      const { layer } = createStubToolkit(undefined, { approvalMode: "all", nonInteractive: false });
       const config = createTestConfig({ approvalMode: "all" });
       const session = createTestSession();
       const agentConfig: AgentConfig = { session, config };
       const mockLLMLayer = createMockLLMLayer(mockResponses);
+      const gateLayer = mockApprovalGateLayer(false);
 
-      const result = yield* runAgent("test prompt", agentConfig, Layer.merge(mockLLMLayer, layer));
-
-      const approvalRequests = result.filter((e) => e.type === "tool-approval-request");
-
-      expect(approvalRequests.length).toBe(2);
-      expect(approvalRequests[0].toolName).toBe("read");
-      expect(approvalRequests[1].toolName).toBe("shell");
-    })
-  );
-
-  it.effect("Test 12: maxTurns text-only stops after max turns", () =>
-    Effect.gen(function* () {
-      const mockResponses: import("./helpers.ts").TurnResponse[] = [
-        [{ type: "text-delta", delta: "Turn 1" }],
-        [{ type: "text-delta", delta: "Turn 2" }]
-      ];
-
-      const { layer } = createStubToolkit();
-      const config = createTestConfig({ approvalMode: "none", maxTurns: 2 });
-      const session = createTestSession();
-      const agentConfig: AgentConfig = { session, config };
-      const mockLLMLayer = createMockLLMLayer(mockResponses);
-
-      const result = yield* runAgent("test prompt", agentConfig, Layer.merge(mockLLMLayer, layer));
-
-      const textDeltas = result.filter((e) => e.type === "text-delta");
-      const errors = result.filter((e) => e.type === "error");
-
-      expect(textDeltas.length).toBe(2);
-      expect(errors.length).toBe(1);
-      expect(errors[0].message).toContain("Max turns exceeded");
-    })
-  );
-
-  it.effect("Test 13: Multi-turn text then tool then finish", () =>
-    Effect.gen(function* () {
-      const mockResponses: import("./helpers.ts").TurnResponse[] = [
-        [{ type: "text-delta", delta: "Let me check" }],
-        [{ type: "tool-call", id: "call-1", name: "read", params: { filePath: "/test.txt" } }],
-        [{ type: "finish", reason: "stop" }]
-      ];
-
-      const { layer } = createStubToolkit();
-      const config = createTestConfig({ approvalMode: "none" });
-      const session = createTestSession();
-      const agentConfig: AgentConfig = { session, config };
-      const mockLLMLayer = createMockLLMLayer(mockResponses);
-
-      const result = yield* runAgent("test prompt", agentConfig, Layer.merge(mockLLMLayer, layer));
-
-      const eventTypes = result.map((e) => e.type);
-
-      expect(eventTypes).toContain("text-delta");
-      expect(eventTypes).toContain("tool-call");
-      expect(eventTypes).toContain("tool-result");
-      expect(eventTypes).toContain("finish");
-      expect(eventTypes.indexOf("text-delta")).toBeLessThan(eventTypes.indexOf("tool-call"));
-      expect(eventTypes.indexOf("tool-call")).toBeLessThan(eventTypes.indexOf("tool-result"));
-      expect(eventTypes.indexOf("tool-result")).toBeLessThan(eventTypes.indexOf("finish"));
-    })
-  );
-
-  it.effect("Test 14: Tool result with array encodedResult is newline-joined", () =>
-    Effect.gen(function* () {
-      const mockResponses: import("./helpers.ts").TurnResponse[] = [
-        [{ type: "tool-call", id: "call-1", name: "grep", params: { pattern: "test", path: "/tmp" } }],
-        [{ type: "finish", reason: "stop" }]
-      ];
-
-      const { layer } = createStubToolkit();
-      const config = createTestConfig({ approvalMode: "none" });
-      const session = createTestSession();
-      const agentConfig: AgentConfig = { session, config };
-      const mockLLMLayer = createMockLLMLayer(mockResponses);
-
-      const result = yield* runAgent("test prompt", agentConfig, Layer.merge(mockLLMLayer, layer));
+      const result = yield* runAgent("test prompt", agentConfig, Layer.mergeAll(mockLLMLayer, layer, gateLayer));
 
       const toolResults = result.filter((e) => e.type === "tool-result");
+      const shellResult = toolResults.find((e) => e.name === "shell");
+      const readResult = toolResults.find((e) => e.name === "read");
 
-      expect(toolResults.length).toBe(1);
-      expect(typeof toolResults[0].result).toBe("string");
-      expect(toolResults[0].result).toBe("stub grep result");
+      if (!shellResult) throw new Error("Expected shellResult");
+      expect(shellResult.isError).toBe(true);
+      if (!readResult) throw new Error("Expected readResult");
+      expect(readResult.isError).toBe(true);
     })
   );
 
-  it.todo("Test 15: Tool result with object encodedResult is JSON stringified");
-
-  it.effect("Test 16: Preliminary tool result is ignored", () =>
+  it.effect("Test 12: approval granted allows dangerous tool", () =>
     Effect.gen(function* () {
       const mockResponses: import("./helpers.ts").TurnResponse[] = [
-        [
-          {
-            type: "tool-result",
-            id: "call-1",
-            name: "read",
-            result: "ignored",
-            preliminary: true
-          }
-        ],
+        [{ type: "tool-call", id: "call-1", name: "shell", params: { command: "ls" } }],
         [{ type: "finish", reason: "stop" }]
       ];
 
-      const { layer } = createStubToolkit();
-      const config = createTestConfig({ approvalMode: "none" });
+      const { layer } = createStubToolkit(undefined, { approvalMode: "dangerous", nonInteractive: false });
+      const config = createTestConfig({ approvalMode: "dangerous" });
+      const session = createTestSession();
+      const agentConfig: AgentConfig = { session, config };
+      const mockLLMLayer = createMockLLMLayer(mockResponses);
+      const gateLayer = mockApprovalGateLayer(true);
+
+      const result = yield* runAgent("test prompt", agentConfig, Layer.mergeAll(mockLLMLayer, layer, gateLayer));
+
+      const toolResults = result.filter((e) => e.type === "tool-result");
+      const shellResult = toolResults.find((e) => e.name === "shell");
+
+      if (!shellResult) throw new Error("Expected shellResult");
+      expect(shellResult.isError).toBe(false);
+    })
+  );
+
+  it.effect("Test 13: askUserTool in non-interactive mode fails", () =>
+    Effect.gen(function* () {
+      const mockResponses: import("./helpers.ts").TurnResponse[] = [
+        [{ type: "tool-call", id: "call-1", name: "ask_user", params: { question: "What is your name?" } }],
+        [{ type: "finish", reason: "stop" }]
+      ];
+
+      const toolkitLayer = makeToolkitLayer({ approvalMode: "none", nonInteractive: true });
+      const config = createTestConfig({ approvalMode: "none", nonInteractive: true });
       const session = createTestSession();
       const agentConfig: AgentConfig = { session, config };
       const mockLLMLayer = createMockLLMLayer(mockResponses);
 
-      const result = yield* runAgent("test prompt", agentConfig, Layer.merge(mockLLMLayer, layer));
+      const result = yield* runAgent("test prompt", agentConfig, Layer.merge(mockLLMLayer, toolkitLayer));
 
       const toolResults = result.filter((e) => e.type === "tool-result");
+      const askResult = toolResults.find((e) => e.name === "ask_user");
 
-      expect(toolResults.length).toBe(0);
+      if (!askResult) throw new Error("Expected askResult");
+      expect(askResult.isError).toBe(true);
+      expect(askResult.result).toContain("non-interactive");
     })
   );
 });

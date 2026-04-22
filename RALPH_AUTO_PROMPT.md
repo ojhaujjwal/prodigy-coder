@@ -98,8 +98,11 @@ This ensures the task gets committed (via TASK_COMPLETE) AND the loop exits (via
 Before signaling TASK_COMPLETE:
 1. Run `bun run typecheck` - must pass with zero errors
 2. Run `bun run lint` - must pass with zero errors
+3. Run `bun run test -- --run` - must pass with zero failures
 
-**If either fails, fix the errors before signaling completion.**
+**⚠️ NEVER use `bun test` — always use `bun run test`**
+
+**If any check fails, fix the errors before signaling completion.**
 
 ## Workflow
 

@@ -13,6 +13,7 @@ export const GlobTool = Tool.make("glob", {
   description: "Find files matching a glob pattern",
   parameters: GlobParameters,
   success: Schema.Array(Schema.String),
+  failureMode: "return",
   dependencies: [ChildProcessSpawner]
 });
 

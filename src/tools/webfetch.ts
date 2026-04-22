@@ -11,6 +11,7 @@ export const WebFetchTool = Tool.make("webfetch", {
   description: "Fetch web content from a URL",
   parameters: WebFetchParameters,
   success: Schema.String,
+  failureMode: "return",
   dependencies: [HttpClient.HttpClient]
 });
 

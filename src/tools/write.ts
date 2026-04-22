@@ -13,6 +13,7 @@ export const WriteTool = Tool.make("write", {
   description: "Write content to a file",
   parameters: WriteParameters,
   success: Schema.String,
+  failureMode: "return",
   dependencies: [FileSystem.FileSystem, Path.Path]
 });
 
