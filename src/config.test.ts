@@ -13,7 +13,8 @@ const CONFIG_DATA = {
   },
   approvalMode: "dangerous" as const,
   maxTurns: 100,
-  systemPrompt: "Custom prompt"
+  systemPrompt: "Custom prompt",
+  nonInteractive: false
 };
 
 const CONFIG_CONTENT = Schema.encodeSync(Schema.fromJsonString(ConfigSchema))(CONFIG_DATA);
@@ -26,7 +27,8 @@ const CUSTOM_CONFIG_DATA = {
   },
   approvalMode: "all" as const,
   maxTurns: 25,
-  systemPrompt: undefined
+  systemPrompt: undefined,
+  nonInteractive: false
 };
 
 const CUSTOM_CONFIG_CONTENT = Schema.encodeSync(Schema.fromJsonString(ConfigSchema))(CUSTOM_CONFIG_DATA);
@@ -39,7 +41,8 @@ const ENV_OVERRIDE_CONFIG_DATA = {
   },
   approvalMode: "none" as const,
   maxTurns: 50,
-  systemPrompt: undefined
+  systemPrompt: undefined,
+  nonInteractive: false
 };
 
 const ENV_OVERRIDE_CONFIG_CONTENT = Schema.encodeSync(Schema.fromJsonString(ConfigSchema))(ENV_OVERRIDE_CONFIG_DATA);
@@ -205,7 +208,8 @@ describe("config", () => {
         },
         approvalMode: "none" as const,
         maxTurns: 50,
-        systemPrompt: undefined
+        systemPrompt: undefined,
+        nonInteractive: false
       });
 
       return setupTmpDir().pipe(
@@ -233,7 +237,8 @@ describe("config", () => {
         },
         approvalMode: "none" as const,
         maxTurns: 50,
-        systemPrompt: undefined
+        systemPrompt: undefined,
+        nonInteractive: false
       });
 
       return setupTmpDir().pipe(
@@ -264,7 +269,8 @@ describe("config", () => {
         },
         approvalMode: "none" as const,
         maxTurns: 50,
-        systemPrompt: undefined
+        systemPrompt: undefined,
+        nonInteractive: false
       };
       const masked = maskConfig(config);
       expect(masked.provider.apiKey).toBe("***");
@@ -279,7 +285,8 @@ describe("config", () => {
         },
         approvalMode: "none" as const,
         maxTurns: 50,
-        systemPrompt: undefined
+        systemPrompt: undefined,
+        nonInteractive: false
       };
       const masked = maskConfig(config);
       expect(masked.provider.apiKey).toBeUndefined();

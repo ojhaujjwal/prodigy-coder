@@ -122,7 +122,8 @@ export const createStubToolkit = (overrides?: Record<string, Error>): StubToolki
     edit: makeHandler("edit", "stub edit result"),
     grep: makeHandler("grep", ["stub grep result"]),
     glob: makeHandler("glob", ["stub glob result"]),
-    webfetch: makeHandler("webfetch", "stub webfetch result")
+    webfetch: makeHandler("webfetch", "stub webfetch result"),
+    ask_user: makeHandler("ask_user", "stub ask result")
   });
 
   return { layer, calls };
@@ -138,6 +139,7 @@ export const createTestConfig = (overrides?: Partial<ConfigData>): ConfigData =>
   approvalMode: "none",
   maxTurns: 10,
   systemPrompt: undefined,
+  nonInteractive: false,
   ...overrides
 });
 

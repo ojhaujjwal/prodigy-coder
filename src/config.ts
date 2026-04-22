@@ -25,7 +25,8 @@ export const ConfigSchema = Schema.Struct({
   provider: ProviderConfig,
   approvalMode: Schema.Literals(["none", "dangerous", "all"]),
   maxTurns: Schema.Number,
-  systemPrompt: Schema.optional(Schema.String)
+  systemPrompt: Schema.optional(Schema.String),
+  nonInteractive: Schema.optional(Schema.Boolean)
 });
 export type ConfigData = typeof ConfigSchema.Type;
 
@@ -39,13 +40,21 @@ const parseApprovalMode = (value: string | undefined): ApprovalMode | undefined 
   return undefined;
 };
 
+const parseBoolean = (value: string | undefined): boolean | undefined => {
+  if (value === undefined) return undefined;
+  if (value.toLowerCase() === "true" || value === "1") return true;
+  if (value.toLowerCase() === "false" || value === "0") return false;
+  return undefined;
+};
+
 const envOverrides = (
   config: ConfigData,
   apiKey: string | undefined,
   baseUrl: string | undefined,
   model: string | undefined,
   approvalMode: string | undefined,
-  bedrockRegion: string | undefined
+  bedrockRegion: string | undefined,
+  nonInteractive: string | undefined
 ): ConfigData => {
   const finalBaseUrl = baseUrl ?? config.provider.baseUrl ?? bedrockBaseUrl(bedrockRegion);
   return {
@@ -56,7 +65,8 @@ const envOverrides = (
       baseUrl: finalBaseUrl,
       model: model ?? config.provider.model
     },
-    approvalMode: parseApprovalMode(approvalMode) ?? config.approvalMode
+    approvalMode: parseApprovalMode(approvalMode) ?? config.approvalMode,
+    nonInteractive: parseBoolean(nonInteractive) ?? config.nonInteractive
   };
 };
 
@@ -69,7 +79,8 @@ const defaultConfig = (apiKey?: string, model?: string): ConfigData => ({
   },
   approvalMode: "none" as const,
   maxTurns: 50,
-  systemPrompt: undefined
+  systemPrompt: undefined,
+  nonInteractive: false
 });
 
 const HOME_CONFIG_PATHS = [".prodigy-coder.json", ".config/prodigy-coder.json"];
@@ -122,6 +133,7 @@ class AppConfig extends Context.Service<AppConfig, ConfigData>()("AppConfig") {
       const model = yield* Config.option(Config.string("PRODIGY_CODER_MODEL"));
       const approvalMode = yield* Config.option(Config.string("PRODIGY_CODER_APPROVAL_MODE"));
       const bedrockRegion = yield* Config.option(Config.string("BEDROCK_REGION"));
+      const nonInteractive = yield* Config.option(Config.string("PRODIGY_CODER_NON_INTERACTIVE"));
 
       const apiKeyValue = Option.map(apiKey, Redacted.value);
       const modelValue = Option.getOrUndefined(model);
@@ -137,7 +149,8 @@ class AppConfig extends Context.Service<AppConfig, ConfigData>()("AppConfig") {
           Option.getOrUndefined(baseUrl),
           modelValue,
           Option.getOrUndefined(approvalMode),
-          Option.getOrUndefined(bedrockRegion)
+          Option.getOrUndefined(bedrockRegion),
+          Option.getOrUndefined(nonInteractive)
         );
       } else {
         loadedConfig = envOverrides(
@@ -146,7 +159,8 @@ class AppConfig extends Context.Service<AppConfig, ConfigData>()("AppConfig") {
           Option.getOrUndefined(baseUrl),
           modelValue ?? loadedConfig.provider.model,
           Option.getOrUndefined(approvalMode),
-          Option.getOrUndefined(bedrockRegion)
+          Option.getOrUndefined(bedrockRegion),
+          Option.getOrUndefined(nonInteractive)
         );
       }
 
@@ -175,6 +189,7 @@ class AppConfig extends Context.Service<AppConfig, ConfigData>()("AppConfig") {
         const model = yield* Config.option(Config.string("PRODIGY_CODER_MODEL"));
         const approvalMode = yield* Config.option(Config.string("PRODIGY_CODER_APPROVAL_MODE"));
         const bedrockRegion = yield* Config.option(Config.string("BEDROCK_REGION"));
+        const nonInteractive = yield* Config.option(Config.string("PRODIGY_CODER_NON_INTERACTIVE"));
 
         const apiKeyValue = Option.map(apiKey, Redacted.value);
         const modelValue = Option.getOrUndefined(model);
@@ -190,7 +205,8 @@ class AppConfig extends Context.Service<AppConfig, ConfigData>()("AppConfig") {
             Option.getOrUndefined(baseUrl),
             modelValue,
             Option.getOrUndefined(approvalMode),
-            Option.getOrUndefined(bedrockRegion)
+            Option.getOrUndefined(bedrockRegion),
+            Option.getOrUndefined(nonInteractive)
           );
         } else {
           loadedConfig = envOverrides(
@@ -199,7 +215,8 @@ class AppConfig extends Context.Service<AppConfig, ConfigData>()("AppConfig") {
             Option.getOrUndefined(baseUrl),
             modelValue ?? loadedConfig.provider.model,
             Option.getOrUndefined(approvalMode),
-            Option.getOrUndefined(bedrockRegion)
+            Option.getOrUndefined(bedrockRegion),
+            Option.getOrUndefined(nonInteractive)
           );
         }
 

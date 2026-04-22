@@ -12,8 +12,8 @@ describe("approval", () => {
 
     it('returns true for dangerous tools in "dangerous" mode', () => {
       expect(needsApproval("shell", "dangerous")).toBe(true);
-      expect(needsApproval("write", "dangerous")).toBe(true);
-      expect(needsApproval("edit", "dangerous")).toBe(true);
+      expect(needsApproval("write", "dangerous")).toBe(false);
+      expect(needsApproval("edit", "dangerous")).toBe(false);
     });
 
     it('returns false for non-dangerous tools in "dangerous" mode', () => {

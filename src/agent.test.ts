@@ -24,7 +24,8 @@ const mockToolkitLayer = MyToolkit.toLayer({
   edit: () => Effect.succeed(""),
   grep: () => Effect.succeed([]),
   glob: () => Effect.succeed([]),
-  webfetch: () => Effect.succeed("")
+  webfetch: () => Effect.succeed(""),
+  ask_user: () => Effect.succeed("")
 });
 
 describe("agent", () => {

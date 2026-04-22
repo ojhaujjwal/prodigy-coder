@@ -6,8 +6,18 @@ import { EditTool, editHandler } from "./edit.ts";
 import { GrepTool, grepHandler } from "./grep.ts";
 import { GlobTool, globHandler } from "./glob.ts";
 import { WebFetchTool, webfetchHandler } from "./webfetch.ts";
+import { AskUserTool, makeAskUserHandler } from "./askUser.ts";
 
-export const MyToolkit = Toolkit.make(ShellTool, ReadTool, WriteTool, EditTool, GrepTool, GlobTool, WebFetchTool);
+export const MyToolkit = Toolkit.make(
+  ShellTool,
+  ReadTool,
+  WriteTool,
+  EditTool,
+  GrepTool,
+  GlobTool,
+  WebFetchTool,
+  AskUserTool
+);
 
 export type MyToolkit = typeof MyToolkit;
 
@@ -18,7 +28,8 @@ export const MyToolkitLayer = MyToolkit.toLayer({
   edit: editHandler,
   grep: grepHandler,
   glob: globHandler,
-  webfetch: webfetchHandler
+  webfetch: webfetchHandler,
+  ask_user: makeAskUserHandler(false)
 });
 
-export { ShellTool, ReadTool, WriteTool, EditTool, GrepTool, GlobTool, WebFetchTool };
+export { ShellTool, ReadTool, WriteTool, EditTool, GrepTool, GlobTool, WebFetchTool, AskUserTool };

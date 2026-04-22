@@ -60,7 +60,8 @@ export default defineRule({
     },
     messages: {
       noNodeImport: "Do not use 'node:' imports. Use @effect/platform instead for platform-agnostic code.",
-      noBareNodeImport: "Do not use Node.js built-in imports (e.g. 'fs', 'path'). Use @effect/platform instead for platform-agnostic code."
+      noBareNodeImport:
+        "Do not use Node.js built-in imports (e.g. 'fs', 'path'). Use @effect/platform instead for platform-agnostic code."
     },
     schema: []
   },
