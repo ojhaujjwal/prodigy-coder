@@ -4,9 +4,9 @@ import * as TestConsole from "effect/testing/TestConsole";
 import { makeTextFormatter, makeStreamJsonFormatter, type OutputEvent } from "./output.ts";
 
 const JsonRecord = Schema.Record(Schema.String, Schema.Unknown);
-// oxlint-disable-next-line typescript/consistent-type-assertions
+
 const parseJson = (input: string) =>
-  Schema.decodeUnknownSync(Schema.fromJsonString(JsonRecord))(input) as Record<string, unknown>;
+  Schema.decodeUnknownSync(Schema.fromJsonString(JsonRecord))(input)
 
 const testLayer = TestConsole.layer;
 
