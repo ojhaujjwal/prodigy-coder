@@ -72,7 +72,7 @@ const systemPromptFlag = Flag.string("system-prompt").pipe(Flag.withDescription(
 
 const configFlag = Flag.string("config").pipe(Flag.withDescription("Config file path"), Flag.optional);
 
-const mainCommand = Command.make(
+export const mainCommand = Command.make(
   "prodigy",
   {
     prompt: promptArg,
@@ -120,7 +120,7 @@ const mainCommand = Command.make(
     )
 ).pipe(Command.withDescription("Run the AI coder"));
 
-const listSessionsCommand = Command.make("list", {}, () =>
+export const listSessionsCommand = Command.make("list", {}, () =>
   Effect.gen(function* () {
     const repo = yield* SessionRepo;
     const sessions = yield* repo.list();
@@ -139,7 +139,7 @@ const listSessionsCommand = Command.make("list", {}, () =>
 
 const deleteSessionArg = Argument.string("id").pipe(Argument.withDescription("Session ID to delete"));
 
-const deleteSessionCommand = Command.make("delete", { id: deleteSessionArg }, ({ id }) =>
+export const deleteSessionCommand = Command.make("delete", { id: deleteSessionArg }, ({ id }) =>
   Effect.gen(function* () {
     const repo = yield* SessionRepo;
     yield* repo.delete(id);
@@ -152,7 +152,7 @@ const sessionCommand = Command.make("session", {}, () => Effect.void).pipe(
   Command.withDescription("Manage sessions")
 );
 
-const configShowCommand = Command.make("show", {}, () =>
+export const configShowCommand = Command.make("show", {}, () =>
   Effect.gen(function* () {
     const config = yield* AppConfig;
     const masked = maskConfig(config);
@@ -166,7 +166,7 @@ const configCommand = Command.make("config", {}, () => Effect.void).pipe(
   Command.withDescription("Manage configuration")
 );
 
-const app = Command.make("prodigy", {}).pipe(
+export const app = Command.make("prodigy", {}).pipe(
   Command.withDescription("AI coding assistant"),
   Command.withSubcommands([mainCommand, sessionCommand, configCommand])
 );

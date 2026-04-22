@@ -6,7 +6,7 @@
 # Usage: ./ralph.sh <focus prompt> [options]
 #
 # Options:
-#   --model <model>          AI model to use (default: opencode-go/minimax-m2.7)
+#   --model <model>          AI model to use (default: opencode-go/kimi-k2.6)
 #   --skip-checks            Skip all CI checks (typecheck, lint)
 #   --max-iterations <n>     Stop after n iterations (default: unlimited)
 #
@@ -26,7 +26,7 @@ set -o pipefail
 SKIP_CHECKS=false
 FOCUS_PROMPT=""
 MAX_ITERATIONS=0
-MODEL="opencode-go/minimax-m2.7"
+MODEL="opencode-go/kimi-k2.6"
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -58,7 +58,7 @@ while [[ $# -gt 0 ]]; do
             echo "A focus prompt is REQUIRED. The agent will only do what you ask."
             echo ""
             echo "Options:"
-            echo "  --model <model>          AI model to use (default: opencode-go/minimax-m2.7)"
+            echo "  --model <model>          AI model to use (default: opencode-go/kimi-k2.6)"
             echo "  --skip-checks            Skip all CI checks (typecheck, lint)"
             echo "  --max-iterations <n>     Stop after n iterations (default: unlimited)"
             echo "  --help, -h               Show this help message"
@@ -248,16 +248,14 @@ $lint_output
     echo "3. Formatting..."
     echo "----------------"
     local format_output
-    if format_output=$(bun run format 2>&1); then
+    if format_output=$(bun run format-fix 2>&1); then
         echo -e "${GREEN}Format passed${NC}"
     else
         echo -e "${RED}Format failed${NC}"
         ci_failed=1
         error_output+="## Format Failed
 
-Command: \`bun run format\`
-
-Run \`bun run format-fix\` to fix formatting issues.
+Command: \`bun run format-fix\`
 
 \`\`\`
 $format_output

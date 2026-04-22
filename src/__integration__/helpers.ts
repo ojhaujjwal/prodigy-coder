@@ -11,6 +11,14 @@ export type MockPart =
   | { type: "text-delta"; delta: string }
   | { type: "tool-call"; id: string; name: string; params: unknown }
   | {
+      type: "tool-result";
+      id: string;
+      name: string;
+      result: unknown;
+      isFailure?: boolean;
+      preliminary?: boolean;
+    }
+  | {
       type: "finish";
       reason: "stop" | "length" | "content-filter" | "tool-calls" | "error" | "pause" | "other" | "unknown";
     };
@@ -31,6 +39,15 @@ const mockPartToEncoded = (part: MockPart): Response.StreamPartEncoded => {
         id: part.id,
         name: part.name,
         params: part.params
+      };
+    case "tool-result":
+      return {
+        type: "tool-result",
+        id: part.id,
+        name: part.name,
+        result: part.result,
+        isFailure: part.isFailure ?? false,
+        preliminary: part.preliminary ?? false
       };
     case "finish":
       return {

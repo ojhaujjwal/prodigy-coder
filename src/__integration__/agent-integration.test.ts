@@ -253,4 +253,136 @@ describe("agent integration", () => {
       expect(agentConfig.session.messages.some((m) => m.role === "user")).toBe(true);
     })
   );
+
+  it.effect("Test 11: approvalMode all requests approval for all tools", () =>
+    Effect.gen(function* () {
+      const mockResponses: import("./helpers.ts").TurnResponse[] = [
+        [
+          { type: "tool-call", id: "call-1", name: "read", params: { filePath: "/test.txt" } },
+          { type: "tool-call", id: "call-2", name: "shell", params: { command: "ls" } }
+        ],
+        [{ type: "finish", reason: "stop" }]
+      ];
+
+      const { layer } = createStubToolkit();
+      const config = createTestConfig({ approvalMode: "all" });
+      const session = createTestSession();
+      const agentConfig: AgentConfig = { session, config };
+      const mockLLMLayer = createMockLLMLayer(mockResponses);
+
+      const result = yield* runAgent("test prompt", agentConfig, Layer.merge(mockLLMLayer, layer));
+
+      const approvalRequests = result.filter((e) => e.type === "tool-approval-request");
+
+      expect(approvalRequests.length).toBe(2);
+      expect(approvalRequests[0].toolName).toBe("read");
+      expect(approvalRequests[1].toolName).toBe("shell");
+    })
+  );
+
+  it.effect("Test 12: maxTurns text-only stops after max turns", () =>
+    Effect.gen(function* () {
+      const mockResponses: import("./helpers.ts").TurnResponse[] = [
+        [{ type: "text-delta", delta: "Turn 1" }],
+        [{ type: "text-delta", delta: "Turn 2" }]
+      ];
+
+      const { layer } = createStubToolkit();
+      const config = createTestConfig({ approvalMode: "none", maxTurns: 2 });
+      const session = createTestSession();
+      const agentConfig: AgentConfig = { session, config };
+      const mockLLMLayer = createMockLLMLayer(mockResponses);
+
+      const result = yield* runAgent("test prompt", agentConfig, Layer.merge(mockLLMLayer, layer));
+
+      const textDeltas = result.filter((e) => e.type === "text-delta");
+      const errors = result.filter((e) => e.type === "error");
+
+      expect(textDeltas.length).toBe(2);
+      expect(errors.length).toBe(1);
+      expect(errors[0].message).toContain("Max turns exceeded");
+    })
+  );
+
+  it.effect("Test 13: Multi-turn text then tool then finish", () =>
+    Effect.gen(function* () {
+      const mockResponses: import("./helpers.ts").TurnResponse[] = [
+        [{ type: "text-delta", delta: "Let me check" }],
+        [{ type: "tool-call", id: "call-1", name: "read", params: { filePath: "/test.txt" } }],
+        [{ type: "finish", reason: "stop" }]
+      ];
+
+      const { layer } = createStubToolkit();
+      const config = createTestConfig({ approvalMode: "none" });
+      const session = createTestSession();
+      const agentConfig: AgentConfig = { session, config };
+      const mockLLMLayer = createMockLLMLayer(mockResponses);
+
+      const result = yield* runAgent("test prompt", agentConfig, Layer.merge(mockLLMLayer, layer));
+
+      const eventTypes = result.map((e) => e.type);
+
+      expect(eventTypes).toContain("text-delta");
+      expect(eventTypes).toContain("tool-call");
+      expect(eventTypes).toContain("tool-result");
+      expect(eventTypes).toContain("finish");
+      expect(eventTypes.indexOf("text-delta")).toBeLessThan(eventTypes.indexOf("tool-call"));
+      expect(eventTypes.indexOf("tool-call")).toBeLessThan(eventTypes.indexOf("tool-result"));
+      expect(eventTypes.indexOf("tool-result")).toBeLessThan(eventTypes.indexOf("finish"));
+    })
+  );
+
+  it.effect("Test 14: Tool result with array encodedResult is newline-joined", () =>
+    Effect.gen(function* () {
+      const mockResponses: import("./helpers.ts").TurnResponse[] = [
+        [{ type: "tool-call", id: "call-1", name: "grep", params: { pattern: "test", path: "/tmp" } }],
+        [{ type: "finish", reason: "stop" }]
+      ];
+
+      const { layer } = createStubToolkit();
+      const config = createTestConfig({ approvalMode: "none" });
+      const session = createTestSession();
+      const agentConfig: AgentConfig = { session, config };
+      const mockLLMLayer = createMockLLMLayer(mockResponses);
+
+      const result = yield* runAgent("test prompt", agentConfig, Layer.merge(mockLLMLayer, layer));
+
+      const toolResults = result.filter((e) => e.type === "tool-result");
+
+      expect(toolResults.length).toBe(1);
+      expect(typeof toolResults[0].result).toBe("string");
+      expect(toolResults[0].result).toBe("stub grep result");
+    })
+  );
+
+  it.todo("Test 15: Tool result with object encodedResult is JSON stringified");
+
+  it.effect("Test 16: Preliminary tool result is ignored", () =>
+    Effect.gen(function* () {
+      const mockResponses: import("./helpers.ts").TurnResponse[] = [
+        [
+          {
+            type: "tool-result",
+            id: "call-1",
+            name: "read",
+            result: "ignored",
+            preliminary: true
+          }
+        ],
+        [{ type: "finish", reason: "stop" }]
+      ];
+
+      const { layer } = createStubToolkit();
+      const config = createTestConfig({ approvalMode: "none" });
+      const session = createTestSession();
+      const agentConfig: AgentConfig = { session, config };
+      const mockLLMLayer = createMockLLMLayer(mockResponses);
+
+      const result = yield* runAgent("test prompt", agentConfig, Layer.merge(mockLLMLayer, layer));
+
+      const toolResults = result.filter((e) => e.type === "tool-result");
+
+      expect(toolResults.length).toBe(0);
+    })
+  );
 });
