@@ -7,13 +7,12 @@ import { layer as bunServicesLayer } from "@effect/platform-bun/BunServices";
 const testLayer = SessionRepo.layer.pipe(Layer.provideMerge(bunServicesLayer));
 
 const cleanupSessions = () =>
-  Effect.sync(() => {
-    const { existsSync, rmSync } = require("fs");
-    try {
-      if (existsSync(".prodigy-coder/sessions")) {
-        rmSync(".prodigy-coder/sessions", { recursive: true, force: true });
-      }
-    } catch {}
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const exists = yield* fs.exists(".prodigy-coder/sessions");
+    if (exists) {
+      yield* fs.remove(".prodigy-coder/sessions", { recursive: true });
+    }
   });
 
 describe("session", () => {

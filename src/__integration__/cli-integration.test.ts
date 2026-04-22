@@ -2,6 +2,7 @@ import { describe, it, expect } from "@effect/vitest";
 import { Effect, Layer, ConfigProvider } from "effect";
 import { Command } from "effect/unstable/cli";
 import * as TestConsole from "effect/testing/TestConsole";
+import * as FileSystem from "effect/FileSystem";
 import { layer as bunServicesLayer } from "@effect/platform-bun/BunServices";
 import { app } from "../index.ts";
 import { SessionRepo } from "../session.ts";
@@ -21,13 +22,12 @@ const testLayer = Layer.merge(
 const combinedLayer = Layer.merge(bunServicesLayer, testLayer).pipe(Layer.provide(bunServicesLayer));
 
 const cleanupSessions = () =>
-  Effect.sync(() => {
-    const { existsSync, rmSync } = require("fs");
-    try {
-      if (existsSync(".prodigy-coder/sessions")) {
-        rmSync(".prodigy-coder/sessions", { recursive: true, force: true });
-      }
-    } catch {}
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const exists = yield* fs.exists(".prodigy-coder/sessions");
+    if (exists) {
+      yield* fs.remove(".prodigy-coder/sessions", { recursive: true });
+    }
   });
 
 describe("CLI integration", () => {

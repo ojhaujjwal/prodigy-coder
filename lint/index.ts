@@ -11,6 +11,7 @@ import importExtensions from "./rules/import-extensions.ts";
 import noDisableValidation from "./rules/no-disable-validation.ts";
 import noVoidExpression from "./rules/no-void-expression.ts";
 import noNodeImports from "./rules/no-node-imports.ts";
+import noRequire from "./rules/no-require.ts";
 import noProcess from "./rules/no-process.ts";
 import noBunGlobals from "./rules/no-bun-globals.ts";
 import noConsole from "./rules/no-console.ts";
@@ -32,6 +33,7 @@ export default definePlugin({
     "no-disable-validation": noDisableValidation,
     "no-void-expression": noVoidExpression,
     "no-node-imports": noNodeImports,
+    "no-require": noRequire,
     "no-process": noProcess,
     "no-bun-globals": noBunGlobals,
     "no-console": noConsole,
