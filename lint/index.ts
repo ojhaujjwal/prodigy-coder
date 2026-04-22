@@ -1,4 +1,5 @@
 import { definePlugin } from "@oxlint/plugins";
+import noOxlintDisable from "./rules/no-oxlint-disable.ts";
 import noEffectIgnore from "./rules/no-effect-ignore.ts";
 import noEffectCatchallcause from "./rules/no-effect-catchallcause.ts";
 import noEffectAsvoid from "./rules/no-effect-asvoid.ts";
@@ -17,10 +18,12 @@ import noBunGlobals from "./rules/no-bun-globals.ts";
 import noConsole from "./rules/no-console.ts";
 import noPlainItWithEffect from "./rules/no-plain-it-with-effect.ts";
 import noVitestModifiers from "./rules/no-vitest-modifiers.ts";
+import noTsIgnore from "./rules/no-ts-ignore.ts";
 
 export default definePlugin({
   meta: { name: "prodigy" },
   rules: {
+    "no-oxlint-disable": noOxlintDisable,
     "no-effect-ignore": noEffectIgnore,
     "no-effect-catchallcause": noEffectCatchallcause,
     "no-effect-asvoid": noEffectAsvoid,
@@ -38,6 +41,7 @@ export default definePlugin({
     "no-bun-globals": noBunGlobals,
     "no-console": noConsole,
     "no-plain-it-with-effect": noPlainItWithEffect,
-    "no-vitest-modifiers": noVitestModifiers
+    "no-vitest-modifiers": noVitestModifiers,
+    "no-ts-ignore": noTsIgnore
   }
 });

@@ -1,16 +1,23 @@
 import { describe, it, expect } from "@effect/vitest";
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Schema } from "effect";
 import { runAgent, type AgentConfig } from "../agent.ts";
 import { createMockLLMLayer, createStubToolkit, createTestConfig, createTestSession } from "./helpers.ts";
-import { ApprovalGate } from "../approval-gate.ts";
 import { makeToolkitLayer } from "../tools/index.ts";
 
 class TestError extends Error {
   readonly _tag = "TestError";
 }
 
-const mockApprovalGateLayer = (approveResult: boolean) =>
-  Layer.succeed(ApprovalGate, ApprovalGate.of({ approve: () => Effect.succeed(approveResult) }));
+const PromptSchema = Schema.Struct({
+  content: Schema.Array(
+    Schema.Struct({
+      role: Schema.String,
+      content: Schema.Unknown
+    })
+  )
+});
+
+const decodePrompt = (value: unknown) => Schema.decodeUnknownSync(PromptSchema)(value);
 
 const runAgentWithMocks = (
   mockResponses: import("./helpers.ts").TurnResponse[],
@@ -170,14 +177,13 @@ describe("agent integration", () => {
         [{ type: "finish", reason: "stop" }]
       ];
 
-      const { layer } = createStubToolkit(undefined, { approvalMode: "dangerous", nonInteractive: false });
+      const { layer } = createStubToolkit(undefined, { approvalMode: "dangerous", nonInteractive: true });
       const config = createTestConfig({ approvalMode: "dangerous" });
       const session = createTestSession();
       const agentConfig: AgentConfig = { session, config };
       const mockLLMLayer = createMockLLMLayer(mockResponses);
-      const gateLayer = mockApprovalGateLayer(false);
 
-      const result = yield* runAgent("test prompt", agentConfig, Layer.mergeAll(mockLLMLayer, layer, gateLayer));
+      const result = yield* runAgent("test prompt", agentConfig, Layer.merge(mockLLMLayer, layer));
 
       const toolResults = result.filter((e) => e.type === "tool-result");
       const shellResult = toolResults.find((e) => e.name === "shell");
@@ -234,8 +240,7 @@ describe("agent integration", () => {
       yield* runAgent("test prompt", agentConfig, Layer.merge(mockLLMLayer, layer));
 
       expect(capturedPrompts.length).toBe(1);
-      // oxlint-disable-next-line typescript/consistent-type-assertions
-      const prompt = capturedPrompts[0] as { content: Array<{ role: string; content: unknown }> };
+      const prompt = decodePrompt(capturedPrompts[0]);
       expect(
         prompt.content.some(
           (m) =>
@@ -279,14 +284,13 @@ describe("agent integration", () => {
         [{ type: "finish", reason: "stop" }]
       ];
 
-      const { layer } = createStubToolkit(undefined, { approvalMode: "all", nonInteractive: false });
+      const { layer } = createStubToolkit(undefined, { approvalMode: "all", nonInteractive: true });
       const config = createTestConfig({ approvalMode: "all" });
       const session = createTestSession();
       const agentConfig: AgentConfig = { session, config };
       const mockLLMLayer = createMockLLMLayer(mockResponses);
-      const gateLayer = mockApprovalGateLayer(false);
 
-      const result = yield* runAgent("test prompt", agentConfig, Layer.mergeAll(mockLLMLayer, layer, gateLayer));
+      const result = yield* runAgent("test prompt", agentConfig, Layer.merge(mockLLMLayer, layer));
 
       const toolResults = result.filter((e) => e.type === "tool-result");
       const shellResult = toolResults.find((e) => e.name === "shell");
@@ -311,9 +315,8 @@ describe("agent integration", () => {
       const session = createTestSession();
       const agentConfig: AgentConfig = { session, config };
       const mockLLMLayer = createMockLLMLayer(mockResponses);
-      const gateLayer = mockApprovalGateLayer(true);
 
-      const result = yield* runAgent("test prompt", agentConfig, Layer.mergeAll(mockLLMLayer, layer, gateLayer));
+      const result = yield* runAgent("test prompt", agentConfig, Layer.merge(mockLLMLayer, layer));
 
       const toolResults = result.filter((e) => e.type === "tool-result");
       const shellResult = toolResults.find((e) => e.name === "shell");

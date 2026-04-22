@@ -19,6 +19,11 @@ export const approvalDeniedError = (toolName: string): AiError.AiError =>
     reason: new AiError.UnknownError({ description: `Tool ${toolName} was denied approval` })
   });
 
+export const DefaultApprovalGateLayer = Layer.succeed(
+  ApprovalGate,
+  ApprovalGate.of({ approve: () => Effect.succeed(true) })
+);
+
 export const makeApprovalGateLayer = (config: ConfigData): Layer.Layer<ApprovalGate> =>
   Layer.effect(
     ApprovalGate,
@@ -32,10 +37,6 @@ export const makeApprovalGateLayer = (config: ConfigData): Layer.Layer<ApprovalG
         }
         if (!needsApproval(toolName, config.approvalMode)) {
           return Effect.succeed(true);
-        }
-        // oxlint-disable-next-line prodigy/no-process
-        if (!globalThis.process?.stdin?.isTTY) {
-          return Effect.succeed(false);
         }
         return Prompt.run(
           Prompt.confirm({

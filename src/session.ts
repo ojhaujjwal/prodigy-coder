@@ -13,7 +13,12 @@ export const SessionSchema = Schema.Struct({
   createdAt: Schema.DateFromString,
   updatedAt: Schema.DateFromString
 });
-export type Session = typeof SessionSchema.Type;
+export type Session = {
+  readonly id: string;
+  messages: Array<{ readonly role: "system" | "user" | "assistant"; readonly content: string }>;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+};
 
 const SESSION_DIR: string = ".prodigy-coder/sessions";
 

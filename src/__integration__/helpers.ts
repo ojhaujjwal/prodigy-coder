@@ -102,10 +102,6 @@ export const createStubToolkit = (
           })
         );
       }
-      if (override !== undefined) {
-        // oxlint-disable-next-line typescript/consistent-type-assertions
-        return Effect.succeed(override as unknown as A);
-      }
       return Effect.succeed(defaultResult);
     };
   };
@@ -170,18 +166,22 @@ const buildSSEChunks = (responses: MockOpenAIResponse[]): Uint8Array[] => {
         object: "chat.completion.chunk",
         created: Date.now(),
         model: "test-model",
-        choices: [{
-          index: 0,
-          delta: {
-            tool_calls: [{
-              index: 0,
-              id: response.id,
-              type: "function",
-              function: { name: response.name, arguments: JSON.stringify(response.arguments) }
-            }]
-          },
-          finish_reason: null
-        }]
+        choices: [
+          {
+            index: 0,
+            delta: {
+              tool_calls: [
+                {
+                  index: 0,
+                  id: response.id,
+                  type: "function",
+                  function: { name: response.name, arguments: JSON.stringify(response.arguments) }
+                }
+              ]
+            },
+            finish_reason: null
+          }
+        ]
       })}\n\n`;
       chunks.push(encoder.encode(chunk));
     }
@@ -206,7 +206,7 @@ export const createMockOpenAIServer = (
   const calls: unknown[] = [];
   let responseIndex = 0;
 
-  const routeEffect = Effect.gen(function*() {
+  const routeEffect = Effect.gen(function* () {
     const request = yield* HttpServerRequest.HttpServerRequest;
     const body = yield* request.json;
     calls.push(body);

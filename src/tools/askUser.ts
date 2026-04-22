@@ -34,16 +34,6 @@ export const makeAskUserHandler =
           })
         });
       }
-      // oxlint-disable-next-line prodigy/no-process
-      if (!globalThis.process?.stdin?.isTTY) {
-        return yield* AiError.make({
-          module: "AskUserTool",
-          method: "askUserHandler",
-          reason: new AiError.UnknownError({
-            description: "Cannot ask user questions when stdin is not a TTY"
-          })
-        });
-      }
       return yield* Prompt.run(Prompt.text({ message: question })).pipe(
         Effect.catchCause((cause) =>
           Effect.fail(

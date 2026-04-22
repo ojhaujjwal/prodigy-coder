@@ -83,21 +83,4 @@ describe("approval-gate", () => {
       )
     )
   );
-
-  it.effect("non-TTY stdin auto-denies without prompting", () =>
-    Effect.gen(function* () {
-      // oxlint-disable-next-line prodigy/no-process
-      const stdin = globalThis.process.stdin;
-      const originalIsTTY: boolean | undefined = stdin.isTTY;
-      stdin.isTTY = false;
-
-      const gate = yield* ApprovalGate;
-      const result = yield* gate.approve("shell", { command: "ls" });
-      expect(result).toBe(false);
-
-      stdin.isTTY = originalIsTTY;
-    }).pipe(
-      Effect.provide(Layer.merge(makeApprovalGateLayer(createConfig({ approvalMode: "dangerous" })), BunServices.layer))
-    )
-  );
 });

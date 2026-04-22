@@ -41,16 +41,9 @@ const dummyContext: Toolkit.HandlerContext<typeof AskUserTool> = {
 describe("askUser tool", () => {
   it.effect("handler returns user input when Terminal is available", () =>
     Effect.gen(function* () {
-      // oxlint-disable-next-line prodigy/no-process
-      const stdin = globalThis.process.stdin;
-      const originalIsTTY: boolean | undefined = stdin.isTTY;
-      stdin.isTTY = true;
-
       const handler = makeAskUserHandler(false);
       const result = yield* handler({ question: "What is your name?" }, dummyContext);
       expect(result).toBe("Alice");
-
-      stdin.isTTY = originalIsTTY;
     }).pipe(
       Effect.provide(
         Layer.merge(

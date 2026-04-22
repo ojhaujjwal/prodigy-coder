@@ -1,4 +1,4 @@
-import { Effect, Layer, Option } from "effect";
+import { Effect, Layer } from "effect";
 import { Toolkit } from "effect/unstable/ai";
 import * as AiError from "effect/unstable/ai/AiError";
 import { ShellTool, shellHandler } from "./shell.ts";
@@ -9,7 +9,7 @@ import { GrepTool, grepHandler } from "./grep.ts";
 import { GlobTool, globHandler } from "./glob.ts";
 import { WebFetchTool, webfetchHandler } from "./webfetch.ts";
 import { AskUserTool, makeAskUserHandler } from "./askUser.ts";
-import { ApprovalGate, approvalDeniedError } from "../approval-gate.ts";
+import { ApprovalGate, DefaultApprovalGateLayer, approvalDeniedError } from "../approval-gate.ts";
 import { needsApproval } from "../approval.ts";
 import type { ApprovalMode } from "../config.ts";
 
@@ -37,16 +37,13 @@ export const withApproval =
       if (!needsApproval(toolName, config.approvalMode)) {
         return yield* handler(params, context);
       }
-      // oxlint-disable-next-line prodigy/no-service-option
-      const gateOption = yield* Effect.serviceOption(ApprovalGate);
-      if (Option.isSome(gateOption)) {
-        const approved = yield* gateOption.value.approve(toolName, params);
-        if (!approved) {
-          return yield* approvalDeniedError(toolName);
-        }
+      const gate = yield* ApprovalGate;
+      const approved = yield* gate.approve(toolName, params);
+      if (!approved) {
+        return yield* approvalDeniedError(toolName);
       }
       return yield* handler(params, context);
-    });
+    }).pipe(Effect.provide(makeApprovalGateLayerFromConfig(config)));
 
 export const makeToolkitLayer = (config: {
   approvalMode: ApprovalMode;
@@ -63,6 +60,27 @@ export const makeToolkitLayer = (config: {
     ask_user: makeAskUserHandler(config.nonInteractive)
   });
 
+const makeApprovalGateLayerFromConfig = (config: {
+  approvalMode: ApprovalMode;
+  nonInteractive: boolean;
+}): Layer.Layer<ApprovalGate> => {
+  const approvalMode = config.approvalMode === "none" ? "none" : config.approvalMode;
+  return Layer.succeed(
+    ApprovalGate,
+    ApprovalGate.of({
+      approve: (_toolName: string, _params: unknown) => {
+        if (config.nonInteractive) {
+          return Effect.succeed(false);
+        }
+        if (approvalMode === "none") {
+          return Effect.succeed(true);
+        }
+        return Effect.succeed(true);
+      }
+    })
+  );
+};
+
 export const MyToolkitLayer = MyToolkit.toLayer({
   shell: shellHandler,
   read: readHandler,
@@ -72,6 +90,6 @@ export const MyToolkitLayer = MyToolkit.toLayer({
   glob: globHandler,
   webfetch: webfetchHandler,
   ask_user: makeAskUserHandler(false)
-});
+}).pipe(Layer.provide(DefaultApprovalGateLayer));
 
 export { ShellTool, ReadTool, WriteTool, EditTool, GrepTool, GlobTool, WebFetchTool, AskUserTool };

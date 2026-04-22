@@ -5,8 +5,19 @@ import { makeTextFormatter, makeStreamJsonFormatter, type OutputEvent } from "./
 
 const JsonRecord = Schema.Record(Schema.String, Schema.Unknown);
 
-const parseJson = (input: string) =>
-  Schema.decodeUnknownSync(Schema.fromJsonString(JsonRecord))(input)
+const ContentOutput = Schema.Struct({
+  type: Schema.Literal("content"),
+  content: Schema.Array(
+    Schema.Struct({
+      type: Schema.String,
+      text: Schema.String
+    })
+  )
+});
+
+const parseJson = (input: string) => Schema.decodeUnknownSync(Schema.fromJsonString(JsonRecord))(input);
+
+const decodeContentOutput = (input: string) => Schema.decodeUnknownSync(Schema.fromJsonString(ContentOutput))(input);
 
 const testLayer = TestConsole.layer;
 
@@ -73,13 +84,10 @@ describe("output", () => {
         const outputs = yield* TestConsole.logLines;
         expect(outputs.length).toBe(1);
         const outputStr = String(outputs[0]);
-        const parsed = parseJson(outputStr);
+        const parsed = decodeContentOutput(outputStr);
         expect(parsed.type).toBe("content");
-        expect(Array.isArray(parsed.content)).toBe(true);
-        // oxlint-disable-next-line typescript/consistent-type-assertions
-        const content = parsed.content as Array<{ type: string; text: string }>;
-        expect(content[0].type).toBe("text");
-        expect(content[0].text).toBe("Hello");
+        expect(parsed.content[0].type).toBe("text");
+        expect(parsed.content[0].text).toBe("Hello");
       }).pipe(Effect.provide(testLayer))
     );
 

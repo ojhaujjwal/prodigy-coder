@@ -123,8 +123,7 @@ export const runAgent = (
       outputEvents.push({ type: "error", message: "Max turns exceeded" });
     }
 
-    // oxlint-disable-next-line typescript/consistent-type-assertions
-    (session as { messages: Message[] }).messages = messages;
+    session.messages = messages;
 
     return outputEvents;
   });

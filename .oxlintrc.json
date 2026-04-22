@@ -30,7 +30,9 @@
     "prodigy/no-bun-globals": "error",
     "prodigy/no-console": "error",
     "prodigy/no-plain-it-with-effect": "error",
-    "prodigy/no-vitest-modifiers": "error"
+    "prodigy/no-oxlint-disable": "error",
+    "prodigy/no-vitest-modifiers": "error",
+    "prodigy/no-ts-ignore": "error"
   },
   "overrides": [
     {
