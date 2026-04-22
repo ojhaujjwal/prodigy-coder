@@ -1,9 +1,10 @@
 import { describe, it, expect } from "@effect/vitest";
 import { Effect, Layer } from "effect";
+import * as FileSystem from "effect/FileSystem";
 import { SessionRepo } from "./session.ts";
 import { layer as bunServicesLayer } from "@effect/platform-bun/BunServices";
 
-const testLayer = SessionRepo.layer.pipe(Layer.provide(bunServicesLayer));
+const testLayer = SessionRepo.layer.pipe(Layer.provideMerge(bunServicesLayer));
 
 const cleanupSessions = () =>
   Effect.sync(() => {
@@ -140,6 +141,52 @@ describe("session", () => {
           expect(error !== undefined).toBe(true);
         })
       )
+    );
+
+    it.effect("fails for session with invalid JSON", () =>
+      Effect.gen(function* () {
+        yield* cleanupSessions();
+        const repo = yield* SessionRepo;
+        const session = yield* repo.create();
+        yield* repo.save(session);
+
+        const fs = yield* FileSystem.FileSystem;
+        yield* fs.writeFileString(`.prodigy-coder/sessions/${session.id}.json`, "not valid json");
+
+        yield* repo.load(session.id);
+      }).pipe(
+        Effect.provide(testLayer),
+        Effect.flip,
+        Effect.map((error) => {
+          expect(error !== undefined).toBe(true);
+        })
+      )
+    );
+  });
+
+  describe("listSessions", () => {
+    it.effect("skips corrupted files and returns valid ones", () =>
+      Effect.gen(function* () {
+        yield* cleanupSessions();
+        const repo = yield* SessionRepo;
+        const session1 = yield* repo.create();
+        yield* repo.save(session1);
+
+        const fs = yield* FileSystem.FileSystem;
+        yield* fs.writeFileString(".prodigy-coder/sessions/corrupted.json", "not valid json");
+
+        const session2 = yield* repo.create();
+        yield* repo.save(session2);
+
+        const sessions = yield* repo.list();
+        const ids = sessions.map((s) => s.id);
+        expect(ids.includes(session1.id)).toBe(true);
+        expect(ids.includes(session2.id)).toBe(true);
+        expect(ids.includes("corrupted")).toBe(false);
+        expect(sessions.length).toBe(2);
+
+        yield* cleanupSessions();
+      }).pipe(Effect.provide(testLayer))
     );
   });
 });

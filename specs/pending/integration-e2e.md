@@ -372,14 +372,14 @@ Create full end-to-end tests that exercise the CLI → provider → agent → to
 
 Before signaling `TASK_COMPLETE`, verify:
 
-- [ ] `bun vitest run` passes all tests (unit + integration projects)
-- [ ] `bun run typecheck` passes with no errors
-- [ ] `bun run lint` passes with no errors
-- [ ] Agent integration test 1-10 all pass
-- [ ] Output integration tests all pass
-- [ ] E2E tests all pass
-- [ ] CLI `--help` still works (`bun run src/index.ts --help`)
-- [ ] Existing unit tests unaffected
+- [x] `bun vitest run` passes all tests (unit + integration projects)
+- [x] `bun run typecheck` passes with no errors
+- [x] `bun run lint` passes with no errors
+- [x] Agent integration test 1-10 all pass
+- [x] Output integration tests all pass
+- [x] E2E tests all pass
+- [x] CLI `--help` still works (`bun run src/index.ts --help`)
+- [x] Existing unit tests unaffected
 
 ## Rollback Plan
 

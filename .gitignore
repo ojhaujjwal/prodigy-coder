@@ -38,3 +38,6 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .ralph-backup/
 .ralph-auto/
 progress-auto.txt
+
+# prodigy-coder local data
+.prodigy-coder/

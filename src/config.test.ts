@@ -97,7 +97,7 @@ const runWithConfigAndEnv = <A, E, R>(env: Record<string, string>, effect: Effec
           Layer.provideMerge(
             Layer.merge(
               Layer.merge(bunServicesLayer, homeLayer(home)),
-              ConfigProvider.layer(ConfigProvider.fromUnknown(env))
+              ConfigProvider.layer(ConfigProvider.fromUnknown({ HOME: home, ...env }))
             )
           )
         )
@@ -196,6 +196,61 @@ describe("config", () => {
         Effect.ensuring(teardownTmpDir())
       )
     );
+
+    it.effect("bedrock region env var sets base URL", () => {
+      const bedrockConfig = Schema.encodeSync(Schema.fromJsonString(ConfigSchema))({
+        provider: {
+          type: "bedrock" as const,
+          apiKey: "bedrock-key"
+        },
+        approvalMode: "none" as const,
+        maxTurns: 50,
+        systemPrompt: undefined
+      });
+
+      return setupTmpDir().pipe(
+        Effect.andThen(writeConfigFile(bedrockConfig)),
+        Effect.andThen(
+          runWithConfigAndEnv(
+            { BEDROCK_REGION: "eu-west-1" },
+            Effect.gen(function* () {
+              const config = yield* AppConfig;
+              expect(config.provider.type).toBe("bedrock");
+              expect(config.provider.baseUrl).toBe("https://bedrock-mantle.eu-west-1.api.aws/v1");
+            })
+          )
+        ),
+        Effect.ensuring(teardownTmpDir())
+      );
+    });
+
+    it.effect("bedrock explicit baseUrl overrides region default", () => {
+      const bedrockConfig = Schema.encodeSync(Schema.fromJsonString(ConfigSchema))({
+        provider: {
+          type: "bedrock" as const,
+          apiKey: "bedrock-key",
+          baseUrl: "https://custom.aws/v1"
+        },
+        approvalMode: "none" as const,
+        maxTurns: 50,
+        systemPrompt: undefined
+      });
+
+      return setupTmpDir().pipe(
+        Effect.andThen(writeConfigFile(bedrockConfig)),
+        Effect.andThen(
+          runWithConfigAndEnv(
+            { BEDROCK_REGION: "eu-west-1" },
+            Effect.gen(function* () {
+              const config = yield* AppConfig;
+              expect(config.provider.type).toBe("bedrock");
+              expect(config.provider.baseUrl).toBe("https://custom.aws/v1");
+            })
+          )
+        ),
+        Effect.ensuring(teardownTmpDir())
+      );
+    });
   });
 
   describe("maskConfig", () => {

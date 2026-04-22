@@ -20,9 +20,20 @@ const testLayer = Layer.merge(
 
 const combinedLayer = Layer.merge(bunServicesLayer, testLayer).pipe(Layer.provide(bunServicesLayer));
 
+const cleanupSessions = () =>
+  Effect.sync(() => {
+    const { existsSync, rmSync } = require("fs");
+    try {
+      if (existsSync(".prodigy-coder/sessions")) {
+        rmSync(".prodigy-coder/sessions", { recursive: true, force: true });
+      }
+    } catch {}
+  });
+
 describe("CLI integration", () => {
   it.effect("session list with no sessions", () =>
     Effect.gen(function* () {
+      yield* cleanupSessions();
       yield* runApp(["session", "list"]);
       const logs = yield* TestConsole.logLines;
       expect(logs.some((log) => String(log).includes("No sessions found"))).toBe(true);

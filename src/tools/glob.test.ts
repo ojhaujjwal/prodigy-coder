@@ -29,8 +29,8 @@ describe("glob tool", () => {
 
   it.effect("returns empty array when no matches", () =>
     Effect.gen(function* () {
-      const result = yield* globHandler({ pattern: "*.xyz", path: "/tmp/test-glob-none" }, mockContext);
-      expect(Array.isArray(result)).toBe(true);
+      const result = yield* globHandler({ pattern: "*.nonexistent", path: "/tmp" }, mockContext);
+      expect(result.length).toBe(0);
     }).pipe(Effect.provide(testLayer))
   );
 });

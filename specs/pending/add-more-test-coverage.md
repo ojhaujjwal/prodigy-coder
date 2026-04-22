@@ -20,18 +20,18 @@ The project currently has 77 passing tests across 16 test files. Core modules li
 
 - [x] CLI integration tests for `session list`, `session delete`, `config show`, and main command
 - [x] Agent integration tests for `approvalMode: "all"`, maxTurns with text-only, multi-turn flows
-- [ ] E2E test using the mock OpenAI HTTP server
-- [ ] Unit tests for bedrock provider and config paths
-- [ ] Unit tests for session repo edge cases (corrupted files, invalid JSON)
-- [ ] Unit tests for tool empty-output edge cases
+- [x] E2E test using the mock OpenAI HTTP server
+- [x] Unit tests for bedrock provider and config paths
+- [x] Unit tests for session repo edge cases (corrupted files, invalid JSON)
+- [x] Unit tests for tool empty-output edge cases
 
 ## Tasks
 
 - [x] **Task 1**: Export CLI command effects from `src/index.ts` and add CLI integration tests
 - [x] **Task 2**: Extend `MockPart` in integration helpers and add agent integration edge-case tests
 - [x] **Task 3**: Add E2E test using mock OpenAI HTTP server
-- [ ] **Task 4**: Add bedrock provider and config unit tests
-- [ ] **Task 5**: Add session and tool edge-case unit tests
+- [x] **Task 4**: Add bedrock provider and config unit tests
+- [x] **Task 5**: Add session and tool edge-case unit tests
 
 ## Implementation Details
 
@@ -195,7 +195,7 @@ Before signaling `TASK_COMPLETE`, verify:
 - [x] All new tests pass
 - [x] Existing tests still pass (no regressions)
 - [x] `src/index.ts` exports do not break the CLI binary (`bun run src/index.ts --help` works)
-- [ ] Mock OpenAI server test exercises real HTTP stack
+- [x] Mock OpenAI server test exercises real HTTP stack
 - [x] No `any` types introduced in test files
 
 ## Rollback Plan

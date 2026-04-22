@@ -32,4 +32,11 @@ describe("shell tool", () => {
       expect(result.includes("stderr")).toBe(true);
     }).pipe(Effect.provide(testLayer))
   );
+
+  it.effect("returns empty string for command with no output", () =>
+    Effect.gen(function* () {
+      const result = yield* shellHandler({ command: "true" }, mockContext);
+      expect(result).toBe("");
+    }).pipe(Effect.provide(testLayer))
+  );
 });

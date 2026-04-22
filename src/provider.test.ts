@@ -78,4 +78,24 @@ describe("provider", () => {
     const layer = buildProviderLayer(config);
     expect(layer).toBeDefined();
   });
+
+  it("buildProviderLayer should create layer for bedrock type with explicit model", () => {
+    const config = {
+      type: "bedrock" as const,
+      apiKey: "test-key",
+      model: "custom-model",
+      region: "us-west-2"
+    };
+    const layer = buildProviderLayer(config);
+    expect(layer).toBeDefined();
+  });
+
+  it("buildProviderLayer should create layer for bedrock type with defaults", () => {
+    const config = {
+      type: "bedrock" as const,
+      apiKey: "test-key"
+    };
+    const layer = buildProviderLayer(config);
+    expect(layer).toBeDefined();
+  });
 });
