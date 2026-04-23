@@ -200,6 +200,190 @@ const buildSSEChunks = (responses: MockOpenAIResponse[]): Uint8Array[] => {
   return chunks;
 };
 
+const buildResponseObject = (responseId: string, status: "in_progress" | "completed") => ({
+  metadata: null,
+  temperature: null,
+  top_p: null,
+  model: "gpt-4o",
+  tools: [],
+  tool_choice: "auto",
+  id: responseId,
+  object: "response",
+  status,
+  created_at: Math.floor(Date.now() / 1000),
+  error: null,
+  incomplete_details: null,
+  output: [],
+  instructions: null,
+  parallel_tool_calls: false
+});
+
+const usageObject = {
+  input_tokens: 1,
+  input_tokens_details: { cached_tokens: 0 },
+  output_tokens: 1,
+  output_tokens_details: { reasoning_tokens: 0 },
+  total_tokens: 2
+};
+
+const buildResponsesSSEChunks = (responses: MockOpenAIResponse[]): Uint8Array[] => {
+  const chunks: Uint8Array[] = [];
+  const encoder = new TextEncoder();
+
+  const responseId = `resp_mock_${Date.now()}`;
+  let seq = 0;
+
+  // response.created event
+  const createdEvent = `event: response.created\ndata: ${JSON.stringify({
+    type: "response.created",
+    sequence_number: seq++,
+    response: buildResponseObject(responseId, "in_progress")
+  })}\n\n`;
+  chunks.push(encoder.encode(createdEvent));
+
+  let outputIndex = 0;
+
+  for (const response of responses) {
+    if (response.type === "text") {
+      const itemId = `item_text_${outputIndex}`;
+      // response.output_item.added
+      const outputItemAdded = `event: response.output_item.added\ndata: ${JSON.stringify({
+        type: "response.output_item.added",
+        output_index: outputIndex,
+        sequence_number: seq++,
+        item: {
+          id: itemId,
+          type: "message",
+          role: "assistant",
+          content: [],
+          status: "in_progress"
+        }
+      })}\n\n`;
+      chunks.push(encoder.encode(outputItemAdded));
+
+      // response.content_part.added
+      const contentPartAdded = `event: response.content_part.added\ndata: ${JSON.stringify({
+        type: "response.content_part.added",
+        item_id: itemId,
+        output_index: outputIndex,
+        content_index: 0,
+        sequence_number: seq++,
+        part: { type: "output_text", text: "", annotations: [], logprobs: [] }
+      })}\n\n`;
+      chunks.push(encoder.encode(contentPartAdded));
+
+      // response.output_text.delta
+      const textDeltaEvent = `event: response.output_text.delta\ndata: ${JSON.stringify({
+        type: "response.output_text.delta",
+        item_id: itemId,
+        output_index: outputIndex,
+        content_index: 0,
+        delta: response.content,
+        sequence_number: seq++,
+        logprobs: []
+      })}\n\n`;
+      chunks.push(encoder.encode(textDeltaEvent));
+
+      // response.output_text.done
+      const textDone = `event: response.output_text.done\ndata: ${JSON.stringify({
+        type: "response.output_text.done",
+        item_id: itemId,
+        output_index: outputIndex,
+        content_index: 0,
+        text: response.content,
+        sequence_number: seq++,
+        logprobs: []
+      })}\n\n`;
+      chunks.push(encoder.encode(textDone));
+
+      // response.content_part.done
+      const contentPartDone = `event: response.content_part.done\ndata: ${JSON.stringify({
+        type: "response.content_part.done",
+        item_id: itemId,
+        output_index: outputIndex,
+        content_index: 0,
+        sequence_number: seq++,
+        part: { type: "output_text", text: response.content, annotations: [], logprobs: [] }
+      })}\n\n`;
+      chunks.push(encoder.encode(contentPartDone));
+
+      // response.output_item.done
+      const outputItemDone = `event: response.output_item.done\ndata: ${JSON.stringify({
+        type: "response.output_item.done",
+        output_index: outputIndex,
+        sequence_number: seq++,
+        item: {
+          id: itemId,
+          type: "message",
+          role: "assistant",
+          content: [{ type: "output_text", text: response.content, annotations: [], logprobs: [] }],
+          status: "completed"
+        }
+      })}\n\n`;
+      chunks.push(encoder.encode(outputItemDone));
+
+      outputIndex++;
+    } else if (response.type === "tool-call") {
+      const itemId = response.id;
+      // response.output_item.added
+      const outputItemAdded = `event: response.output_item.added\ndata: ${JSON.stringify({
+        type: "response.output_item.added",
+        output_index: outputIndex,
+        sequence_number: seq++,
+        item: {
+          id: itemId,
+          type: "function_call",
+          call_id: itemId,
+          name: response.name,
+          arguments: ""
+        }
+      })}\n\n`;
+      chunks.push(encoder.encode(outputItemAdded));
+
+      // response.function_call_arguments.done
+      const funcCallDone = `event: response.function_call_arguments.done\ndata: ${JSON.stringify({
+        type: "response.function_call_arguments.done",
+        item_id: itemId,
+        output_index: outputIndex,
+        sequence_number: seq++,
+        name: response.name,
+        arguments: JSON.stringify(response.arguments)
+      })}\n\n`;
+      chunks.push(encoder.encode(funcCallDone));
+
+      // response.output_item.done
+      const outputItemDone = `event: response.output_item.done\ndata: ${JSON.stringify({
+        type: "response.output_item.done",
+        output_index: outputIndex,
+        sequence_number: seq++,
+        item: {
+          id: itemId,
+          type: "function_call",
+          call_id: itemId,
+          name: response.name,
+          arguments: JSON.stringify(response.arguments)
+        }
+      })}\n\n`;
+      chunks.push(encoder.encode(outputItemDone));
+
+      outputIndex++;
+    }
+  }
+
+  // response.completed event
+  const completedEvent = `event: response.completed\ndata: ${JSON.stringify({
+    type: "response.completed",
+    sequence_number: seq++,
+    response: {
+      ...buildResponseObject(responseId, "completed"),
+      usage: usageObject
+    }
+  })}\n\n`;
+  chunks.push(encoder.encode(completedEvent));
+
+  return chunks;
+};
+
 export const createMockOpenAIServer = (
   responses: MockOpenAIResponse[][]
 ): Effect.Effect<{ url: string; calls: unknown[] }, never, Scope.Scope> => {
@@ -222,7 +406,25 @@ export const createMockOpenAIServer = (
     return HttpServerResponse.stream(stream, { contentType: "text/event-stream" });
   });
 
-  const appLayer = HttpRouter.add("POST", "/v1/chat/completions", routeEffect);
+  const responsesRouteEffect = Effect.gen(function* () {
+    const request = yield* HttpServerRequest.HttpServerRequest;
+    const body = yield* request.json;
+    calls.push(body);
+
+    if (responseIndex >= responses.length) {
+      responseIndex = responses.length - 1;
+    }
+    const currentResponses = responses[responseIndex];
+    responseIndex++;
+
+    const chunks = buildResponsesSSEChunks(currentResponses);
+    const stream = Stream.fromIterable(chunks);
+    return HttpServerResponse.stream(stream, { contentType: "text/event-stream" });
+  });
+
+  const chatCompletionsLayer = HttpRouter.add("POST", "/v1/chat/completions", routeEffect);
+  const responsesLayer = HttpRouter.add("POST", "/v1/responses", responsesRouteEffect);
+  const appLayer = Layer.merge(chatCompletionsLayer, responsesLayer);
 
   const serverLayer = HttpRouter.serve(appLayer, { disableListenLog: true }).pipe(
     Layer.provideMerge(BunHttpServer.layer({ port: 0 }))

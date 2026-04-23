@@ -98,4 +98,23 @@ describe("provider", () => {
     const layer = buildProviderLayer(config);
     expect(layer).toBeDefined();
   });
+
+  it("buildProviderLayer should create layer for gemini type with explicit model", () => {
+    const config = {
+      type: "gemini" as const,
+      apiKey: "test-key",
+      model: "gemini-3.1-flash"
+    };
+    const layer = buildProviderLayer(config);
+    expect(layer).toBeDefined();
+  });
+
+  it("buildProviderLayer should create layer for gemini type with defaults", () => {
+    const config = {
+      type: "gemini" as const,
+      apiKey: "test-key"
+    };
+    const layer = buildProviderLayer(config);
+    expect(layer).toBeDefined();
+  });
 });

@@ -1,8 +1,6 @@
 import * as Model from "effect/unstable/ai/Model";
-import * as OpenAiClient from "@effect/ai-openai-compat/OpenAiClient";
-import * as OpenAiLanguageModel from "@effect/ai-openai-compat/OpenAiLanguageModel";
-import * as OpenAiClient_OpenAi from "@effect/ai-openai/OpenAiClient";
-import * as OpenAiLanguageModel_OpenAi from "@effect/ai-openai/OpenAiLanguageModel";
+import * as OpenAiClient from "@effect/ai-openai/OpenAiClient";
+import * as OpenAiLanguageModel from "@effect/ai-openai/OpenAiLanguageModel";
 import * as AnthropicClient from "@effect/ai-anthropic/AnthropicClient";
 import * as AnthropicLanguageModel from "@effect/ai-anthropic/AnthropicLanguageModel";
 import * as OpenRouterClient from "@effect/ai-openrouter/OpenRouterClient";
@@ -11,13 +9,15 @@ import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import type { ProviderConfig } from "./config.ts";
 import { makeHttpDebugLayer } from "./http-debug.ts";
+import { buildGeminiProviderLayer } from "./provider/gemini.ts";
 
 const DEFAULT_MODELS = {
   "openai-compat": "gpt-4o",
   openai: "gpt-4o",
   anthropic: "claude-3-5-sonnet-20241022",
   openrouter: "anthropic/claude-3-5-sonnet-20241022",
-  bedrock: "anthropic.claude-3-5-sonnet-20241022"
+  bedrock: "anthropic.claude-3-5-sonnet-20241022",
+  gemini: "gemini-3.1-flash"
 } as const;
 
 const getDefaultModel = (type: ProviderConfig["type"]): string => DEFAULT_MODELS[type];
@@ -41,10 +41,10 @@ export const buildProviderLayer = (config: ProviderConfig) => {
         return Model.make("openai-compat", modelName, combined);
       }
       case "openai": {
-        const clientLayer = OpenAiClient_OpenAi.layer({
+        const clientLayer = OpenAiClient.layer({
           apiKey
         });
-        const languageModelLayer = OpenAiLanguageModel_OpenAi.layer({
+        const languageModelLayer = OpenAiLanguageModel.layer({
           model: modelName
         });
         const combined = languageModelLayer.pipe(Layer.provide(clientLayer));
@@ -81,6 +81,9 @@ export const buildProviderLayer = (config: ProviderConfig) => {
         });
         const combined = languageModelLayer.pipe(Layer.provide(clientLayer));
         return Model.make("bedrock", modelName, combined);
+      }
+      case "gemini": {
+        return buildGeminiProviderLayer(config, modelName, apiKey);
       }
     }
   })();

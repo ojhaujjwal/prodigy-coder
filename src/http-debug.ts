@@ -29,7 +29,7 @@ const appendToLog = (message: string) =>
 
 const formatRequest = (request: HttpClientRequest.HttpClientRequest): string => {
   const method = request.method;
-  const url = request.url.toString();
+  const urlStr = request.url;
   const headers = { ...request.headers };
   let body: string;
   if (request.body._tag === "Uint8Array") {
@@ -42,7 +42,7 @@ const formatRequest = (request: HttpClientRequest.HttpClientRequest): string => 
 
   const truncatedBody = body.length > 2000 ? body.slice(0, 2000) + "...(truncated)" : body;
 
-  return `>>> REQUEST ${method} ${url}\nHeaders: ${JSON.stringify(headers, null, 2)}\nBody: ${truncatedBody}`;
+  return `>>> REQUEST ${method} ${urlStr}\nHeaders: ${JSON.stringify(headers, null, 2)}\nBody: ${truncatedBody}`;
 };
 
 const formatResponse = (response: HttpClientResponse.HttpClientResponse): string => {
@@ -60,14 +60,13 @@ const formatResponse = (response: HttpClientResponse.HttpClientResponse): string
 
 export const withHttpDebug = (client: HttpClient.HttpClient): HttpClient.HttpClient =>
   client.pipe(
-    HttpClient.tapRequest((request) => {
-      const formatted = formatRequest(request);
-      return appendToLog(formatted);
-    }),
-    HttpClient.tap((response) => {
-      const formatted = formatResponse(response);
-      return appendToLog(formatted);
-    })
+    HttpClient.transform((responseEffect, request) =>
+      Effect.tap(responseEffect, (response) => {
+        const reqFormatted = formatRequest(request);
+        const resFormatted = formatResponse(response);
+        return appendToLog(`${reqFormatted}\n\n${resFormatted}`);
+      })
+    )
   );
 
 export const makeHttpDebugLayer = (): Layer.Layer<HttpClient.HttpClient, never, HttpClient.HttpClient> =>

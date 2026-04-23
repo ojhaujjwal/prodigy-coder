@@ -6,7 +6,14 @@ export class ConfigValidationError extends Data.TaggedError("ConfigValidationErr
   readonly cause?: Error;
 }> {}
 
-export const ProviderType = Schema.Literals(["openai-compat", "openai", "anthropic", "openrouter", "bedrock"]);
+export const ProviderType = Schema.Literals([
+  "openai-compat",
+  "openai",
+  "anthropic",
+  "openrouter",
+  "bedrock",
+  "gemini"
+]);
 export type ProviderType = typeof ProviderType.Type;
 
 export const ApprovalMode = Schema.Literals(["none", "dangerous", "all"]);
@@ -56,7 +63,10 @@ const envOverrides = (
   bedrockRegion: string | undefined,
   nonInteractive: string | undefined
 ): ConfigData => {
-  const finalBaseUrl = baseUrl ?? config.provider.baseUrl ?? bedrockBaseUrl(bedrockRegion);
+  const finalBaseUrl =
+    baseUrl ??
+    config.provider.baseUrl ??
+    (config.provider.type === "bedrock" ? bedrockBaseUrl(bedrockRegion) : undefined);
   return {
     ...config,
     provider: {
@@ -126,7 +136,8 @@ class AppConfig extends Context.Service<AppConfig, ConfigData>()("AppConfig") {
           Config.orElse(() => Config.redacted("OPENAI_API_KEY")),
           Config.orElse(() => Config.redacted("ANTHROPIC_API_KEY")),
           Config.orElse(() => Config.redacted("OPENROUTER_API_KEY")),
-          Config.orElse(() => Config.redacted("BEDROCK_API_KEY"))
+          Config.orElse(() => Config.redacted("BEDROCK_API_KEY")),
+          Config.orElse(() => Config.redacted("GEMINI_API_KEY"))
         )
       );
       const baseUrl = yield* Config.option(Config.string("PRODIGY_CODER_BASE_URL"));
@@ -182,7 +193,8 @@ class AppConfig extends Context.Service<AppConfig, ConfigData>()("AppConfig") {
             Config.orElse(() => Config.redacted("OPENAI_API_KEY")),
             Config.orElse(() => Config.redacted("ANTHROPIC_API_KEY")),
             Config.orElse(() => Config.redacted("OPENROUTER_API_KEY")),
-            Config.orElse(() => Config.redacted("BEDROCK_API_KEY"))
+            Config.orElse(() => Config.redacted("BEDROCK_API_KEY")),
+            Config.orElse(() => Config.redacted("GEMINI_API_KEY"))
           )
         );
         const baseUrl = yield* Config.option(Config.string("PRODIGY_CODER_BASE_URL"));
