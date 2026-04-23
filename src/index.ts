@@ -2,7 +2,7 @@ import { BunRuntime, BunServices } from "@effect/platform-bun";
 import { Argument, Command, Flag } from "effect/unstable/cli";
 import { Console, Effect, Layer, Option, Schema } from "effect";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
-import { AppConfig, loadConfig, maskConfig } from "./config.ts";
+import { AppConfig, loadConfig, maskConfig, type ConfigData } from "./config.ts";
 import { SessionRepo, createSession, loadSession } from "./session.ts";
 import { createFormatter } from "./output.ts";
 import { runAgent as runAgentLoop } from "./agent.ts";
@@ -84,17 +84,7 @@ const mainCommand = Command.make(
     config: configFlag,
     nonInteractive: nonInteractiveFlag
   },
-  ({
-    prompt,
-    outputFormat,
-    session,
-    model: _model,
-    maxTurns: _maxTurns,
-    approvalMode: _approvalMode,
-    systemPrompt: _systemPrompt,
-    nonInteractive,
-    config
-  }) =>
+  ({ prompt, outputFormat, session, model, maxTurns, approvalMode, systemPrompt, nonInteractive, config }) =>
     Effect.gen(function* () {
       const appConfig = yield* AppConfig;
       const sessionId = session;
@@ -105,7 +95,17 @@ const mainCommand = Command.make(
         return;
       }
 
-      const finalConfig = { ...appConfig, nonInteractive: nonInteractive || appConfig.nonInteractive };
+      const finalConfig: ConfigData = {
+        ...appConfig,
+        provider: {
+          ...appConfig.provider,
+          model: Option.getOrElse(model, () => appConfig.provider.model)
+        },
+        maxTurns: Option.getOrElse(maxTurns, () => appConfig.maxTurns),
+        approvalMode: Option.getOrElse(approvalMode, () => appConfig.approvalMode),
+        systemPrompt: Option.getOrElse(systemPrompt, () => appConfig.systemPrompt),
+        nonInteractive: nonInteractive || appConfig.nonInteractive
+      };
 
       const format: "text" | "stream-json" = outputFormat satisfies "text" | "stream-json";
       const formatter = createFormatter(format);
