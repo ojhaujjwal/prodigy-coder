@@ -20,14 +20,16 @@ Never guess at Effect patterns - check the guide first.
 
 ## Effect v4 Beta Notes
 
-This project uses **Effect v4 beta** (`effect@4.0.0-beta.50`). Key import paths:
+This project uses **Effect v4 beta** (`effect@4.0.0-beta.50`).
+For the full v3 → v4 migration guide, see [repos/effect-smol/MIGRATION.md](repos/effect-smol/MIGRATION.md).
+
+Key import paths:
 
 | Feature | v3 (stable) | v4 beta (this project) |
 |---|---|---|
 | CLI | `@effect/cli` | `effect/Unstable/Cli` |
 | HTTP | `@effect/platform` | `effect/Unstable/Http` |
 | Schema | `@effect/schema` | `effect/Schema` |
-| Platform | `@effect/platform-bun` | `@effect/platform-bun` |
 
 Patterns from `effect-solutions show <topic>` apply, but update imports:
 - `@effect/cli` → `effect/Unstable/Cli`
