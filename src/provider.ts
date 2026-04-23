@@ -10,6 +10,7 @@ import * as OpenRouterLanguageModel from "@effect/ai-openrouter/OpenRouterLangua
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import type { ProviderConfig } from "./config.ts";
+import { makeHttpDebugLayer } from "./http-debug.ts";
 
 const DEFAULT_MODELS = {
   "openai-compat": "gpt-4o",
@@ -84,5 +85,5 @@ export const buildProviderLayer = (config: ProviderConfig) => {
     }
   })();
 
-  return result;
+  return result.pipe(Layer.provide(makeHttpDebugLayer()));
 };

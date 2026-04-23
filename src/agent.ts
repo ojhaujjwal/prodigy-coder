@@ -2,7 +2,6 @@ import * as LanguageModel from "effect/unstable/ai/LanguageModel";
 import * as Prompt from "effect/unstable/ai/Prompt";
 import { Effect, Layer, Stream } from "effect";
 import { Tool } from "effect/unstable/ai";
-import { BunServices } from "@effect/platform-bun";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import type { Session, Message } from "./session.ts";
 import type { ConfigData } from "./config.ts";
@@ -58,7 +57,9 @@ export const runAgent = (
       const turnOutputEvents: OutputEvent[] = [];
 
       const approvalGateLayer = makeApprovalGateLayer(config);
-      const fullLayer = Layer.mergeAll(approvalGateLayer, BunServices.layer, FetchHttpClient.layer, providerLayer);
+      const fullLayer = Layer.mergeAll(approvalGateLayer, FetchHttpClient.layer, providerLayer);
+
+      yield* Effect.logDebug(`Agent turn ${turnCount} starting with ${messages.length} messages`);
 
       yield* llmStream.pipe(
         Stream.runForEach((part) => {
@@ -68,7 +69,7 @@ export const runAgent = (
               return Effect.void;
             case "tool-call": {
               turnOutputEvents.push({ type: "tool-call", id: part.id, name: part.name, params: part.params });
-              return Effect.void;
+              return Effect.logDebug(`LLM tool call: ${part.name}(${JSON.stringify(part.params)})`);
             }
             case "tool-result": {
               if (part.preliminary) {
@@ -89,14 +90,14 @@ export const runAgent = (
                 result: resultStr,
                 isError: part.isFailure
               });
-              return Effect.void;
+              return Effect.logDebug(`Tool result: ${part.name} -> ${resultStr.slice(0, 200)}...`);
             }
             case "finish":
               finished = true;
               turnOutputEvents.push({ type: "finish", text: part.reason || "" });
-              return Effect.void;
+              return Effect.logDebug(`LLM finish: reason=${part.reason}`);
             default:
-              return Effect.void;
+              return Effect.logDebug(`Unknown stream part: ${part.type}`);
           }
         }),
         Effect.provide(fullLayer)

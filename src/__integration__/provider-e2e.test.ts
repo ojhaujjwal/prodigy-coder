@@ -5,6 +5,7 @@ import { runAgent, type AgentConfig } from "../agent.ts";
 import { buildProviderLayer } from "../provider.ts";
 import { createMockOpenAIServer, createTestConfig, createTestSession } from "./helpers.ts";
 import { MyToolkitLayer } from "../tools/index.ts";
+import { BunServices } from "@effect/platform-bun";
 
 describe("provider e2e", () => {
   it.effect("receives text response from mock OpenAI server", () =>
@@ -35,7 +36,7 @@ describe("provider e2e", () => {
       expect(textDeltas.length).toBeGreaterThan(0);
       expect(textDeltas.some((e) => e.delta.includes("Hello from server"))).toBe(true);
       expect(finishes.length).toBe(1);
-    })
+    }).pipe(Effect.provide(BunServices.layer))
   );
 
   it.effect("receives tool-call response from mock OpenAI server", () =>
@@ -80,6 +81,6 @@ describe("provider e2e", () => {
       expect(toolResults.length).toBe(1);
       expect(toolResults[0].result).toContain("e2e-test");
       expect(finishes.length).toBe(1);
-    })
+    }).pipe(Effect.provide(BunServices.layer))
   );
 });

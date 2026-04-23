@@ -3,6 +3,7 @@ import { Effect, Layer, Schema } from "effect";
 import { runAgent, type AgentConfig } from "../agent.ts";
 import { createMockLLMLayer, createStubToolkit, createTestConfig, createTestSession } from "./helpers.ts";
 import { makeToolkitLayer } from "../tools/index.ts";
+import { BunServices } from "@effect/platform-bun";
 
 class TestError extends Error {
   readonly _tag = "TestError";
@@ -60,7 +61,7 @@ describe("agent integration", () => {
       expect(finishes.length).toBe(1);
       expect(toolCalls.length).toBe(0);
       expect(toolResults.length).toBe(0);
-    })
+    }).pipe(Effect.provide(BunServices.layer))
   );
 
   it.effect("Test 2: Single tool call then finish", () =>
@@ -91,7 +92,7 @@ describe("agent integration", () => {
       expect(toolResults[0].isError).toBe(false);
       expect(toolResults[0].result).toBe("stub read result");
       expect(finishes.length).toBe(1);
-    })
+    }).pipe(Effect.provide(BunServices.layer))
   );
 
   it.effect("Test 3: Two tool calls in one turn", () =>
@@ -120,7 +121,7 @@ describe("agent integration", () => {
 
       expect(calls["read"]).toEqual([{ filePath: "/a" }]);
       expect(calls["write"]).toEqual([{ filePath: "/b", content: "x" }]);
-    })
+    }).pipe(Effect.provide(BunServices.layer))
   );
 
   it.effect("Test 5: Tool execution error returns error result", () =>
@@ -142,7 +143,7 @@ describe("agent integration", () => {
       expect(toolResults.length).toBe(1);
       expect(toolResults[0].isError).toBe(true);
       expect(toolResults[0].result).toContain("file not found");
-    })
+    }).pipe(Effect.provide(BunServices.layer))
   );
 
   it.effect("Test 6: approvalMode none executes dangerous tools", () =>
@@ -164,7 +165,7 @@ describe("agent integration", () => {
 
       expect(toolResults.length).toBe(1);
       expect(toolResults[0].isError).toBe(false);
-    })
+    }).pipe(Effect.provide(BunServices.layer))
   );
 
   it.effect("Test 7: approvalMode dangerous with denied gate blocks dangerous tools", () =>
@@ -194,7 +195,7 @@ describe("agent integration", () => {
       expect(shellResult.result).toContain("denied approval");
       if (!readResult) throw new Error("Expected readResult");
       expect(readResult.isError).toBe(false);
-    })
+    }).pipe(Effect.provide(BunServices.layer))
   );
 
   it.effect("Test 8: maxTurns 1 with tool call", () =>
@@ -215,7 +216,7 @@ describe("agent integration", () => {
 
       expect(errors.length).toBe(1);
       expect(errors[0].message).toContain("Max turns exceeded");
-    })
+    }).pipe(Effect.provide(BunServices.layer))
   );
 
   it.effect("Test 9: System prompt prepended", () =>
@@ -247,7 +248,7 @@ describe("agent integration", () => {
             m.role === "system" && typeof m.content === "string" && m.content.includes("You are a helpful assistant")
         )
       ).toBe(true);
-    })
+    }).pipe(Effect.provide(BunServices.layer))
   );
 
   it.effect("Test 10: Session messages accumulate", () =>
@@ -271,7 +272,7 @@ describe("agent integration", () => {
 
       expect(agentConfig.session.messages.length >= 2).toBe(true);
       expect(agentConfig.session.messages.some((m) => m.role === "user")).toBe(true);
-    })
+    }).pipe(Effect.provide(BunServices.layer))
   );
 
   it.effect("Test 11: approvalMode all with denied gate blocks all tools", () =>
@@ -300,7 +301,7 @@ describe("agent integration", () => {
       expect(shellResult.isError).toBe(true);
       if (!readResult) throw new Error("Expected readResult");
       expect(readResult.isError).toBe(true);
-    })
+    }).pipe(Effect.provide(BunServices.layer))
   );
 
   it.effect("Test 12: approval granted allows dangerous tool", () =>
@@ -323,7 +324,7 @@ describe("agent integration", () => {
 
       if (!shellResult) throw new Error("Expected shellResult");
       expect(shellResult.isError).toBe(false);
-    })
+    }).pipe(Effect.provide(BunServices.layer))
   );
 
   it.effect("Test 13: askUserTool in non-interactive mode fails", () =>
@@ -347,6 +348,6 @@ describe("agent integration", () => {
       if (!askResult) throw new Error("Expected askResult");
       expect(askResult.isError).toBe(true);
       expect(askResult.result).toContain("non-interactive");
-    })
+    }).pipe(Effect.provide(BunServices.layer))
   );
 });

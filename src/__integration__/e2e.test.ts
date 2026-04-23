@@ -9,9 +9,9 @@ import {
   type TurnResponse
 } from "./helpers.ts";
 import { SessionRepo } from "../session.ts";
-import { layer as bunServicesLayer } from "@effect/platform-bun/BunServices";
+import { BunServices } from "@effect/platform-bun";
 
-const testLayer = SessionRepo.layer.pipe(Layer.provide(bunServicesLayer));
+const testLayer = SessionRepo.layer.pipe(Layer.provide(BunServices.layer));
 
 describe("e2e", () => {
   it.effect("Test 1: Agent with mock LLM produces output events", () =>
@@ -37,7 +37,7 @@ describe("e2e", () => {
 
       expect(textDeltas.length >= 1).toBe(true);
       expect(finishes.length >= 1).toBe(true);
-    })
+    }).pipe(Effect.provide(BunServices.layer))
   );
 
   it.effect("Test 2: Session repo can list sessions", () =>
@@ -69,7 +69,7 @@ describe("e2e", () => {
       yield* runAgent("test prompt", agentConfig, Layer.merge(mockLLMLayer, layer));
 
       expect(agentConfig.session.messages.length >= 2).toBe(true);
-    })
+    }).pipe(Effect.provide(BunServices.layer))
   );
 
   it.effect("Test 4: Multiple tool calls in sequence", () =>
@@ -93,6 +93,6 @@ describe("e2e", () => {
 
       expect(calls["read"]).toEqual([{ filePath: "/a.txt" }]);
       expect(calls["write"]).toEqual([{ filePath: "/b.txt", content: "test" }]);
-    })
+    }).pipe(Effect.provide(BunServices.layer))
   );
 });

@@ -5,24 +5,24 @@
 Plain `it()` creates a synchronous test that captures the `Effect` value but never executes it — the test appears to pass but nothing actually runs. `it.effect` properly executes the Effect within the test runtime.
 
 ```ts
-import { expect } from "vitest"
+import { expect } from "@effect/vitest";
 
 // WRONG — Effect is never executed, test falsely passes:
 it("should do something", () => {
   const result = Effect.gen(function* () {
-    const x = yield* someEffect
-    expect(x).toBe(42)
+    const x = yield* someEffect;
+    expect(x).toBe(42);
   })
   // This returns an Effect but it never runs!
-})
+});
 
 // CORRECT — Effect is properly executed:
 it.effect("should do something", () =>
   Effect.gen(function* () {
-    const x = yield* someEffect
-    expect(x).toBe(42)
+    const x = yield* someEffect;
+    expect(x).toBe(42);
   })
-)
+);
 ```
 
 **Rules:**

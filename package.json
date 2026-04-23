@@ -11,7 +11,15 @@
     "format-fix": "bun oxfmt --write",
     "test": "bun --bun vitest",
     "coverage": "bun vitest --coverage",
-    "prepare": "effect-language-service patch"
+    "prepare": "husky; effect-language-service patch"
+  },
+  "lint-staged": {
+    "*.{ts}": [
+      "bun oxfmt --write",
+      "bun --bun oxlint --disable-nested-config --fix",
+      "bash -c 'bun run typecheck'",
+      "bash -c 'bun run test --run'"
+    ]
   },
   "dependencies": {
     "@effect/ai-anthropic": "^4.0.0-beta.50",
@@ -27,6 +35,8 @@
     "@oxlint/plugins": "^1.60.0",
     "@types/bun": "latest",
     "@vitest/coverage-v8": "^4.1.5",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
     "oxfmt": "^0.45.0",
     "oxlint": "^1.60.0",
     "vitest": "^4.0.0"

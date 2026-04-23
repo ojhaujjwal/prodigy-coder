@@ -26,6 +26,24 @@ export const MyToolkit = Toolkit.make(
 
 export type MyToolkit = typeof MyToolkit;
 
+const withLogging =
+  <P, C, A, E, R>(toolName: string, handler: (params: P, context: C) => Effect.Effect<A, E, R>) =>
+  (params: P, context: C): Effect.Effect<A, E, R> =>
+    Effect.gen(function* () {
+      yield* Effect.logDebug(`Tool call: ${toolName}(${JSON.stringify(params)})`);
+      const result = yield* handler(params, context);
+      const resultStr = typeof result === "string" ? result.slice(0, 200) : JSON.stringify(result).slice(0, 200);
+      yield* Effect.logDebug(`Tool result: ${toolName} -> ${resultStr}...`);
+      return result;
+    }).pipe(
+      Effect.catch((error: E) =>
+        Effect.gen(function* () {
+          yield* Effect.logError(`Tool error: ${toolName} -> ${error}`);
+          return yield* Effect.fail(error);
+        })
+      )
+    );
+
 export const withApproval =
   <P, C, A, E, R>(
     toolName: string,
@@ -35,14 +53,15 @@ export const withApproval =
   (params: P, context: C): Effect.Effect<A, E | AiError.AiError, R> =>
     Effect.gen(function* () {
       if (!needsApproval(toolName, config.approvalMode)) {
-        return yield* handler(params, context);
+        return yield* withLogging(toolName, handler)(params, context);
       }
       const gate = yield* ApprovalGate;
       const approved = yield* gate.approve(toolName, params);
       if (!approved) {
+        yield* Effect.logDebug(`Tool approval denied: ${toolName}`);
         return yield* approvalDeniedError(toolName);
       }
-      return yield* handler(params, context);
+      return yield* withLogging(toolName, handler)(params, context);
     }).pipe(Effect.provide(makeApprovalGateLayerFromConfig(config)));
 
 export const makeToolkitLayer = (config: {

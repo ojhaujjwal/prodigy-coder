@@ -4,18 +4,14 @@ import { Console, Effect, Layer, Option, Schema } from "effect";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import { AppConfig, loadConfig, maskConfig } from "./config.ts";
 import { SessionRepo, createSession, loadSession } from "./session.ts";
-import { createFormatter, type OutputEvent } from "./output.ts";
+import { createFormatter } from "./output.ts";
 import { runAgent as runAgentLoop } from "./agent.ts";
 import type { AgentConfig } from "./agent.ts";
 import { makeToolkitLayer } from "./tools/index.ts";
 import { buildProviderLayer } from "./provider.ts";
-import * as AiError from "effect/unstable/ai/AiError";
+import { makeFileLoggerLayer } from "./logger.ts";
 
-const runAgent = (
-  prompt: string,
-  sessionId: Option.Option<string>,
-  config: import("./config.ts").ConfigData
-): Effect.Effect<OutputEvent[], AiError.AiError | Error> => {
+const runAgent = (prompt: string, sessionId: Option.Option<string>, config: import("./config.ts").ConfigData) => {
   const sessionEffect = Option.match(sessionId, {
     onNone: () => createSession(config.systemPrompt),
     onSome: (id) => loadSession(id).pipe(Effect.orDie)
@@ -180,6 +176,8 @@ export const app = Command.make("prodigy", {}).pipe(
 
 const cli = Command.run(app, {
   version: "0.0.1"
-}).pipe(Effect.provide(BunServices.layer));
+}).pipe(
+  Effect.provide(Layer.mergeAll(BunServices.layer, makeFileLoggerLayer().pipe(Layer.provide(BunServices.layer))))
+);
 
 BunRuntime.runMain(cli);
