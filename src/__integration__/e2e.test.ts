@@ -289,9 +289,7 @@ describe("e2e", () => {
       const toolMsg = toolMessages[toolMessages.length - 1];
       expect(Array.isArray(toolMsg.content)).toBe(true);
       if (Array.isArray(toolMsg.content)) {
-        const hasToolResult = toolMsg.content.some(
-          (part) => part.type === "tool-result" && part.name === "read"
-        );
+        const hasToolResult = toolMsg.content.some((part) => part.type === "tool-result" && part.name === "read");
         expect(hasToolResult).toBe(true);
       }
 

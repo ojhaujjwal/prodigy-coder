@@ -6,7 +6,7 @@ import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import type { Session, Message, MessagePart } from "./session.ts";
 import type { ConfigData } from "./config.ts";
 import type { OutputEvent } from "./output.ts";
-import { MyToolkit } from "./tools/index.ts";
+import { AgenticToolkit } from "./tools/index.ts";
 import { makeApprovalGateLayer } from "./approval-gate.ts";
 
 export interface AgentConfig {
@@ -22,21 +22,26 @@ const messageToEncoded = (msg: Message): Prompt.MessageEncoded => {
     if (typeof msg.content === "string") {
       return { role: "user", content: [{ type: "text", text: msg.content }] };
     }
-    return { role: "user", content: msg.content as Prompt.UserMessageEncoded["content"] };
+    const textParts = msg.content.filter((p): p is { type: "text"; text: string } => p.type === "text");
+    return { role: "user", content: textParts };
   }
   if (msg.role === "tool") {
-    return { role: "tool", content: msg.content as Prompt.ToolMessageEncoded["content"] };
+    const toolResultParts = msg.content.filter(
+      (p): p is { type: "tool-result"; id: string; name: string; isFailure: boolean; result: unknown } =>
+        p.type === "tool-result"
+    );
+    return { role: "tool", content: toolResultParts };
   }
   if (typeof msg.content === "string") {
     return { role: "assistant", content: [{ type: "text", text: msg.content }] };
   }
-  return { role: "assistant", content: msg.content as Prompt.AssistantMessageEncoded["content"] };
+  return { role: "assistant", content: msg.content };
 };
 
 export const runAgent = (
   promptText: string,
   agentConfig: AgentConfig,
-  providerLayer: Layer.Layer<LanguageModel.LanguageModel | Tool.HandlersFor<typeof MyToolkit.tools>>
+  providerLayer: Layer.Layer<LanguageModel.LanguageModel | Tool.HandlersFor<typeof AgenticToolkit.tools>>
 ) =>
   Effect.gen(function* () {
     const { session, config } = agentConfig;
@@ -60,7 +65,7 @@ export const runAgent = (
 
       const llmStream = LanguageModel.streamText({
         prompt: promptMessages,
-        toolkit: MyToolkit
+        toolkit: AgenticToolkit
       });
 
       const turnOutputEvents: OutputEvent[] = [];
