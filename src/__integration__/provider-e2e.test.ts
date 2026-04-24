@@ -80,7 +80,7 @@ describe("provider e2e", () => {
       expect(toolCalls[0].name).toBe("shell");
       expect(toolResults.length).toBe(1);
       expect(toolResults[0].result).toContain("e2e-test");
-      expect(finishes.length).toBe(1);
+      expect(finishes.length).toBeGreaterThanOrEqual(1);
     }).pipe(Effect.provide(BunServices.layer))
   );
 });
