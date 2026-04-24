@@ -3,7 +3,7 @@ import * as Prompt from "effect/unstable/ai/Prompt";
 import { Effect, Layer, Stream } from "effect";
 import { Tool } from "effect/unstable/ai";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
-import type { Session, Message, MessagePart } from "./session.ts";
+import type { Session, Message, TextPart, ToolCallPart, ToolResultPart } from "./session.ts";
 import type { ConfigData } from "./config.ts";
 import type { OutputEvent } from "./output.ts";
 import { AgenticToolkit } from "./tools/index.ts";
@@ -15,27 +15,16 @@ export interface AgentConfig {
 }
 
 const messageToEncoded = (msg: Message): Prompt.MessageEncoded => {
-  if (msg.role === "system") {
-    return { role: "system", content: msg.content };
+  switch (msg.role) {
+    case "system":
+      return { role: "system", content: msg.content };
+    case "user":
+      return { role: "user", content: msg.content };
+    case "assistant":
+      return { role: "assistant", content: msg.content };
+    case "tool":
+      return { role: "tool", content: msg.content };
   }
-  if (msg.role === "user") {
-    if (typeof msg.content === "string") {
-      return { role: "user", content: [{ type: "text", text: msg.content }] };
-    }
-    const textParts = msg.content.filter((p): p is { type: "text"; text: string } => p.type === "text");
-    return { role: "user", content: textParts };
-  }
-  if (msg.role === "tool") {
-    const toolResultParts = msg.content.filter(
-      (p): p is { type: "tool-result"; id: string; name: string; isFailure: boolean; result: unknown } =>
-        p.type === "tool-result"
-    );
-    return { role: "tool", content: toolResultParts };
-  }
-  if (typeof msg.content === "string") {
-    return { role: "assistant", content: [{ type: "text", text: msg.content }] };
-  }
-  return { role: "assistant", content: msg.content };
 };
 
 export const runAgent = (
@@ -69,8 +58,8 @@ export const runAgent = (
       });
 
       const turnOutputEvents: OutputEvent[] = [];
-      const assistantParts: MessagePart[] = [];
-      const toolParts: MessagePart[] = [];
+      const assistantParts: Array<TextPart | ToolCallPart> = [];
+      const toolParts: Array<ToolResultPart> = [];
 
       const approvalGateLayer = makeApprovalGateLayer(config);
       const fullLayer = Layer.mergeAll(approvalGateLayer, FetchHttpClient.layer, providerLayer);

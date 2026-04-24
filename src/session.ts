@@ -1,46 +1,57 @@
 import { Clock, Context, Effect, Layer, Option, Schema } from "effect";
 import * as FileSystem from "effect/FileSystem";
 
-export const MessagePart = Schema.Union([
-  Schema.Struct({
-    type: Schema.Literals(["text"]),
-    text: Schema.String
-  }),
-  Schema.Struct({
-    type: Schema.Literals(["tool-call"]),
-    id: Schema.String,
-    name: Schema.String,
-    params: Schema.Unknown,
-    providerExecuted: Schema.Boolean
-  }),
-  Schema.Struct({
-    type: Schema.Literals(["tool-result"]),
-    id: Schema.String,
-    name: Schema.String,
-    isFailure: Schema.Boolean,
-    result: Schema.Unknown
-  })
-]);
-export type MessagePart = typeof MessagePart.Type;
+export const TextPart = Schema.Struct({
+  type: Schema.Literal("text"),
+  text: Schema.String
+});
+export type TextPart = typeof TextPart.Type;
 
-export const Message = Schema.Union([
-  Schema.Struct({
-    role: Schema.Literals(["system"]),
-    content: Schema.String
-  }),
-  Schema.Struct({
-    role: Schema.Literals(["user"]),
-    content: Schema.Union([Schema.String, Schema.Array(MessagePart)])
-  }),
-  Schema.Struct({
-    role: Schema.Literals(["assistant"]),
-    content: Schema.Union([Schema.String, Schema.Array(MessagePart)])
-  }),
-  Schema.Struct({
-    role: Schema.Literals(["tool"]),
-    content: Schema.Array(MessagePart)
-  })
-]);
+export const ToolCallPart = Schema.Struct({
+  type: Schema.Literal("tool-call"),
+  id: Schema.String,
+  name: Schema.String,
+  params: Schema.Unknown,
+  providerExecuted: Schema.Boolean
+});
+export type ToolCallPart = typeof ToolCallPart.Type;
+
+export const ToolResultPart = Schema.Struct({
+  type: Schema.Literal("tool-result"),
+  id: Schema.String,
+  name: Schema.String,
+  isFailure: Schema.Boolean,
+  result: Schema.Unknown
+});
+export type ToolResultPart = typeof ToolResultPart.Type;
+
+export type MessagePart = TextPart | ToolCallPart | ToolResultPart;
+
+export const SystemMessage = Schema.Struct({
+  role: Schema.Literal("system"),
+  content: Schema.String
+});
+export type SystemMessage = typeof SystemMessage.Type;
+
+export const UserMessage = Schema.Struct({
+  role: Schema.Literal("user"),
+  content: Schema.Union([Schema.String, Schema.Array(TextPart)])
+});
+export type UserMessage = typeof UserMessage.Type;
+
+export const AssistantMessage = Schema.Struct({
+  role: Schema.Literal("assistant"),
+  content: Schema.Union([Schema.String, Schema.Array(Schema.Union([TextPart, ToolCallPart]))])
+});
+export type AssistantMessage = typeof AssistantMessage.Type;
+
+export const ToolMessage = Schema.Struct({
+  role: Schema.Literal("tool"),
+  content: Schema.Array(ToolResultPart)
+});
+export type ToolMessage = typeof ToolMessage.Type;
+
+export const Message = Schema.Union([SystemMessage, UserMessage, AssistantMessage, ToolMessage]);
 export type Message = typeof Message.Type;
 
 export const SessionSchema = Schema.Struct({
