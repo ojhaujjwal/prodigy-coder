@@ -1,5 +1,4 @@
 import * as LanguageModel from "effect/unstable/ai/LanguageModel";
-import * as Prompt from "effect/unstable/ai/Prompt";
 import { Effect, Layer, Stream } from "effect";
 import { Tool } from "effect/unstable/ai";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
@@ -13,19 +12,6 @@ export interface AgentConfig {
   readonly session: Session;
   readonly config: ConfigData;
 }
-
-const messageToEncoded = (msg: Message): Prompt.MessageEncoded => {
-  switch (msg.role) {
-    case "system":
-      return { role: "system", content: msg.content };
-    case "user":
-      return { role: "user", content: msg.content };
-    case "assistant":
-      return { role: "assistant", content: msg.content };
-    case "tool":
-      return { role: "tool", content: msg.content };
-  }
-};
 
 export const runAgent = (
   promptText: string,
@@ -50,10 +36,8 @@ export const runAgent = (
     while (!finished && turnCount < config.maxTurns) {
       turnCount++;
 
-      const promptMessages: Prompt.MessageEncoded[] = messages.map(messageToEncoded);
-
       const llmStream = LanguageModel.streamText({
-        prompt: promptMessages,
+        prompt: messages,
         toolkit: AgenticToolkit
       });
 
