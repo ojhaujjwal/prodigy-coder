@@ -3,10 +3,10 @@ import * as Prompt from "effect/unstable/ai/Prompt";
 import { Effect, Layer, Stream } from "effect";
 import { Tool } from "effect/unstable/ai";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
-import type { Session, Message } from "./session.ts";
+import type { Session, Message, MessagePart } from "./session.ts";
 import type { ConfigData } from "./config.ts";
 import type { OutputEvent } from "./output.ts";
-import { MyToolkit } from "./tools/index.ts";
+import { AgenticToolkit } from "./tools/index.ts";
 import { makeApprovalGateLayer } from "./approval-gate.ts";
 
 export interface AgentConfig {
@@ -19,15 +19,29 @@ const messageToEncoded = (msg: Message): Prompt.MessageEncoded => {
     return { role: "system", content: msg.content };
   }
   if (msg.role === "user") {
-    return { role: "user", content: [{ type: "text", text: msg.content }] };
+    if (typeof msg.content === "string") {
+      return { role: "user", content: [{ type: "text", text: msg.content }] };
+    }
+    const textParts = msg.content.filter((p): p is { type: "text"; text: string } => p.type === "text");
+    return { role: "user", content: textParts };
   }
-  return { role: "assistant", content: [{ type: "text", text: msg.content }] };
+  if (msg.role === "tool") {
+    const toolResultParts = msg.content.filter(
+      (p): p is { type: "tool-result"; id: string; name: string; isFailure: boolean; result: unknown } =>
+        p.type === "tool-result"
+    );
+    return { role: "tool", content: toolResultParts };
+  }
+  if (typeof msg.content === "string") {
+    return { role: "assistant", content: [{ type: "text", text: msg.content }] };
+  }
+  return { role: "assistant", content: msg.content };
 };
 
 export const runAgent = (
   promptText: string,
   agentConfig: AgentConfig,
-  providerLayer: Layer.Layer<LanguageModel.LanguageModel | Tool.HandlersFor<typeof MyToolkit.tools>>
+  providerLayer: Layer.Layer<LanguageModel.LanguageModel | Tool.HandlersFor<typeof AgenticToolkit.tools>>
 ) =>
   Effect.gen(function* () {
     const { session, config } = agentConfig;
@@ -51,10 +65,12 @@ export const runAgent = (
 
       const llmStream = LanguageModel.streamText({
         prompt: promptMessages,
-        toolkit: MyToolkit
+        toolkit: AgenticToolkit
       });
 
       const turnOutputEvents: OutputEvent[] = [];
+      const assistantParts: MessagePart[] = [];
+      const toolParts: MessagePart[] = [];
 
       const approvalGateLayer = makeApprovalGateLayer(config);
       const fullLayer = Layer.mergeAll(approvalGateLayer, FetchHttpClient.layer, providerLayer);
@@ -69,6 +85,13 @@ export const runAgent = (
               return Effect.void;
             case "tool-call": {
               turnOutputEvents.push({ type: "tool-call", id: part.id, name: part.name, params: part.params });
+              assistantParts.push({
+                type: "tool-call",
+                id: part.id,
+                name: part.name,
+                params: part.params,
+                providerExecuted: false
+              });
               return Effect.logDebug(`LLM tool call: ${part.name}(${JSON.stringify(part.params)})`);
             }
             case "tool-result": {
@@ -90,6 +113,13 @@ export const runAgent = (
                 result: resultStr,
                 isError: part.isFailure
               });
+              toolParts.push({
+                type: "tool-result",
+                id: part.id,
+                name: part.name,
+                isFailure: part.isFailure,
+                result: part.encodedResult
+              });
               return Effect.logDebug(`Tool result: ${part.name} -> ${resultStr.slice(0, 200)}...`);
             }
             case "finish":
@@ -105,18 +135,27 @@ export const runAgent = (
 
       outputEvents.push(...turnOutputEvents);
 
-      const toolResults = turnOutputEvents.filter((e) => e.type === "tool-result");
-      for (const toolResult of toolResults) {
-        if (toolResult.type === "tool-result") {
-          messages.push({
-            role: "assistant",
-            content: ""
-          });
-          messages.push({
-            role: "assistant",
-            content: `[tool result: ${toolResult.name}] ${toolResult.result}`
-          });
+      const textParts = turnOutputEvents
+        .filter((e) => e.type === "text-delta")
+        .map((e) => (e.type === "text-delta" ? e.delta : ""))
+        .join("");
+
+      if (assistantParts.length > 0) {
+        if (textParts.length > 0) {
+          assistantParts.unshift({ type: "text", text: textParts });
         }
+        messages.push({ role: "assistant", content: assistantParts });
+      } else if (textParts.length > 0) {
+        messages.push({ role: "assistant", content: textParts });
+      }
+
+      if (toolParts.length > 0) {
+        messages.push({ role: "tool", content: toolParts });
+      }
+
+      const hasToolCalls = turnOutputEvents.some((e) => e.type === "tool-call");
+      if (hasToolCalls) {
+        finished = false;
       }
     }
 

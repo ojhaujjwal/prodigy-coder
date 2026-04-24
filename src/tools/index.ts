@@ -13,7 +13,7 @@ import { ApprovalGate, DefaultApprovalGateLayer, approvalDeniedError } from "../
 import { needsApproval } from "../approval.ts";
 import type { ApprovalMode } from "../config.ts";
 
-export const MyToolkit = Toolkit.make(
+export const AgenticToolkit = Toolkit.make(
   ShellTool,
   ReadTool,
   WriteTool,
@@ -24,7 +24,7 @@ export const MyToolkit = Toolkit.make(
   AskUserTool
 );
 
-export type MyToolkit = typeof MyToolkit;
+export type AgenticToolkit = typeof AgenticToolkit;
 
 const withLogging =
   <P, C, A, E, R>(toolName: string, handler: (params: P, context: C) => Effect.Effect<A, E, R>) =>
@@ -67,8 +67,8 @@ export const withApproval =
 export const makeToolkitLayer = (config: {
   approvalMode: ApprovalMode;
   nonInteractive: boolean;
-}): Layer.Layer<import("effect/unstable/ai").Tool.HandlersFor<typeof MyToolkit.tools>> =>
-  MyToolkit.toLayer({
+}): Layer.Layer<import("effect/unstable/ai").Tool.HandlersFor<typeof AgenticToolkit.tools>> =>
+  AgenticToolkit.toLayer({
     shell: withApproval("shell", config, shellHandler),
     read: withApproval("read", config, readHandler),
     write: withApproval("write", config, writeHandler),
@@ -100,7 +100,7 @@ const makeApprovalGateLayerFromConfig = (config: {
   );
 };
 
-export const MyToolkitLayer = MyToolkit.toLayer({
+export const AgenticToolkitLayer = AgenticToolkit.toLayer({
   shell: shellHandler,
   read: readHandler,
   write: writeHandler,

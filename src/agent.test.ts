@@ -4,7 +4,7 @@ import * as LanguageModel from "effect/unstable/ai/LanguageModel";
 import * as Response from "effect/unstable/ai/Response";
 import * as AiError from "effect/unstable/ai/AiError";
 import { runAgent, type AgentConfig } from "../src/agent.ts";
-import { MyToolkit } from "../src/tools/index.ts";
+import { AgenticToolkit } from "../src/tools/index.ts";
 
 const mockLanguageModelLayer = Layer.effect(
   LanguageModel.LanguageModel,
@@ -17,7 +17,7 @@ const mockLanguageModelLayer = Layer.effect(
   })
 );
 
-const mockToolkitLayer = MyToolkit.toLayer({
+const mockToolkitLayer = AgenticToolkit.toLayer({
   shell: () => Effect.succeed(""),
   read: () => Effect.succeed(""),
   write: () => Effect.succeed(""),

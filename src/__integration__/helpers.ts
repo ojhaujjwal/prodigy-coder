@@ -10,7 +10,7 @@ import * as HttpServerResponse from "effect/unstable/http/HttpServerResponse";
 import * as BunHttpServer from "@effect/platform-bun/BunHttpServer";
 import type { ConfigData } from "../config.ts";
 import type { Session, Message } from "../session.ts";
-import { MyToolkit, withApproval } from "../tools/index.ts";
+import { AgenticToolkit, withApproval } from "../tools/index.ts";
 
 export type MockPart =
   | { type: "text-delta"; delta: string }
@@ -75,7 +75,7 @@ export const createMockLLMLayer = (
 };
 
 export interface StubToolkit {
-  layer: Layer.Layer<Tool.HandlersFor<typeof MyToolkit.tools>>;
+  layer: Layer.Layer<Tool.HandlersFor<typeof AgenticToolkit.tools>>;
   calls: Record<string, unknown[]>;
 }
 
@@ -108,7 +108,7 @@ export const createStubToolkit = (
 
   const toolConfig = config ?? { approvalMode: "none" as const, nonInteractive: false };
 
-  const layer = MyToolkit.toLayer({
+  const layer = AgenticToolkit.toLayer({
     shell: withApproval("shell", toolConfig, makeHandler("shell", "stub shell result")),
     read: withApproval("read", toolConfig, makeHandler("read", "stub read result")),
     write: withApproval("write", toolConfig, makeHandler("write", "stub write result")),

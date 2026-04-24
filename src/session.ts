@@ -1,10 +1,46 @@
 import { Clock, Context, Effect, Layer, Option, Schema } from "effect";
 import * as FileSystem from "effect/FileSystem";
 
-export const Message = Schema.Struct({
-  role: Schema.Literals(["system", "user", "assistant"]),
-  content: Schema.String
-});
+export const MessagePart = Schema.Union([
+  Schema.Struct({
+    type: Schema.Literals(["text"]),
+    text: Schema.String
+  }),
+  Schema.Struct({
+    type: Schema.Literals(["tool-call"]),
+    id: Schema.String,
+    name: Schema.String,
+    params: Schema.Unknown,
+    providerExecuted: Schema.Boolean
+  }),
+  Schema.Struct({
+    type: Schema.Literals(["tool-result"]),
+    id: Schema.String,
+    name: Schema.String,
+    isFailure: Schema.Boolean,
+    result: Schema.Unknown
+  })
+]);
+export type MessagePart = typeof MessagePart.Type;
+
+export const Message = Schema.Union([
+  Schema.Struct({
+    role: Schema.Literals(["system"]),
+    content: Schema.String
+  }),
+  Schema.Struct({
+    role: Schema.Literals(["user"]),
+    content: Schema.Union([Schema.String, Schema.Array(MessagePart)])
+  }),
+  Schema.Struct({
+    role: Schema.Literals(["assistant"]),
+    content: Schema.Union([Schema.String, Schema.Array(MessagePart)])
+  }),
+  Schema.Struct({
+    role: Schema.Literals(["tool"]),
+    content: Schema.Array(MessagePart)
+  })
+]);
 export type Message = typeof Message.Type;
 
 export const SessionSchema = Schema.Struct({
@@ -15,7 +51,7 @@ export const SessionSchema = Schema.Struct({
 });
 export type Session = {
   readonly id: string;
-  messages: Array<{ readonly role: "system" | "user" | "assistant"; readonly content: string }>;
+  messages: Array<Message>;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 };
