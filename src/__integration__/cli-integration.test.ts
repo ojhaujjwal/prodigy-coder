@@ -14,9 +14,11 @@ const testConfigProvider = ConfigProvider.fromUnknown({
   PRODIGY_CODER_API_KEY: "test-key"
 });
 
+const TEST_SESSION_DIR = ".prodigy-coder/test-sessions";
+
 const testLayer = Layer.merge(
   TestConsole.layer,
-  Layer.merge(ConfigProvider.layerAdd(testConfigProvider, { asPrimary: true }), SessionRepo.layer)
+  Layer.merge(ConfigProvider.layerAdd(testConfigProvider, { asPrimary: true }), SessionRepo.layer(TEST_SESSION_DIR))
 );
 
 const combinedLayer = Layer.merge(bunServicesLayer, testLayer).pipe(Layer.provide(bunServicesLayer));
@@ -24,9 +26,9 @@ const combinedLayer = Layer.merge(bunServicesLayer, testLayer).pipe(Layer.provid
 const cleanupSessions = () =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
-    const exists = yield* fs.exists(".prodigy-coder/sessions");
+    const exists = yield* fs.exists(TEST_SESSION_DIR);
     if (exists) {
-      yield* fs.remove(".prodigy-coder/sessions", { recursive: true });
+      yield* fs.remove(TEST_SESSION_DIR, { recursive: true });
     }
   });
 

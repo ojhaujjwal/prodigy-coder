@@ -4,14 +4,16 @@ import * as FileSystem from "effect/FileSystem";
 import { SessionRepo } from "./session.ts";
 import { layer as bunServicesLayer } from "@effect/platform-bun/BunServices";
 
-const testLayer = SessionRepo.layer.pipe(Layer.provideMerge(bunServicesLayer));
+const TEST_SESSION_DIR = "/tmp/.prodigy-coder/test-sessions";
+
+const testLayer = SessionRepo.layer(TEST_SESSION_DIR).pipe(Layer.provideMerge(bunServicesLayer));
 
 const cleanupSessions = () =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
-    const exists = yield* fs.exists(".prodigy-coder/sessions");
+    const exists = yield* fs.exists(TEST_SESSION_DIR);
     if (exists) {
-      yield* fs.remove(".prodigy-coder/sessions", { recursive: true });
+      yield* fs.remove(TEST_SESSION_DIR, { recursive: true });
     }
   });
 
@@ -164,7 +166,7 @@ describe("session", () => {
         yield* repo.save(session);
 
         const fs = yield* FileSystem.FileSystem;
-        yield* fs.writeFileString(`.prodigy-coder/sessions/${session.id}.json`, "not valid json");
+        yield* fs.writeFileString(`${TEST_SESSION_DIR}/${session.id}.json`, "not valid json");
 
         yield* repo.load(session.id);
       }).pipe(
@@ -186,7 +188,7 @@ describe("session", () => {
         yield* repo.save(session1);
 
         const fs = yield* FileSystem.FileSystem;
-        yield* fs.writeFileString(".prodigy-coder/sessions/corrupted.json", "not valid json");
+        yield* fs.writeFileString(`${TEST_SESSION_DIR}/corrupted.json`, "not valid json");
 
         const session2 = yield* repo.create();
         yield* repo.save(session2);

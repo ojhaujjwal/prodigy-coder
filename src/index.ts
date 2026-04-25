@@ -31,7 +31,7 @@ const runAgent = (prompt: string, sessionId: Option.Option<string>, config: impo
     const outputEvents = yield* runAgentLoop(prompt, agentConfig, providerLayer);
     yield* saveSession(session);
     return outputEvents;
-  }).pipe(Effect.provide(SessionRepo.layer.pipe(Layer.provide(BunServices.layer))));
+  });
 };
 
 const promptArg = Argument.string("prompt").pipe(Argument.optional, Argument.withDescription("The prompt to process"));
@@ -139,11 +139,7 @@ const mainCommand = Command.make(
         yield* formatter(event);
       }
     }).pipe(
-      Effect.provide(
-        (Option.getOrElse(config, () => "") ? loadConfig(Option.getOrElse(config, () => "")) : loadConfig()).pipe(
-          Layer.merge(SessionRepo.layer)
-        )
-      )
+      Effect.provide(Option.getOrElse(config, () => "") ? loadConfig(Option.getOrElse(config, () => "")) : loadConfig())
     )
 ).pipe(Command.withDescription("Run the AI coder"));
 
@@ -161,7 +157,7 @@ const listSessionsCommand = Command.make("list", {}, () =>
         );
       }
     }
-  }).pipe(Effect.provide(SessionRepo.layer))
+  })
 ).pipe(Command.withDescription("List all sessions"));
 
 const deleteSessionArg = Argument.string("id").pipe(Argument.withDescription("Session ID to delete"));
@@ -171,7 +167,7 @@ const deleteSessionCommand = Command.make("delete", { id: deleteSessionArg }, ({
     const repo = yield* SessionRepo;
     yield* repo.delete(id);
     yield* Console.log(`Deleted session ${id}`);
-  }).pipe(Effect.provide(SessionRepo.layer))
+  })
 ).pipe(Command.withDescription("Delete a session"));
 
 const sessionCommand = Command.make("session", {}, () => Effect.void).pipe(
@@ -201,7 +197,13 @@ export const app = Command.make("prodigy", {}).pipe(
 const cli = Command.run(app, {
   version: "0.0.1"
 }).pipe(
-  Effect.provide(Layer.mergeAll(BunServices.layer, makeFileLoggerLayer().pipe(Layer.provide(BunServices.layer))))
+  Effect.provide(
+    Layer.mergeAll(
+      BunServices.layer,
+      makeFileLoggerLayer().pipe(Layer.provide(BunServices.layer)),
+      SessionRepo.layer(".prodigy-coder/sessions").pipe(Layer.provide(BunServices.layer))
+    )
+  )
 );
 
 BunRuntime.runMain(cli);

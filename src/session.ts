@@ -67,8 +67,6 @@ export type Session = {
   readonly updatedAt: Date;
 };
 
-const SESSION_DIR: string = ".prodigy-coder/sessions";
-
 class SessionRepo extends Context.Service<
   SessionRepo,
   {
@@ -79,100 +77,101 @@ class SessionRepo extends Context.Service<
     readonly delete: (id: string) => Effect.Effect<void, unknown, never>;
   }
 >()("SessionRepo") {
-  static readonly layer = Layer.effect(
-    SessionRepo,
-    Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      const clock = yield* Clock.Clock;
+  static readonly layer = (sessionDir: string) =>
+    Layer.effect(
+      SessionRepo,
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const clock = yield* Clock.Clock;
 
-      const ensureDir = Effect.gen(function* () {
-        const exists = yield* fs.exists(SESSION_DIR);
-        if (!exists) {
-          yield* fs.makeDirectory(SESSION_DIR, { recursive: true });
-        }
-      });
-
-      const sessionPath = (id: string) => `${SESSION_DIR}/${id}.json`;
-
-      const generateId = (): string => {
-        const chars = "0123456789abcdefghijklmnopqrstuvwxyz";
-        const bytes = new Uint8Array(8);
-        crypto.getRandomValues(bytes);
-        let id = "";
-        for (let i = 0; i < 8; i++) {
-          id += chars[bytes[i] % 36];
-        }
-        return id;
-      };
-
-      const create = (systemPrompt?: string) =>
-        Effect.gen(function* () {
-          yield* ensureDir.pipe(Effect.orDie);
-          const now = yield* clock.currentTimeMillis;
-          const nowDate = new Date(now);
-
-          let id = generateId();
-          let attempts = 0;
-          while ((yield* fs.exists(sessionPath(id)).pipe(Effect.orDie)) && attempts < 10) {
-            id = generateId();
-            attempts++;
+        const ensureDir = Effect.gen(function* () {
+          const exists = yield* fs.exists(sessionDir);
+          if (!exists) {
+            yield* fs.makeDirectory(sessionDir, { recursive: true });
           }
-
-          const messages: Message[] = systemPrompt ? [{ role: "system", content: systemPrompt }] : [];
-
-          return {
-            id,
-            messages,
-            createdAt: nowDate,
-            updatedAt: nowDate
-          };
         });
 
-      const save = Effect.fnUntraced(function* (session: Session) {
-        const now = yield* clock.currentTimeMillis;
-        const updated = { ...session, updatedAt: new Date(now) };
-        const json = Schema.encodeUnknownSync(Schema.fromJsonString(SessionSchema))(updated);
-        yield* fs.writeFileString(sessionPath(session.id), json);
-      });
+        const sessionPath = (id: string) => `${sessionDir}/${id}.json`;
 
-      const load = Effect.fnUntraced(function* (id: string) {
-        const content = yield* fs.readFileString(sessionPath(id));
-        return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(SessionSchema))(content);
-      });
-
-      const list = Effect.fnUntraced(function* () {
-        yield* ensureDir;
-        const entries = yield* fs.readDirectory(SESSION_DIR);
-        const jsonFiles = entries.filter((f) => f.endsWith(".json"));
-
-        const sessions: { id: string; createdAt: Date; updatedAt: Date }[] = [];
-
-        for (const entry of jsonFiles) {
-          const id = entry.replace(".json", "");
-          const result = yield* load(id).pipe(Effect.option);
-          if (Option.isSome(result)) {
-            sessions.push({
-              id: result.value.id,
-              createdAt: result.value.createdAt,
-              updatedAt: result.value.updatedAt
-            });
+        const generateId = (): string => {
+          const chars = "0123456789abcdefghijklmnopqrstuvwxyz";
+          const bytes = new Uint8Array(8);
+          crypto.getRandomValues(bytes);
+          let id = "";
+          for (let i = 0; i < 8; i++) {
+            id += chars[bytes[i] % 36];
           }
-        }
+          return id;
+        };
 
-        return sessions.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
-      });
+        const create = (systemPrompt?: string) =>
+          Effect.gen(function* () {
+            yield* ensureDir.pipe(Effect.orDie);
+            const now = yield* clock.currentTimeMillis;
+            const nowDate = new Date(now);
 
-      const deleteSession = Effect.fnUntraced(function* (id: string) {
-        const path = sessionPath(id);
-        const exists = yield* fs.exists(path);
-        if (exists) {
-          yield* fs.remove(path);
-        }
-      });
+            let id = generateId();
+            let attempts = 0;
+            while ((yield* fs.exists(sessionPath(id)).pipe(Effect.orDie)) && attempts < 10) {
+              id = generateId();
+              attempts++;
+            }
 
-      return { create, save, load, list, delete: deleteSession };
-    })
-  );
+            const messages: Message[] = systemPrompt ? [{ role: "system", content: systemPrompt }] : [];
+
+            return {
+              id,
+              messages,
+              createdAt: nowDate,
+              updatedAt: nowDate
+            };
+          });
+
+        const save = Effect.fnUntraced(function* (session: Session) {
+          const now = yield* clock.currentTimeMillis;
+          const updated = { ...session, updatedAt: new Date(now) };
+          const json = Schema.encodeUnknownSync(Schema.fromJsonString(SessionSchema))(updated);
+          yield* fs.writeFileString(sessionPath(session.id), json);
+        });
+
+        const load = Effect.fnUntraced(function* (id: string) {
+          const content = yield* fs.readFileString(sessionPath(id));
+          return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(SessionSchema))(content);
+        });
+
+        const list = Effect.fnUntraced(function* () {
+          yield* ensureDir;
+          const entries = yield* fs.readDirectory(sessionDir);
+          const jsonFiles = entries.filter((f) => f.endsWith(".json"));
+
+          const sessions: { id: string; createdAt: Date; updatedAt: Date }[] = [];
+
+          for (const entry of jsonFiles) {
+            const id = entry.replace(".json", "");
+            const result = yield* load(id).pipe(Effect.option);
+            if (Option.isSome(result)) {
+              sessions.push({
+                id: result.value.id,
+                createdAt: result.value.createdAt,
+                updatedAt: result.value.updatedAt
+              });
+            }
+          }
+
+          return sessions.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+        });
+
+        const deleteSession = Effect.fnUntraced(function* (id: string) {
+          const path = sessionPath(id);
+          const exists = yield* fs.exists(path);
+          if (exists) {
+            yield* fs.remove(path);
+          }
+        });
+
+        return { create, save, load, list, delete: deleteSession };
+      })
+    );
 }
 
 export const createSession = (systemPrompt?: string) =>
