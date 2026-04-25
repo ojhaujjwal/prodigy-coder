@@ -174,17 +174,4 @@ class SessionRepo extends Context.Service<
     );
 }
 
-export const createSession = (systemPrompt?: string) =>
-  Effect.service(SessionRepo).pipe(Effect.flatMap((repo) => repo.create(systemPrompt)));
-
-export const saveSession = (session: Session) =>
-  Effect.service(SessionRepo).pipe(Effect.flatMap((repo) => repo.save(session)));
-
-export const loadSession = (id: string) => Effect.service(SessionRepo).pipe(Effect.flatMap((repo) => repo.load(id)));
-
-export const listSessions = () => Effect.service(SessionRepo).pipe(Effect.flatMap((repo) => repo.list()));
-
-export const deleteSession = (id: string) =>
-  Effect.service(SessionRepo).pipe(Effect.flatMap((repo) => repo.delete(id)));
-
 export { SessionRepo };

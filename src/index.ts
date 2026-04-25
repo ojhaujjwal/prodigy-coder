@@ -3,7 +3,7 @@ import { Argument, Command, Flag } from "effect/unstable/cli";
 import { Config, Console, Effect, Layer, Option, Schema } from "effect";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import { AppConfig, loadConfig, maskConfig, type ConfigData } from "./config.ts";
-import { SessionRepo, createSession, loadSession, saveSession } from "./session.ts";
+import { SessionRepo } from "./session.ts";
 import { createFormatter } from "./output.ts";
 import { runAgent as runAgentLoop } from "./agent.ts";
 import type { AgentConfig } from "./agent.ts";
@@ -12,12 +12,14 @@ import { buildProviderLayer } from "./provider.ts";
 import { makeFileLoggerLayer } from "./logger.ts";
 
 const runAgent = (prompt: string, sessionId: Option.Option<string>, config: import("./config.ts").ConfigData) => {
-  const sessionEffect = Option.match(sessionId, {
-    onNone: () => createSession(config.systemPrompt),
-    onSome: (id) => loadSession(id).pipe(Effect.orDie)
-  });
-
   return Effect.gen(function* () {
+    const sessionRepo = yield* SessionRepo;
+
+    const sessionEffect = Option.match(sessionId, {
+      onNone: () => sessionRepo.create(config.systemPrompt),
+      onSome: (id) => sessionRepo.load(id).pipe(Effect.orDie)
+    });
+
     const session = yield* sessionEffect;
 
     yield* Console.error(`Session: ${session.id}  (export PRODIGY_SESSION_ID=${session.id} to continue)`);
@@ -29,7 +31,7 @@ const runAgent = (prompt: string, sessionId: Option.Option<string>, config: impo
     ).pipe(Layer.provide(FetchHttpClient.layer));
 
     const outputEvents = yield* runAgentLoop(prompt, agentConfig, providerLayer);
-    yield* saveSession(session);
+    yield* sessionRepo.save(session);
     return outputEvents;
   });
 };

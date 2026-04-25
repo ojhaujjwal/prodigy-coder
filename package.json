@@ -4,7 +4,7 @@
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
-    "ci": "bun run lint && bun run typecheck && bun run test",
+    "ci": "bun run lint && bun run typecheck && bun run test --run",
     "typecheck": "tsc --noEmit",
     "lint": "bun --bun oxlint --disable-nested-config",
     "lint-fix": "bun --bun oxlint --disable-nested-config --fix",
