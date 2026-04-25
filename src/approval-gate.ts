@@ -29,14 +29,14 @@ export const makeApprovalGateLayer = (config: ConfigData): Layer.Layer<ApprovalG
     ApprovalGate,
     Effect.sync(() => {
       const approve = (toolName: string, params: unknown): Effect.Effect<boolean, never, never> => {
-        if (config.nonInteractive) {
-          return Effect.succeed(false);
-        }
         if (config.approvalMode === "none") {
           return Effect.succeed(true);
         }
         if (!needsApproval(toolName, config.approvalMode)) {
           return Effect.succeed(true);
+        }
+        if (config.nonInteractive) {
+          return Effect.succeed(false);
         }
         return Prompt.run(
           Prompt.confirm({

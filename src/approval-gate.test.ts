@@ -77,7 +77,7 @@ describe("approval-gate", () => {
     }).pipe(
       Effect.provide(
         Layer.merge(
-          makeApprovalGateLayer(createConfig({ approvalMode: "none", nonInteractive: true })),
+          makeApprovalGateLayer(createConfig({ approvalMode: "dangerous", nonInteractive: true })),
           BunServices.layer
         )
       )
