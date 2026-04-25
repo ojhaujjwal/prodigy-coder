@@ -1,9 +1,9 @@
 import { BunRuntime, BunServices } from "@effect/platform-bun";
 import { Argument, Command, Flag } from "effect/unstable/cli";
-import { Console, Effect, Layer, Option, Schema } from "effect";
+import { Config, Console, Effect, Layer, Option, Schema } from "effect";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import { AppConfig, loadConfig, maskConfig, type ConfigData } from "./config.ts";
-import { SessionRepo, createSession, loadSession } from "./session.ts";
+import { SessionRepo, createSession, loadSession, saveSession } from "./session.ts";
 import { createFormatter } from "./output.ts";
 import { runAgent as runAgentLoop } from "./agent.ts";
 import type { AgentConfig } from "./agent.ts";
@@ -20,13 +20,17 @@ const runAgent = (prompt: string, sessionId: Option.Option<string>, config: impo
   return Effect.gen(function* () {
     const session = yield* sessionEffect;
 
+    yield* Console.error(`Session: ${session.id}  (export PRODIGY_SESSION_ID=${session.id} to continue)`);
+
     const agentConfig: AgentConfig = { session, config };
     const providerLayer = Layer.merge(
       buildProviderLayer(config.provider),
       makeToolkitLayer({ approvalMode: config.approvalMode, nonInteractive: config.nonInteractive ?? false })
     ).pipe(Layer.provide(FetchHttpClient.layer));
 
-    return yield* runAgentLoop(prompt, agentConfig, providerLayer);
+    const outputEvents = yield* runAgentLoop(prompt, agentConfig, providerLayer);
+    yield* saveSession(session);
+    return outputEvents;
   }).pipe(Effect.provide(SessionRepo.layer.pipe(Layer.provide(BunServices.layer))));
 };
 
@@ -44,6 +48,12 @@ const sessionFlag = Flag.string("session").pipe(
   Flag.withAlias("s"),
   Flag.withDescription("Session ID to load"),
   Flag.optional
+);
+
+const continueFlag = Flag.boolean("continue").pipe(
+  Flag.withAlias("c"),
+  Flag.withDescription("Continue previous session (reads PRODIGY_SESSION_ID env var, or starts new if not set)"),
+  Flag.withDefault(false)
 );
 
 const modelFlag = Flag.string("model").pipe(Flag.withAlias("m"), Flag.withDescription("Model name"), Flag.optional);
@@ -77,6 +87,7 @@ const mainCommand = Command.make(
     print: printFlag,
     outputFormat: outputFormatFlag,
     session: sessionFlag,
+    continue: continueFlag,
     model: modelFlag,
     maxTurns: maxTurnsFlag,
     approvalMode: approvalModeFlag,
@@ -84,10 +95,23 @@ const mainCommand = Command.make(
     config: configFlag,
     nonInteractive: nonInteractiveFlag
   },
-  ({ prompt, outputFormat, session, model, maxTurns, approvalMode, systemPrompt, nonInteractive, config }) =>
+  ({
+    prompt,
+    outputFormat,
+    session,
+    continue: cont,
+    model,
+    maxTurns,
+    approvalMode,
+    systemPrompt,
+    nonInteractive,
+    config
+  }) =>
     Effect.gen(function* () {
       const appConfig = yield* AppConfig;
-      const sessionId = session;
+
+      const envSessionId = cont ? yield* Config.option(Config.string("PRODIGY_SESSION_ID")) : Option.none<string>();
+      const sessionId = Option.orElse(session, () => envSessionId);
 
       const promptText = Option.getOrElse(prompt, () => "");
       if (!promptText) {

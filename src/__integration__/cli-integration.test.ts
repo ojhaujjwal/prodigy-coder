@@ -81,4 +81,50 @@ describe("CLI integration", () => {
       expect(logs.some((log) => String(log).includes("No prompt provided"))).toBe(true);
     }).pipe(Effect.provide(combinedLayer))
   );
+
+  it.effect("main command accepts --continue flag", () =>
+    Effect.gen(function* () {
+      yield* runApp(["prodigy", "--continue"]);
+      const logs = yield* TestConsole.logLines;
+      expect(logs.some((log) => String(log).includes("No prompt provided"))).toBe(true);
+    }).pipe(Effect.provide(combinedLayer))
+  );
+
+  it.effect("main command accepts --continue with --session", () =>
+    Effect.gen(function* () {
+      yield* runApp(["prodigy", "--continue", "--session", "abc123"]);
+      const logs = yield* TestConsole.logLines;
+      expect(logs.some((log) => String(log).includes("No prompt provided"))).toBe(true);
+    }).pipe(Effect.provide(combinedLayer))
+  );
+
+  it.effect("session save and load roundtrip persists messages", () =>
+    Effect.gen(function* () {
+      const repo = yield* SessionRepo;
+      yield* cleanupSessions();
+
+      const session1 = yield* repo.create("system prompt");
+      session1.messages.push({ role: "user", content: "hello" });
+      session1.messages.push({ role: "assistant", content: "hi there" });
+      yield* repo.save(session1);
+
+      const loaded = yield* repo.load(session1.id);
+      expect(loaded.id).toBe(session1.id);
+      expect(loaded.messages.length).toBe(3);
+      expect(loaded.messages[1].role).toBe("user");
+      expect(loaded.messages[1].content).toBe("hello");
+      expect(loaded.messages[2].role).toBe("assistant");
+      expect(loaded.messages[2].content).toBe("hi there");
+
+      session1.messages.push({ role: "user", content: "how are you?" });
+      yield* repo.save(session1);
+
+      const loaded2 = yield* repo.load(session1.id);
+      expect(loaded2.messages.length).toBe(4);
+      expect(loaded2.messages[3].role).toBe("user");
+      expect(loaded2.messages[3].content).toBe("how are you?");
+
+      yield* cleanupSessions();
+    }).pipe(Effect.provide(combinedLayer))
+  );
 });

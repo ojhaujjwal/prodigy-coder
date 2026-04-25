@@ -11,7 +11,7 @@
     "format": "bun oxfmt --check",
     "format-fix": "bun oxfmt --write",
     "test": "bun --bun vitest",
-    "coverage": "bun vitest --coverage",
+    "coverage": "bun --bun vitest --coverage",
     "prepare": "husky; effect-language-service patch"
   },
   "dependencies": {

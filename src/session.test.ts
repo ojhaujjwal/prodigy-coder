@@ -17,17 +17,31 @@ const cleanupSessions = () =>
 
 describe("session", () => {
   describe("createSession", () => {
-    it.effect("returns session with valid UUID and empty messages", () =>
+    it.effect("returns session with 8-char base-36 ID and empty messages", () =>
       Effect.gen(function* () {
         yield* cleanupSessions();
         const repo = yield* SessionRepo;
         const session = yield* repo.create();
 
         expect(typeof session.id).toBe("string");
-        expect(session.id.length > 0).toBe(true);
+        expect(session.id.length).toBe(8);
+        expect(/^[0-9a-z]{8}$/.test(session.id)).toBe(true);
         expect(session.messages.length === 0).toBe(true);
         expect(session.createdAt instanceof Date).toBe(true);
         expect(session.updatedAt instanceof Date).toBe(true);
+      }).pipe(Effect.provide(testLayer))
+    );
+
+    it.effect("generates unique IDs for multiple sessions", () =>
+      Effect.gen(function* () {
+        yield* cleanupSessions();
+        const repo = yield* SessionRepo;
+        const ids = new Set<string>();
+        for (let i = 0; i < 20; i++) {
+          const session = yield* repo.create();
+          ids.add(session.id);
+        }
+        expect(ids.size).toBe(20);
       }).pipe(Effect.provide(testLayer))
     );
 

@@ -94,12 +94,29 @@ class SessionRepo extends Context.Service<
 
       const sessionPath = (id: string) => `${SESSION_DIR}/${id}.json`;
 
+      const generateId = (): string => {
+        const chars = "0123456789abcdefghijklmnopqrstuvwxyz";
+        const bytes = new Uint8Array(8);
+        crypto.getRandomValues(bytes);
+        let id = "";
+        for (let i = 0; i < 8; i++) {
+          id += chars[bytes[i] % 36];
+        }
+        return id;
+      };
+
       const create = (systemPrompt?: string) =>
         Effect.gen(function* () {
           yield* ensureDir.pipe(Effect.orDie);
-          const id = crypto.randomUUID();
           const now = yield* clock.currentTimeMillis;
           const nowDate = new Date(now);
+
+          let id = generateId();
+          let attempts = 0;
+          while ((yield* fs.exists(sessionPath(id)).pipe(Effect.orDie)) && attempts < 10) {
+            id = generateId();
+            attempts++;
+          }
 
           const messages: Message[] = systemPrompt ? [{ role: "system", content: systemPrompt }] : [];
 
