@@ -1,7 +1,8 @@
 import * as LanguageModel from "effect/unstable/ai/LanguageModel";
-import { Effect, Layer, Stream } from "effect";
+import { Effect, Layer, Option, Stream } from "effect";
 import { Tool } from "effect/unstable/ai";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
+import * as Response from "effect/unstable/ai/Response";
 import type { Session, Message, TextPart, ToolCallPart, ToolResultPart } from "./session.ts";
 import type { ConfigData } from "./config.ts";
 import type { OutputEvent } from "./output.ts";
@@ -12,6 +13,41 @@ export interface AgentConfig {
   readonly session: Session;
   readonly config: ConfigData;
 }
+
+const formatToolResult = (encodedResult: unknown): string => {
+  if (Array.isArray(encodedResult)) {
+    return encodedResult.join("\n");
+  } else if (typeof encodedResult === "string") {
+    return encodedResult;
+  } else {
+    return JSON.stringify(encodedResult);
+  }
+};
+
+const streamPartToOutputEvent = (part: Response.AnyPart): Option.Option<OutputEvent> => {
+  switch (part.type) {
+    case "text-delta":
+      return Option.some({ type: "text-delta", delta: part.delta });
+    case "tool-call":
+      return Option.some({ type: "tool-call", id: part.id, name: part.name, params: part.params });
+    case "tool-result": {
+      if (part.preliminary) {
+        return Option.none();
+      }
+      return Option.some({
+        type: "tool-result",
+        id: part.id,
+        name: part.name,
+        result: formatToolResult(part.encodedResult),
+        isError: part.isFailure
+      });
+    }
+    case "finish":
+      return Option.some({ type: "finish", text: part.reason || "" });
+    default:
+      return Option.none();
+  }
+};
 
 export const runAgent = (
   promptText: string,
@@ -52,12 +88,15 @@ export const runAgent = (
 
       yield* llmStream.pipe(
         Stream.runForEach((part) => {
+          const maybeEvent = streamPartToOutputEvent(part);
+          if (Option.isSome(maybeEvent)) {
+            turnOutputEvents.push(maybeEvent.value);
+          }
+
           switch (part.type) {
             case "text-delta":
-              turnOutputEvents.push({ type: "text-delta", delta: part.delta });
               return Effect.void;
             case "tool-call": {
-              turnOutputEvents.push({ type: "tool-call", id: part.id, name: part.name, params: part.params });
               assistantParts.push({
                 type: "tool-call",
                 id: part.id,
@@ -71,21 +110,6 @@ export const runAgent = (
               if (part.preliminary) {
                 return Effect.void;
               }
-              let resultStr: string;
-              if (Array.isArray(part.encodedResult)) {
-                resultStr = part.encodedResult.join("\n");
-              } else if (typeof part.encodedResult === "string") {
-                resultStr = part.encodedResult;
-              } else {
-                resultStr = JSON.stringify(part.encodedResult);
-              }
-              turnOutputEvents.push({
-                type: "tool-result",
-                id: part.id,
-                name: part.name,
-                result: resultStr,
-                isError: part.isFailure
-              });
               toolParts.push({
                 type: "tool-result",
                 id: part.id,
@@ -93,11 +117,12 @@ export const runAgent = (
                 isFailure: part.isFailure,
                 result: part.encodedResult
               });
-              return Effect.logDebug(`Tool result: ${part.name} -> ${resultStr.slice(0, 200)}...`);
+              return Effect.logDebug(
+                `Tool result: ${part.name} -> ${formatToolResult(part.encodedResult).slice(0, 200)}...`
+              );
             }
             case "finish":
               finished = true;
-              turnOutputEvents.push({ type: "finish", text: part.reason || "" });
               return Effect.logDebug(`LLM finish: reason=${part.reason}`);
             default:
               return Effect.logDebug(`Unknown stream part: ${part.type}`);
