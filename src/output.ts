@@ -35,7 +35,13 @@ export const ErrorEvent = Schema.Struct({
 });
 export type ErrorEvent = typeof ErrorEvent.Type;
 
-export const OutputEvent = Schema.Union([TextDelta, ToolCall, ToolResult, Finish, ErrorEvent]);
+export const SessionInfo = Schema.Struct({
+  type: Schema.Literal("session-info"),
+  sessionId: Schema.String
+});
+export type SessionInfo = typeof SessionInfo.Type;
+
+export const OutputEvent = Schema.Union([TextDelta, ToolCall, ToolResult, Finish, ErrorEvent, SessionInfo]);
 export type OutputEvent = typeof OutputEvent.Type;
 
 export type OutputFormatter = (event: OutputEvent) => Effect.Effect<void>;
@@ -64,6 +70,8 @@ export const makeTextFormatter =
         return Console.log("\n" + event.text + "\n");
       case "error":
         return Console.log(textColor(31, `Error: ${event.message}`));
+      case "session-info":
+        return Console.log(`\n---\nSession: ${event.sessionId}\nexport PRODIGY_SESSION_ID=${event.sessionId}\n---\n`);
     }
   };
 
@@ -87,6 +95,13 @@ export const makeStreamJsonFormatter =
         break;
       case "error":
         output = { type: "error", message: event.message };
+        break;
+      case "session-info":
+        output = {
+          type: "session",
+          session_id: event.sessionId,
+          export_command: `export PRODIGY_SESSION_ID=${event.sessionId}`
+        };
         break;
     }
 

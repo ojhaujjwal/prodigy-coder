@@ -73,6 +73,20 @@ describe("output", () => {
         yield* formatter(event);
       }).pipe(Effect.provide(testLayer))
     );
+
+    it.effect("text formatter processes session-info event", () =>
+      Effect.gen(function* () {
+        const formatter = makeTextFormatter();
+        const event: OutputEvent = { type: "session-info", sessionId: "abc-123" };
+        yield* formatter(event);
+        const logs = yield* TestConsole.logLines;
+        expect(logs.length).toBe(1);
+        const log = String(logs[0]);
+        expect(log).toContain("abc-123");
+        expect(log).toContain("export PRODIGY_SESSION_ID=abc-123");
+        expect(log).toContain("---");
+      }).pipe(Effect.provide(testLayer))
+    );
   });
 
   describe("stream-json formatter", () => {
@@ -156,6 +170,20 @@ describe("output", () => {
       }).pipe(Effect.provide(testLayer))
     );
 
+    it.effect("stream-json formatter outputs valid LDJSON for session-info", () =>
+      Effect.gen(function* () {
+        const formatter = makeStreamJsonFormatter();
+        const event: OutputEvent = { type: "session-info", sessionId: "abc-123" };
+        yield* formatter(event);
+        const outputs = yield* TestConsole.logLines;
+        expect(outputs.length).toBe(1);
+        const parsed = parseJson(String(outputs[0]));
+        expect(parsed.type).toBe("session");
+        expect(parsed.session_id).toBe("abc-123");
+        expect(parsed.export_command).toBe("export PRODIGY_SESSION_ID=abc-123");
+      }).pipe(Effect.provide(testLayer))
+    );
+
     it.effect("all event types are handled without errors", () =>
       Effect.gen(function* () {
         const formatter = makeStreamJsonFormatter();
@@ -164,7 +192,8 @@ describe("output", () => {
           { type: "tool-call", id: "1", name: "test", params: {} },
           { type: "tool-result", id: "1", name: "test", result: "ok", isError: false },
           { type: "finish", text: "done" },
-          { type: "error", message: "err" }
+          { type: "error", message: "err" },
+          { type: "session-info", sessionId: "sess-1" }
         ];
         for (const event of events) {
           yield* formatter(event);

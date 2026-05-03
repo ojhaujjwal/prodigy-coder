@@ -22,8 +22,6 @@ const runAgent = (prompt: string, sessionId: Option.Option<string>, config: impo
 
     const session = yield* sessionEffect;
 
-    yield* Console.error(`Session: ${session.id}  (export PRODIGY_SESSION_ID=${session.id} to continue)`);
-
     const agentConfig: AgentConfig = { session, config };
     const providerLayer = Layer.merge(
       buildProviderLayer(config.provider),
@@ -32,7 +30,7 @@ const runAgent = (prompt: string, sessionId: Option.Option<string>, config: impo
 
     const outputEvents = yield* runAgentLoop(prompt, agentConfig, providerLayer);
     yield* sessionRepo.save(session);
-    return outputEvents;
+    return { outputEvents, sessionId: session.id };
   });
 };
 
@@ -135,11 +133,13 @@ const mainCommand = Command.make(
 
       const format: "text" | "stream-json" = outputFormat satisfies "text" | "stream-json";
       const formatter = createFormatter(format);
-      const outputEvents = yield* runAgent(promptText, sessionId, finalConfig);
+      const { outputEvents, sessionId: resultingSessionId } = yield* runAgent(promptText, sessionId, finalConfig);
 
       for (const event of outputEvents) {
         yield* formatter(event);
       }
+
+      yield* formatter({ type: "session-info", sessionId: resultingSessionId });
     }).pipe(
       Effect.provide(Option.getOrElse(config, () => "") ? loadConfig(Option.getOrElse(config, () => "")) : loadConfig())
     )
