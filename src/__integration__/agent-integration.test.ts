@@ -6,14 +6,14 @@ import { Tool } from "effect/unstable/ai";
 import { BunServices } from "@effect/platform-bun";
 import { runAgent, type AgentConfig } from "../agent.ts";
 import { buildProviderLayer } from "../provider.ts";
-import { AgenticToolkitLayer, makeToolkitLayer, AgenticToolkit } from "../tools/index.ts";
+import { AgenticToolkitLayer, makeToolkitLayer, AgenticToolkit, EmptySkillsRepoLayer } from "../tools/index.ts";
 import type { OutputEvent } from "../output.ts";
 import type { Message } from "../session.ts";
 import { createMockOpenAIServer, createTestConfig, createTestSession, type MockOpenAIResponse } from "./helpers.ts";
 import type { ConfigData } from "../config.ts";
 
 const runAgentWithMockServer = (
-  prompt: string,
+  userMessages: readonly string[],
   responses: MockOpenAIResponse[][],
   configOverrides?: Partial<ConfigData>,
   toolkitLayer?: Layer.Layer<Tool.HandlersFor<typeof AgenticToolkit.tools>>
@@ -39,7 +39,7 @@ const runAgentWithMockServer = (
       Layer.provide(FetchHttpClient.layer)
     );
 
-    const result = yield* runAgent(prompt, agentConfig, providerLayer);
+    const result = yield* runAgent(userMessages, agentConfig, providerLayer).pipe(Effect.provide(EmptySkillsRepoLayer));
 
     return { result, server, session };
   });
@@ -47,9 +47,10 @@ const runAgentWithMockServer = (
 describe("e2e", () => {
   it.effect("responds with text from mock OpenAI server", () =>
     Effect.gen(function* () {
-      const { result } = yield* runAgentWithMockServer("hello", [
-        [{ type: "text", content: "Hello from mock server" }]
-      ]);
+      const { result } = yield* runAgentWithMockServer(
+        ["hello"],
+        [[{ type: "text", content: "Hello from mock server" }]]
+      );
 
       const textDeltas = result.filter((e: OutputEvent) => e.type === "text-delta");
       const finishes = result.filter((e: OutputEvent) => e.type === "finish");
@@ -63,10 +64,13 @@ describe("e2e", () => {
 
   it.effect("executes single tool-call then returns text", () =>
     Effect.gen(function* () {
-      const { result } = yield* runAgentWithMockServer("run echo", [
-        [{ type: "tool-call", id: "call-1", name: "shell", arguments: { command: "echo hello-e2e" } }],
-        [{ type: "text", content: "Done" }]
-      ]);
+      const { result } = yield* runAgentWithMockServer(
+        ["run echo"],
+        [
+          [{ type: "tool-call", id: "call-1", name: "shell", arguments: { command: "echo hello-e2e" } }],
+          [{ type: "text", content: "Done" }]
+        ]
+      );
 
       const toolCalls = result.filter((e: OutputEvent) => e.type === "tool-call");
       const toolResults = result.filter((e: OutputEvent) => e.type === "tool-result");
@@ -95,18 +99,21 @@ describe("e2e", () => {
       yield* fs.writeFileString(`${tmpDir}/a.txt`, "content-a");
       yield* fs.writeFileString(`${tmpDir}/b.txt`, "");
 
-      const { result } = yield* runAgentWithMockServer("read and write", [
+      const { result } = yield* runAgentWithMockServer(
+        ["read and write"],
         [
-          { type: "tool-call", id: "call-1", name: "read", arguments: { filePath: `${tmpDir}/a.txt` } },
-          {
-            type: "tool-call",
-            id: "call-2",
-            name: "write",
-            arguments: { filePath: `${tmpDir}/b.txt`, content: "updated" }
-          }
-        ],
-        [{ type: "text", content: "All done" }]
-      ]);
+          [
+            { type: "tool-call", id: "call-1", name: "read", arguments: { filePath: `${tmpDir}/a.txt` } },
+            {
+              type: "tool-call",
+              id: "call-2",
+              name: "write",
+              arguments: { filePath: `${tmpDir}/b.txt`, content: "updated" }
+            }
+          ],
+          [{ type: "text", content: "All done" }]
+        ]
+      );
 
       yield* fs.remove(tmpDir, { recursive: true }).pipe(Effect.catch(() => Effect.void));
 
@@ -131,25 +138,28 @@ describe("e2e", () => {
       yield* fs.writeFileString(`${tmpDir}/src/a.ts`, "const x = 1;");
       yield* fs.writeFileString(`${tmpDir}/src/b.ts`, "const y = 2;");
 
-      const { result } = yield* runAgentWithMockServer("find and read ts files", [
+      const { result } = yield* runAgentWithMockServer(
+        ["find and read ts files"],
         [
-          {
-            type: "tool-call",
-            id: "call-1",
-            name: "glob",
-            arguments: { pattern: "*.ts", path: `${tmpDir}/src` }
-          }
-        ],
-        [
-          {
-            type: "tool-call",
-            id: "call-2",
-            name: "read",
-            arguments: { filePath: `${tmpDir}/src/a.ts` }
-          }
-        ],
-        [{ type: "text", content: "Analysis complete" }]
-      ]);
+          [
+            {
+              type: "tool-call",
+              id: "call-1",
+              name: "glob",
+              arguments: { pattern: "*.ts", path: `${tmpDir}/src` }
+            }
+          ],
+          [
+            {
+              type: "tool-call",
+              id: "call-2",
+              name: "read",
+              arguments: { filePath: `${tmpDir}/src/a.ts` }
+            }
+          ],
+          [{ type: "text", content: "Analysis complete" }]
+        ]
+      );
 
       yield* fs.remove(tmpDir, { recursive: true }).pipe(Effect.catch(() => Effect.void));
 
@@ -167,14 +177,17 @@ describe("e2e", () => {
 
   it.effect("continues loop when turn has both text and tool-calls", () =>
     Effect.gen(function* () {
-      const { result } = yield* runAgentWithMockServer("run commands", [
-        [{ type: "tool-call", id: "call-1", name: "shell", arguments: { command: "echo first" } }],
+      const { result } = yield* runAgentWithMockServer(
+        ["run commands"],
         [
-          { type: "text", content: "Result after tool" },
-          { type: "tool-call", id: "call-2", name: "shell", arguments: { command: "echo second" } }
-        ],
-        [{ type: "text", content: "All complete" }]
-      ]);
+          [{ type: "tool-call", id: "call-1", name: "shell", arguments: { command: "echo first" } }],
+          [
+            { type: "text", content: "Result after tool" },
+            { type: "tool-call", id: "call-2", name: "shell", arguments: { command: "echo second" } }
+          ],
+          [{ type: "text", content: "All complete" }]
+        ]
+      );
 
       const toolCalls = result.filter((e: OutputEvent) => e.type === "tool-call");
       const toolResults = result.filter((e: OutputEvent) => e.type === "tool-result");
@@ -188,10 +201,13 @@ describe("e2e", () => {
 
   it.effect("reports tool execution error", () =>
     Effect.gen(function* () {
-      const { result } = yield* runAgentWithMockServer("read bad file", [
-        [{ type: "tool-call", id: "call-1", name: "read", arguments: { filePath: "/nonexistent/file.txt" } }],
-        [{ type: "text", content: "Failed" }]
-      ]);
+      const { result } = yield* runAgentWithMockServer(
+        ["read bad file"],
+        [
+          [{ type: "tool-call", id: "call-1", name: "read", arguments: { filePath: "/nonexistent/file.txt" } }],
+          [{ type: "text", content: "Failed" }]
+        ]
+      );
 
       const toolResults = result.filter((e: OutputEvent) => e.type === "tool-result");
       expect(toolResults.length).toBe(1);
@@ -202,7 +218,7 @@ describe("e2e", () => {
   it.effect("emits max-turns-exceeded error when loop limit reached", () =>
     Effect.gen(function* () {
       const { result } = yield* runAgentWithMockServer(
-        "infinite loop",
+        ["infinite loop"],
         [[{ type: "tool-call", id: "call-1", name: "shell", arguments: { command: "echo loop" } }]],
         { maxTurns: 1 }
       );
@@ -220,17 +236,20 @@ describe("e2e", () => {
       yield* fs.makeDirectory(tmpDir);
       yield* fs.writeFileString(`${tmpDir}/test.txt`, "file content");
 
-      const { session } = yield* runAgentWithMockServer("read and respond", [
+      const { session } = yield* runAgentWithMockServer(
+        ["read and respond"],
         [
-          {
-            type: "tool-call",
-            id: "call-1",
-            name: "read",
-            arguments: { filePath: `${tmpDir}/test.txt` }
-          }
-        ],
-        [{ type: "text", content: "Done reading" }]
-      ]);
+          [
+            {
+              type: "tool-call",
+              id: "call-1",
+              name: "read",
+              arguments: { filePath: `${tmpDir}/test.txt` }
+            }
+          ],
+          [{ type: "text", content: "Done reading" }]
+        ]
+      );
 
       yield* fs.remove(tmpDir, { recursive: true }).pipe(Effect.catch(() => Effect.void));
 
@@ -255,7 +274,7 @@ describe("e2e", () => {
       yield* fs.writeFileString(`${tmpDir}/safe.txt`, "data");
 
       const { result } = yield* runAgentWithMockServer(
-        "run shell and read",
+        ["run shell and read"],
         [
           [
             { type: "tool-call", id: "call-1", name: "shell", arguments: { command: "ls" } },
@@ -269,7 +288,7 @@ describe("e2e", () => {
           [{ type: "text", content: "Done" }]
         ],
         { approvalMode: "dangerous", nonInteractive: true },
-        makeToolkitLayer({ approvalMode: "dangerous", nonInteractive: true })
+        makeToolkitLayer({ approvalMode: "dangerous", nonInteractive: true, skillsRepoLayer: EmptySkillsRepoLayer })
       );
 
       yield* fs.remove(tmpDir, { recursive: true }).pipe(Effect.catch(() => Effect.void));
@@ -299,7 +318,7 @@ describe("e2e", () => {
       yield* fs.writeFileString(`${tmpDir}/safe.txt`, "data");
 
       const { result } = yield* runAgentWithMockServer(
-        "run shell and read",
+        ["run shell and read"],
         [
           [
             { type: "tool-call", id: "call-1", name: "shell", arguments: { command: "ls" } },
@@ -313,7 +332,7 @@ describe("e2e", () => {
           [{ type: "text", content: "Done" }]
         ],
         { approvalMode: "all", nonInteractive: true },
-        makeToolkitLayer({ approvalMode: "all", nonInteractive: true })
+        makeToolkitLayer({ approvalMode: "all", nonInteractive: true, skillsRepoLayer: EmptySkillsRepoLayer })
       );
 
       yield* fs.remove(tmpDir, { recursive: true }).pipe(Effect.catch(() => Effect.void));
@@ -333,7 +352,7 @@ describe("e2e", () => {
   it.effect("askUserTool fails in non-interactive mode", () =>
     Effect.gen(function* () {
       const { result } = yield* runAgentWithMockServer(
-        "ask user something",
+        ["ask user something"],
         [
           [
             {
@@ -346,7 +365,7 @@ describe("e2e", () => {
           [{ type: "text", content: "Asked" }]
         ],
         { approvalMode: "none", nonInteractive: true },
-        makeToolkitLayer({ approvalMode: "none", nonInteractive: true })
+        makeToolkitLayer({ approvalMode: "none", nonInteractive: true, skillsRepoLayer: EmptySkillsRepoLayer })
       );
 
       const toolResults = result.filter((e: OutputEvent) => e.type === "tool-result");
@@ -372,45 +391,48 @@ describe("e2e", () => {
         "// CLI entry point\nimport { BunRuntime } from '@effect/platform-bun';\n"
       );
 
-      const { result } = yield* runAgentWithMockServer("Update README.md to add one sentence about CLI", [
+      const { result } = yield* runAgentWithMockServer(
+        ["Update README.md to add one sentence about CLI"],
         [
-          {
-            type: "tool-call",
-            id: "call-glob",
-            name: "glob",
-            arguments: { pattern: "README.md", path: tmpDir }
-          }
-        ],
-        [
-          {
-            type: "tool-call",
-            id: "call-read-index",
-            name: "read",
-            arguments: { filePath: `${tmpDir}/src/index.ts` }
-          }
-        ],
-        [
-          {
-            type: "tool-call",
-            id: "call-read-readme",
-            name: "read",
-            arguments: { filePath: `${tmpDir}/README.md` }
-          }
-        ],
-        [
-          {
-            type: "tool-call",
-            id: "call-write",
-            name: "write",
-            arguments: {
-              filePath: `${tmpDir}/README.md`,
-              content:
-                "# Prodigy Coder\n\nInitial content.\n\nThis project is a Coding Agent CLI. Run it with `prodigy <prompt>`.\n"
+          [
+            {
+              type: "tool-call",
+              id: "call-glob",
+              name: "glob",
+              arguments: { pattern: "README.md", path: tmpDir }
             }
-          }
-        ],
-        [{ type: "text", content: "Updated README.md with CLI usage info." }]
-      ]);
+          ],
+          [
+            {
+              type: "tool-call",
+              id: "call-read-index",
+              name: "read",
+              arguments: { filePath: `${tmpDir}/src/index.ts` }
+            }
+          ],
+          [
+            {
+              type: "tool-call",
+              id: "call-read-readme",
+              name: "read",
+              arguments: { filePath: `${tmpDir}/README.md` }
+            }
+          ],
+          [
+            {
+              type: "tool-call",
+              id: "call-write",
+              name: "write",
+              arguments: {
+                filePath: `${tmpDir}/README.md`,
+                content:
+                  "# Prodigy Coder\n\nInitial content.\n\nThis project is a Coding Agent CLI. Run it with `prodigy <prompt>`.\n"
+              }
+            }
+          ],
+          [{ type: "text", content: "Updated README.md with CLI usage info." }]
+        ]
+      );
 
       const updatedContent = yield* fs.readFileString(`${tmpDir}/README.md`);
 
@@ -447,7 +469,7 @@ describe("e2e", () => {
   describe("System Prompt", () => {
     it.effect("prepends AGENTS.md content when no explicit systemPrompt", () =>
       Effect.gen(function* () {
-        const { server } = yield* runAgentWithMockServer("hello", [[{ type: "text", content: "Hi there" }]]);
+        const { server } = yield* runAgentWithMockServer(["hello"], [[{ type: "text", content: "Hi there" }]]);
 
         expect(server.calls.length).toBe(1);
         const requestBody = JSON.stringify(server.calls[0]);
@@ -459,7 +481,7 @@ describe("e2e", () => {
 
     it.effect("prepends both AGENTS.md and explicit systemPrompt when both present", () =>
       Effect.gen(function* () {
-        const { server } = yield* runAgentWithMockServer("hello", [[{ type: "text", content: "Hi there" }]], {
+        const { server } = yield* runAgentWithMockServer(["hello"], [[{ type: "text", content: "Hi there" }]], {
           systemPrompt: "You are a helpful assistant."
         });
 

@@ -10,25 +10,50 @@ import type { AgentConfig } from "./agent.ts";
 import { makeToolkitLayer } from "./tools/index.ts";
 import { buildProviderLayer } from "./provider.ts";
 import { makeFileLoggerLayer } from "./logger.ts";
+import { parseCommand } from "./slash-commands.ts";
+import { discoverSkills, SkillsRepo, formatSkillsIndex, formatSkillContent } from "./skills.ts";
+import type { Skill } from "./skills.ts";
 
-const runAgent = (prompt: string, sessionId: Option.Option<string>, config: import("./config.ts").ConfigData) => {
+const systemPromptBuilder = (skills: Skill[], config: ConfigData) => {
+  const explicitPrompt = config.systemPrompt ?? "";
+  const autoInvokable = skills.filter((s) => !s.disableModelInvocation);
+
+  const skillsIndex = autoInvokable.length > 0 ? formatSkillsIndex(autoInvokable) : "";
+
+  return [skillsIndex, explicitPrompt].filter(Boolean).join("\n\n");
+};
+
+const runAgent = (
+  userMessages: readonly string[],
+  sessionId: Option.Option<string>,
+  config: ConfigData,
+  skills: Skill[]
+) => {
   return Effect.gen(function* () {
     const sessionRepo = yield* SessionRepo;
 
+    const combinedSystemPrompt = systemPromptBuilder(skills, config);
+
     const sessionEffect = Option.match(sessionId, {
-      onNone: () => sessionRepo.create(config.systemPrompt),
+      onNone: () => sessionRepo.create(combinedSystemPrompt),
       onSome: (id) => sessionRepo.load(id).pipe(Effect.orDie)
     });
 
     const session = yield* sessionEffect;
 
-    const agentConfig: AgentConfig = { session, config };
-    const providerLayer = Layer.merge(
+    const agentConfig: AgentConfig = { session, config: { ...config, systemPrompt: combinedSystemPrompt } };
+    const skillsRepoLayer = SkillsRepo.layer(skills);
+    const providerLayer = Layer.mergeAll(
       buildProviderLayer(config.provider),
-      makeToolkitLayer({ approvalMode: config.approvalMode, nonInteractive: config.nonInteractive ?? false })
+      makeToolkitLayer({
+        approvalMode: config.approvalMode,
+        nonInteractive: config.nonInteractive ?? false,
+        skillsRepoLayer
+      }),
+      skillsRepoLayer
     ).pipe(Layer.provide(FetchHttpClient.layer));
 
-    const outputEvents = yield* runAgentLoop(prompt, agentConfig, providerLayer);
+    const outputEvents = yield* runAgentLoop(userMessages, agentConfig, providerLayer);
     yield* sessionRepo.save(session);
     return { outputEvents, sessionId: session.id };
   });
@@ -119,6 +144,26 @@ const mainCommand = Command.make(
         return;
       }
 
+      const skills = yield* discoverSkills(yield* Config.string("HOME"));
+
+      let userMessages: readonly string[];
+      const command = parseCommand(promptText);
+
+      if (command._tag === "SkillPrefixed") {
+        const skill = skills.find((s) => s.name === command.name);
+        if (!skill) {
+          yield* Console.log(`Skill '${command.name}' not found.`);
+          return;
+        }
+        if (!command.prompt) {
+          yield* Console.log("Usage: /skill <name> <prompt> — Load a skill and run the agent.");
+          return;
+        }
+        userMessages = [formatSkillContent(skill), command.prompt];
+      } else {
+        userMessages = [promptText];
+      }
+
       const finalConfig: ConfigData = {
         ...appConfig,
         provider: {
@@ -133,7 +178,12 @@ const mainCommand = Command.make(
 
       const format: "text" | "stream-json" = outputFormat satisfies "text" | "stream-json";
       const formatter = createFormatter(format);
-      const { outputEvents, sessionId: resultingSessionId } = yield* runAgent(promptText, sessionId, finalConfig);
+      const { outputEvents, sessionId: resultingSessionId } = yield* runAgent(
+        userMessages,
+        sessionId,
+        finalConfig,
+        skills
+      );
 
       for (const event of outputEvents) {
         yield* formatter(event);
@@ -203,7 +253,8 @@ const cli = Command.run(app, {
     Layer.mergeAll(
       BunServices.layer,
       makeFileLoggerLayer().pipe(Layer.provide(BunServices.layer)),
-      SessionRepo.layer(".prodigy-coder/sessions").pipe(Layer.provide(BunServices.layer))
+      SessionRepo.layer(".prodigy-coder/sessions").pipe(Layer.provide(BunServices.layer)),
+      SkillsRepo.layer([])
     )
   )
 );

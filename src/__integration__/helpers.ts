@@ -10,7 +10,7 @@ import * as HttpServerResponse from "effect/unstable/http/HttpServerResponse";
 import * as BunHttpServer from "@effect/platform-bun/BunHttpServer";
 import type { ConfigData } from "../config.ts";
 import type { Session, Message } from "../session.ts";
-import { AgenticToolkit, withApproval } from "../tools/index.ts";
+import { AgenticToolkit, withApproval, EmptySkillsRepoLayer } from "../tools/index.ts";
 
 export type MockPart =
   | { type: "text-delta"; delta: string }
@@ -116,8 +116,9 @@ export const createStubToolkit = (
     grep: withApproval("grep", toolConfig, makeHandler("grep", ["stub grep result"])),
     glob: withApproval("glob", toolConfig, makeHandler("glob", ["stub glob result"])),
     webfetch: withApproval("webfetch", toolConfig, makeHandler("webfetch", "stub webfetch result")),
-    ask_user: withApproval("ask_user", toolConfig, makeHandler("ask_user", "stub ask result"))
-  });
+    ask_user: withApproval("ask_user", toolConfig, makeHandler("ask_user", "stub ask result")),
+    load_skill: withApproval("load_skill", toolConfig, makeHandler("load_skill", "stub load_skill result"))
+  }).pipe(Layer.provide(EmptySkillsRepoLayer));
 
   return { layer, calls };
 };

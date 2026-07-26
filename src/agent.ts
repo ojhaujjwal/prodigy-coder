@@ -64,7 +64,7 @@ const streamPartToOutputEvent = (part: Response.AnyPart): Option.Option<OutputEv
 };
 
 export const runAgent = (
-  promptText: string,
+  userMessages: readonly string[],
   agentConfig: AgentConfig,
   providerLayer: Layer.Layer<LanguageModel.LanguageModel | Tool.HandlersFor<typeof AgenticToolkit.tools>>
 ) =>
@@ -84,7 +84,9 @@ export const runAgent = (
       }
     }
 
-    messages.push({ role: "user", content: promptText });
+    for (const msg of userMessages) {
+      messages.push({ role: "user", content: msg });
+    }
 
     const outputEvents: OutputEvent[] = [];
     let turnCount = 0;

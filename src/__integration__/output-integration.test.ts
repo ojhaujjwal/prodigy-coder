@@ -5,6 +5,7 @@ import type { OutputEvent } from "../output.ts";
 import { makeTextFormatter, makeStreamJsonFormatter } from "../output.ts";
 import { createMockLLMLayer, createStubToolkit, createTestConfig, createTestSession } from "./helpers.ts";
 import { BunServices } from "@effect/platform-bun";
+import { EmptySkillsRepoLayer } from "../tools/index.ts";
 
 const runAgentWithMocks = (
   mockResponses: import("./helpers.ts").TurnResponse[],
@@ -21,7 +22,7 @@ const runAgentWithMocks = (
 
   const mockLLMLayer = createMockLLMLayer(mockResponses);
 
-  return runAgent("test prompt", agentConfig, Layer.merge(mockLLMLayer, layer));
+  return runAgent(["test prompt"], agentConfig, Layer.merge(mockLLMLayer, layer));
 };
 
 describe("output integration", () => {
@@ -46,7 +47,7 @@ describe("output integration", () => {
       const finishes = events.filter((e) => e.type === "finish");
       expect(textDeltas.length >= 1).toBe(true);
       expect(finishes.length >= 1).toBe(true);
-    }).pipe(Effect.provide(BunServices.layer))
+    }).pipe(Effect.provide(Layer.merge(BunServices.layer, EmptySkillsRepoLayer)))
   );
 
   it.effect("Test 2: Text formatter through agent", () =>
@@ -67,7 +68,7 @@ describe("output integration", () => {
 
       const textDeltas = events.filter((e) => e.type === "text-delta");
       expect(textDeltas[0].delta).toBe("Hello, world!");
-    }).pipe(Effect.provide(BunServices.layer))
+    }).pipe(Effect.provide(Layer.merge(BunServices.layer, EmptySkillsRepoLayer)))
   );
 
   it.effect("Test 3: All event types produce valid output", () =>

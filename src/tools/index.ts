@@ -9,6 +9,8 @@ import { GrepTool, grepHandler } from "./grep.ts";
 import { GlobTool, globHandler } from "./glob.ts";
 import { WebFetchTool, webfetchHandler } from "./webfetch.ts";
 import { AskUserTool, makeAskUserHandler } from "./askUser.ts";
+import { LoadSkillTool, loadSkillHandler } from "./loadSkill.ts";
+import { SkillsRepo } from "../skills.ts";
 import { ApprovalGate, DefaultApprovalGateLayer, approvalDeniedError } from "../approval-gate.ts";
 import { needsApproval } from "../approval.ts";
 import type { ApprovalMode } from "../config.ts";
@@ -21,7 +23,8 @@ export const AgenticToolkit = Toolkit.make(
   GrepTool,
   GlobTool,
   WebFetchTool,
-  AskUserTool
+  AskUserTool,
+  LoadSkillTool
 );
 
 export type AgenticToolkit = typeof AgenticToolkit;
@@ -67,6 +70,7 @@ export const withApproval =
 export const makeToolkitLayer = (config: {
   approvalMode: ApprovalMode;
   nonInteractive: boolean;
+  skillsRepoLayer: Layer.Layer<SkillsRepo>;
 }): Layer.Layer<import("effect/unstable/ai").Tool.HandlersFor<typeof AgenticToolkit.tools>> =>
   AgenticToolkit.toLayer({
     shell: withApproval("shell", config, shellHandler),
@@ -76,8 +80,11 @@ export const makeToolkitLayer = (config: {
     grep: withApproval("grep", config, grepHandler),
     glob: withApproval("glob", config, globHandler),
     webfetch: withApproval("webfetch", config, webfetchHandler),
-    ask_user: makeAskUserHandler(config.nonInteractive)
-  });
+    ask_user: makeAskUserHandler(config.nonInteractive),
+    load_skill: withLogging("load_skill", loadSkillHandler)
+  }).pipe(Layer.provide(config.skillsRepoLayer));
+
+export const EmptySkillsRepoLayer = SkillsRepo.layer([]);
 
 const makeApprovalGateLayerFromConfig = (config: {
   approvalMode: ApprovalMode;
@@ -108,7 +115,8 @@ export const AgenticToolkitLayer = AgenticToolkit.toLayer({
   grep: grepHandler,
   glob: globHandler,
   webfetch: webfetchHandler,
-  ask_user: makeAskUserHandler(false)
-}).pipe(Layer.provide(DefaultApprovalGateLayer));
+  ask_user: makeAskUserHandler(false),
+  load_skill: loadSkillHandler
+}).pipe(Layer.provide(DefaultApprovalGateLayer), Layer.provide(EmptySkillsRepoLayer));
 
 export { ShellTool, ReadTool, WriteTool, EditTool, GrepTool, GlobTool, WebFetchTool, AskUserTool };

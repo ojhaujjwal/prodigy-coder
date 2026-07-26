@@ -6,6 +6,7 @@ import * as FileSystem from "effect/FileSystem";
 import { layer as bunServicesLayer } from "@effect/platform-bun/BunServices";
 import { app } from "../index.ts";
 import { SessionRepo } from "../session.ts";
+import { EmptySkillsRepoLayer } from "../tools/index.ts";
 
 const runApp = (args: ReadonlyArray<string>) =>
   Command.runWith(app, { version: "0.0.1" })(args).pipe(Effect.provide(bunServicesLayer));
@@ -18,7 +19,11 @@ const TEST_SESSION_DIR = ".prodigy-coder/test-sessions";
 
 const testLayer = Layer.merge(
   TestConsole.layer,
-  Layer.merge(ConfigProvider.layerAdd(testConfigProvider, { asPrimary: true }), SessionRepo.layer(TEST_SESSION_DIR))
+  Layer.mergeAll(
+    ConfigProvider.layerAdd(testConfigProvider, { asPrimary: true }),
+    SessionRepo.layer(TEST_SESSION_DIR),
+    EmptySkillsRepoLayer
+  )
 );
 
 const combinedLayer = Layer.merge(bunServicesLayer, testLayer).pipe(Layer.provide(bunServicesLayer));
