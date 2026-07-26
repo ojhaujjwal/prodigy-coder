@@ -11,8 +11,7 @@ import { WebFetchTool, webfetchHandler } from "./webfetch.ts";
 import { AskUserTool, makeAskUserHandler } from "./askUser.ts";
 import { LoadSkillTool, loadSkillHandler } from "./loadSkill.ts";
 import { SkillsRepo } from "../skills.ts";
-import { ApprovalGate, DefaultApprovalGateLayer, approvalDeniedError } from "../approval-gate.ts";
-import { needsApproval } from "../approval.ts";
+import { createApprovalGate, DefaultApprovalGateLayer, approvalDeniedError } from "../approval-gate.ts";
 import type { ApprovalMode } from "../config.ts";
 
 export const AgenticToolkit = Toolkit.make(
@@ -50,62 +49,39 @@ const withLogging =
 export const withApproval =
   <P, C, A, E, R>(
     toolName: string,
-    config: { approvalMode: ApprovalMode; nonInteractive: boolean },
+    gate: { approve: (toolName: string, params: unknown) => Effect.Effect<boolean, never, never> },
     handler: (params: P, context: C) => Effect.Effect<A, E, R>
   ) =>
   (params: P, context: C): Effect.Effect<A, E | AiError.AiError, R> =>
     Effect.gen(function* () {
-      if (!needsApproval(toolName, config.approvalMode)) {
-        return yield* withLogging(toolName, handler)(params, context);
-      }
-      const gate = yield* ApprovalGate;
       const approved = yield* gate.approve(toolName, params);
       if (!approved) {
         yield* Effect.logDebug(`Tool approval denied: ${toolName}`);
         return yield* approvalDeniedError(toolName);
       }
       return yield* withLogging(toolName, handler)(params, context);
-    }).pipe(Effect.provide(makeApprovalGateLayerFromConfig(config)));
+    });
 
 export const makeToolkitLayer = (config: {
   approvalMode: ApprovalMode;
   nonInteractive: boolean;
   skillsRepoLayer: Layer.Layer<SkillsRepo>;
-}): Layer.Layer<import("effect/unstable/ai").Tool.HandlersFor<typeof AgenticToolkit.tools>> =>
-  AgenticToolkit.toLayer({
-    shell: withApproval("shell", config, shellHandler),
-    read: withApproval("read", config, readHandler),
-    write: withApproval("write", config, writeHandler),
-    edit: withApproval("edit", config, editHandler),
-    grep: withApproval("grep", config, grepHandler),
-    glob: withApproval("glob", config, globHandler),
-    webfetch: withApproval("webfetch", config, webfetchHandler),
+}): Layer.Layer<import("effect/unstable/ai").Tool.HandlersFor<typeof AgenticToolkit.tools>> => {
+  const gate = createApprovalGate({ approvalMode: config.approvalMode, nonInteractive: config.nonInteractive });
+  return AgenticToolkit.toLayer({
+    shell: withApproval("shell", gate, shellHandler),
+    read: withApproval("read", gate, readHandler),
+    write: withApproval("write", gate, writeHandler),
+    edit: withApproval("edit", gate, editHandler),
+    grep: withApproval("grep", gate, grepHandler),
+    glob: withApproval("glob", gate, globHandler),
+    webfetch: withApproval("webfetch", gate, webfetchHandler),
     ask_user: makeAskUserHandler(config.nonInteractive),
     load_skill: withLogging("load_skill", loadSkillHandler)
   }).pipe(Layer.provide(config.skillsRepoLayer));
+};
 
 export const EmptySkillsRepoLayer = SkillsRepo.layer([]);
-
-const makeApprovalGateLayerFromConfig = (config: {
-  approvalMode: ApprovalMode;
-  nonInteractive: boolean;
-}): Layer.Layer<ApprovalGate> => {
-  const approvalMode = config.approvalMode === "none" ? "none" : config.approvalMode;
-  return Layer.succeed(
-    ApprovalGate,
-    ApprovalGate.of({
-      approve: (_toolName: string, _params: unknown) => {
-        if (config.nonInteractive) {
-          return Effect.succeed(false);
-        }
-        if (approvalMode === "none") {
-          return Effect.succeed(true);
-        }
-        return Effect.succeed(true);
-      }
-    })
-  );
-};
 
 export const AgenticToolkitLayer = AgenticToolkit.toLayer({
   shell: shellHandler,

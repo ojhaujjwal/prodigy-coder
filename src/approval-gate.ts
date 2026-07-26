@@ -24,31 +24,39 @@ export const DefaultApprovalGateLayer = Layer.succeed(
   ApprovalGate.of({ approve: () => Effect.succeed(true) })
 );
 
-export const makeApprovalGateLayer = (config: ConfigData): Layer.Layer<ApprovalGate> =>
-  Layer.effect(
-    ApprovalGate,
-    Effect.sync(() => {
-      const approve = (toolName: string, params: unknown): Effect.Effect<boolean, never, never> => {
-        if (config.approvalMode === "none") {
-          return Effect.succeed(true);
-        }
-        if (!needsApproval(toolName, config.approvalMode)) {
-          return Effect.succeed(true);
-        }
-        if (config.nonInteractive) {
-          return Effect.succeed(false);
-        }
-        return Prompt.run(
-          Prompt.confirm({
-            message: `Allow ${toolName}(${JSON.stringify(params)})?`,
-            initial: false
-          })
-        ).pipe(
-          Effect.orElseSucceed(() => false),
-          Effect.provide(BunServices.layer)
-        );
-      };
+export const createApprovalGate = (config: {
+  approvalMode: ConfigData["approvalMode"];
+  nonInteractive: boolean;
+}): typeof ApprovalGate.Service => ({
+  approve: (toolName: string, params: unknown) => {
+    if (config.approvalMode === "none") {
+      return Effect.succeed(true);
+    }
+    if (!needsApproval(toolName, config.approvalMode)) {
+      return Effect.succeed(true);
+    }
+    if (config.nonInteractive) {
+      return Effect.succeed(false);
+    }
+    return Prompt.run(
+      Prompt.confirm({
+        message: `Allow ${toolName}(${JSON.stringify(params)})?`,
+        initial: false
+      })
+    ).pipe(
+      Effect.orElseSucceed(() => false),
+      Effect.provide(BunServices.layer)
+    );
+  }
+});
 
-      return ApprovalGate.of({ approve });
-    })
+export const makeApprovalGateLayer = (config: ConfigData): Layer.Layer<ApprovalGate> =>
+  Layer.succeed(
+    ApprovalGate,
+    ApprovalGate.of(
+      createApprovalGate({
+        approvalMode: config.approvalMode,
+        nonInteractive: config.nonInteractive ?? false
+      })
+    )
   );

@@ -11,6 +11,7 @@ import * as BunHttpServer from "@effect/platform-bun/BunHttpServer";
 import type { ConfigData } from "../config.ts";
 import type { Session, Message } from "../session.ts";
 import { AgenticToolkit, withApproval, EmptySkillsRepoLayer } from "../tools/index.ts";
+import { createApprovalGate } from "../approval-gate.ts";
 
 export type MockPart =
   | { type: "text-delta"; delta: string }
@@ -108,16 +109,18 @@ export const createStubToolkit = (
 
   const toolConfig = config ?? { approvalMode: "none" as const, nonInteractive: false };
 
+  const gate = createApprovalGate(toolConfig);
+
   const layer = AgenticToolkit.toLayer({
-    shell: withApproval("shell", toolConfig, makeHandler("shell", "stub shell result")),
-    read: withApproval("read", toolConfig, makeHandler("read", "stub read result")),
-    write: withApproval("write", toolConfig, makeHandler("write", "stub write result")),
-    edit: withApproval("edit", toolConfig, makeHandler("edit", "stub edit result")),
-    grep: withApproval("grep", toolConfig, makeHandler("grep", ["stub grep result"])),
-    glob: withApproval("glob", toolConfig, makeHandler("glob", ["stub glob result"])),
-    webfetch: withApproval("webfetch", toolConfig, makeHandler("webfetch", "stub webfetch result")),
-    ask_user: withApproval("ask_user", toolConfig, makeHandler("ask_user", "stub ask result")),
-    load_skill: withApproval("load_skill", toolConfig, makeHandler("load_skill", "stub load_skill result"))
+    shell: withApproval("shell", gate, makeHandler("shell", "stub shell result")),
+    read: withApproval("read", gate, makeHandler("read", "stub read result")),
+    write: withApproval("write", gate, makeHandler("write", "stub write result")),
+    edit: withApproval("edit", gate, makeHandler("edit", "stub edit result")),
+    grep: withApproval("grep", gate, makeHandler("grep", ["stub grep result"])),
+    glob: withApproval("glob", gate, makeHandler("glob", ["stub glob result"])),
+    webfetch: withApproval("webfetch", gate, makeHandler("webfetch", "stub webfetch result")),
+    ask_user: withApproval("ask_user", gate, makeHandler("ask_user", "stub ask result")),
+    load_skill: withApproval("load_skill", gate, makeHandler("load_skill", "stub load_skill result"))
   }).pipe(Layer.provide(EmptySkillsRepoLayer));
 
   return { layer, calls };

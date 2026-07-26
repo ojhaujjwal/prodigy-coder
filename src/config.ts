@@ -37,8 +37,6 @@ export const ConfigSchema = Schema.Struct({
 });
 export type ConfigData = typeof ConfigSchema.Type;
 
-export interface Config extends ConfigData {}
-
 const bedrockBaseUrl = (region: string | undefined) =>
   region ? `https://bedrock-mantle.${region}.api.aws/v1` : undefined;
 
