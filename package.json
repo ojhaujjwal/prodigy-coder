@@ -15,16 +15,16 @@
     "prepare": "husky; effect-language-service patch"
   },
   "dependencies": {
-    "@effect/ai-anthropic": "^4.0.0-beta.50",
-    "@effect/ai-openai": "^4.0.0-beta.50",
-    "@effect/ai-openai-compat": "^4.0.0-beta.50",
-    "@effect/ai-openrouter": "^4.0.0-beta.50",
-    "@effect/platform-bun": "^4.0.0-beta.50",
-    "effect": "^4.0.0-beta.50"
+    "@effect/ai-anthropic": "^4.0.0-beta.101",
+    "@effect/ai-openai": "^4.0.0-beta.101",
+    "@effect/ai-openai-compat": "^4.0.0-beta.101",
+    "@effect/ai-openrouter": "^4.0.0-beta.101",
+    "@effect/platform-bun": "^4.0.0-beta.101",
+    "effect": "^4.0.0-beta.101"
   },
   "devDependencies": {
     "@effect/language-service": "^0.85.1",
-    "@effect/vitest": "^4.0.0-beta.49",
+    "@effect/vitest": "^4.0.0-beta.101",
     "@oxlint/plugins": "^1.60.0",
     "@types/bun": "latest",
     "@vitest/coverage-v8": "^4.1.5",

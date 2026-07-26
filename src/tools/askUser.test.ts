@@ -17,6 +17,7 @@ const makeMockTerminalLayer = (inputs: Terminal.UserInput[]): Layer.Layer<Termin
       }
       return Terminal.make({
         columns: Effect.succeed(80),
+        rows: Effect.succeed(24),
         display: () => Effect.void,
         readInput: Effect.succeed(Queue.asDequeue(queue)),
         readLine: Effect.succeed("")
