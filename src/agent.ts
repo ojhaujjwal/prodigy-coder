@@ -2,6 +2,7 @@ import * as LanguageModel from "effect/unstable/ai/LanguageModel";
 import { Effect, Layer, Option, Stream } from "effect";
 import { Tool } from "effect/unstable/ai";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
+import * as FileSystem from "effect/FileSystem";
 import * as Response from "effect/unstable/ai/Response";
 import type { Session, Message, TextPart, ToolCallPart, ToolResultPart } from "./session.ts";
 import type { ConfigData } from "./config.ts";
@@ -23,6 +24,19 @@ const formatToolResult = (encodedResult: unknown): string => {
     return JSON.stringify(encodedResult);
   }
 };
+
+export const DEFAULT_AGENTS_MD = "";
+
+export const loadAgentsMd = (fs: FileSystem.FileSystem, cwd = ".") =>
+  Effect.gen(function* () {
+    const path = `${cwd}/AGENTS.md`;
+    const exists = yield* fs.exists(path);
+    if (!exists) return Option.none();
+    const content = yield* fs.readFileString(path);
+    const trimmed = content.trim();
+    if (!trimmed) return Option.none();
+    return Option.some(trimmed);
+  }).pipe(Effect.catch(() => Effect.succeed(Option.none())));
 
 const streamPartToOutputEvent = (part: Response.AnyPart): Option.Option<OutputEvent> => {
   switch (part.type) {
@@ -59,8 +73,15 @@ export const runAgent = (
 
     const messages: Message[] = [...session.messages];
 
-    if (messages.length === 0 && config.systemPrompt) {
-      messages.push({ role: "system", content: config.systemPrompt });
+    if (messages.length === 0) {
+      const fs = yield* FileSystem.FileSystem;
+      const agentsMdOption = yield* loadAgentsMd(fs);
+      const agentsMd = Option.getOrElse(agentsMdOption, () => DEFAULT_AGENTS_MD);
+      const explicitPrompt = config.systemPrompt ?? "";
+      const combined = [agentsMd, explicitPrompt].filter(Boolean).join("\n\n");
+      if (combined) {
+        messages.push({ role: "system", content: combined });
+      }
     }
 
     messages.push({ role: "user", content: promptText });

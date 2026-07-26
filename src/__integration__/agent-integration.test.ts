@@ -247,19 +247,6 @@ describe("e2e", () => {
     }).pipe(Effect.provide(BunServices.layer))
   );
 
-  it.effect("prepends system prompt to LLM request", () =>
-    Effect.gen(function* () {
-      const { server } = yield* runAgentWithMockServer("hello", [[{ type: "text", content: "Hi there" }]], {
-        systemPrompt: "You are a helpful assistant."
-      });
-
-      expect(server.calls.length).toBe(1);
-      const requestBody = JSON.stringify(server.calls[0]);
-      expect(requestBody).toContain("You are a helpful assistant");
-      expect(requestBody).toContain("system");
-    }).pipe(Effect.provide(BunServices.layer))
-  );
-
   it.effect("approvalMode dangerous: blocks dangerous tool, allows safe tool", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
@@ -456,4 +443,32 @@ describe("e2e", () => {
       expect(updatedContent).toContain("prodigy <prompt>");
     }).pipe(Effect.provide(BunServices.layer))
   );
+
+  describe("System Prompt", () => {
+    it.effect("prepends AGENTS.md content when no explicit systemPrompt", () =>
+      Effect.gen(function* () {
+        const { server } = yield* runAgentWithMockServer("hello", [[{ type: "text", content: "Hi there" }]]);
+
+        expect(server.calls.length).toBe(1);
+        const requestBody = JSON.stringify(server.calls[0]);
+        expect(requestBody).toContain("AI Agentic Coding CLI");
+        expect(requestBody).toContain("system");
+        expect(requestBody).not.toContain("You are a helpful assistant");
+      }).pipe(Effect.provide(BunServices.layer))
+    );
+
+    it.effect("prepends both AGENTS.md and explicit systemPrompt when both present", () =>
+      Effect.gen(function* () {
+        const { server } = yield* runAgentWithMockServer("hello", [[{ type: "text", content: "Hi there" }]], {
+          systemPrompt: "You are a helpful assistant."
+        });
+
+        expect(server.calls.length).toBe(1);
+        const requestBody = JSON.stringify(server.calls[0]);
+        expect(requestBody).toContain("AI Agentic Coding CLI");
+        expect(requestBody).toContain("You are a helpful assistant");
+        expect(requestBody).toContain("system");
+      }).pipe(Effect.provide(BunServices.layer))
+    );
+  });
 });
