@@ -184,7 +184,7 @@ export const runAgent = (
       outputEvents.push({ type: "error", message: "Max turns exceeded" });
     }
 
-    session.messages = messages;
+    session.messages.splice(0, session.messages.length, ...messages);
 
     return outputEvents;
   });

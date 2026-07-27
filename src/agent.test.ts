@@ -1,10 +1,11 @@
 import { describe, it, expect } from "@effect/vitest";
-import { Effect, Layer, Stream } from "effect";
+import { Effect, Layer, Schema, Stream } from "effect";
 import * as LanguageModel from "effect/unstable/ai/LanguageModel";
 import * as Response from "effect/unstable/ai/Response";
 import * as AiError from "effect/unstable/ai/AiError";
 import { runAgent, type AgentConfig } from "../src/agent.ts";
 import { AgenticToolkit, EmptySkillsRepoLayer } from "../src/tools/index.ts";
+import { SessionSchema } from "../src/session.ts";
 
 const mockLanguageModelLayer = Layer.effect(
   LanguageModel.LanguageModel,
@@ -38,12 +39,12 @@ describe("agent", () => {
       model: "gpt-4o"
     };
 
-    const session = {
+    const session = Schema.decodeUnknownSync(SessionSchema)({
       id: "test-session",
       messages: [],
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
 
     const agentConfig: AgentConfig = {
       session,
@@ -66,12 +67,12 @@ describe("agent", () => {
       model: "gpt-4o"
     };
 
-    const session = {
+    const session = Schema.decodeUnknownSync(SessionSchema)({
       id: "test-session",
       messages: [],
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
 
     const agentConfig: AgentConfig = {
       session,

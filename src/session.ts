@@ -1,6 +1,9 @@
 import { Clock, Context, Effect, Layer, Option, Schema } from "effect";
 import * as FileSystem from "effect/FileSystem";
 
+const SessionId = Schema.String.pipe(Schema.brand("SessionId"));
+export type SessionId = typeof SessionId.Type;
+
 export const TextPart = Schema.Struct({
   type: Schema.Literal("text"),
   text: Schema.String
@@ -55,17 +58,13 @@ export const Message = Schema.Union([SystemMessage, UserMessage, AssistantMessag
 export type Message = typeof Message.Type;
 
 export const SessionSchema = Schema.Struct({
-  id: Schema.String,
+  id: SessionId,
   messages: Schema.mutable(Schema.Array(Message)),
   createdAt: Schema.DateFromString,
   updatedAt: Schema.DateFromString
 });
-export type Session = {
-  readonly id: string;
-  messages: Array<Message>;
-  readonly createdAt: Date;
-  readonly updatedAt: Date;
-};
+
+export type Session = typeof SessionSchema.Type;
 
 class SessionRepo extends Context.Service<
   SessionRepo,
@@ -73,7 +72,7 @@ class SessionRepo extends Context.Service<
     readonly create: (systemPrompt?: string) => Effect.Effect<Session, never>;
     readonly save: (session: Session) => Effect.Effect<void, unknown, never>;
     readonly load: (id: string) => Effect.Effect<Session, unknown, never>;
-    readonly list: () => Effect.Effect<ReadonlyArray<{ id: string; createdAt: Date; updatedAt: Date }>, unknown, never>;
+    readonly list: () => Effect.Effect<ReadonlyArray<Pick<Session, "id" | "createdAt" | "updatedAt">>, unknown, never>;
     readonly delete: (id: string) => Effect.Effect<void, unknown, never>;
   }
 >()("SessionRepo") {
@@ -93,7 +92,7 @@ class SessionRepo extends Context.Service<
 
         const sessionPath = (id: string) => `${sessionDir}/${id}.json`;
 
-        const generateId = (): string => {
+        const generateId = (): SessionId => {
           const chars = "0123456789abcdefghijklmnopqrstuvwxyz";
           const bytes = new Uint8Array(8);
           crypto.getRandomValues(bytes);
@@ -101,7 +100,8 @@ class SessionRepo extends Context.Service<
           for (let i = 0; i < 8; i++) {
             id += chars[bytes[i] % 36];
           }
-          return id;
+
+          return SessionId.make(id);
         };
 
         const create = (systemPrompt?: string) =>
@@ -144,7 +144,7 @@ class SessionRepo extends Context.Service<
           const entries = yield* fs.readDirectory(sessionDir);
           const jsonFiles = entries.filter((f) => f.endsWith(".json"));
 
-          const sessions: { id: string; createdAt: Date; updatedAt: Date }[] = [];
+          const sessions: { id: SessionId; createdAt: Date; updatedAt: Date }[] = [];
 
           for (const entry of jsonFiles) {
             const id = entry.replace(".json", "");

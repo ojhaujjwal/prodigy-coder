@@ -7,6 +7,8 @@
     "verbatimModuleSyntax": true,
     "rewriteRelativeImportExtensions": true,
     "strict": true,
+    "noUncheckedIndexedAccess": false,
+    "noFallthroughCasesInSwitch": true,
     "exactOptionalPropertyTypes": true,
     "noUnusedLocals": true,
     "noImplicitOverride": true,

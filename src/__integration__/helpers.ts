@@ -1,4 +1,4 @@
-import { Context, Effect, Layer, Scope, Stream } from "effect";
+import { Context, Effect, Layer, Schema, Scope, Stream } from "effect";
 import * as LanguageModel from "effect/unstable/ai/LanguageModel";
 import * as Response from "effect/unstable/ai/Response";
 import * as AiError from "effect/unstable/ai/AiError";
@@ -9,7 +9,7 @@ import * as HttpServerRequest from "effect/unstable/http/HttpServerRequest";
 import * as HttpServerResponse from "effect/unstable/http/HttpServerResponse";
 import * as BunHttpServer from "@effect/platform-bun/BunHttpServer";
 import type { ConfigData } from "../config.ts";
-import type { Session, Message } from "../session.ts";
+import { SessionSchema, type Session, type Message } from "../session.ts";
 import { AgenticToolkit, withApproval, EmptySkillsRepoLayer } from "../tools/index.ts";
 import { createApprovalGate } from "../approval-gate.ts";
 
@@ -139,12 +139,13 @@ export const createTestConfig = (overrides?: Partial<ConfigData>): ConfigData =>
   ...overrides
 });
 
-export const createTestSession = (messages?: Message[]): Session => ({
-  id: crypto.randomUUID(),
-  messages: messages ?? [],
-  createdAt: new Date(),
-  updatedAt: new Date()
-});
+export const createTestSession = (messages?: Message[]): Session =>
+  Schema.decodeUnknownSync(SessionSchema)({
+    id: crypto.randomUUID(),
+    messages: messages ?? [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  });
 
 export type MockOpenAIResponse =
   | { type: "text"; content: string }

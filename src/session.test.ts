@@ -197,7 +197,7 @@ describe("session", () => {
         const ids = sessions.map((s) => s.id);
         expect(ids.includes(session1.id)).toBe(true);
         expect(ids.includes(session2.id)).toBe(true);
-        expect(ids.includes("corrupted")).toBe(false);
+        expect(ids.some((id) => id === "corrupted")).toBe(false);
         expect(sessions.length).toBe(2);
 
         yield* cleanupSessions();
