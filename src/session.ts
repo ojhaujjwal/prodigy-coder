@@ -66,14 +66,29 @@ export const SessionSchema = Schema.Struct({
 
 export type Session = typeof SessionSchema.Type;
 
+export class SessionNotFound extends Schema.TaggedErrorClass<SessionNotFound>()("SessionNotFound", {
+  id: Schema.String
+}) {}
+
+export class SessionStorageError extends Schema.TaggedErrorClass<SessionStorageError>()("SessionStorageError", {
+  operation: Schema.Literals(["create", "save", "load", "list", "delete"]),
+  id: Schema.optional(Schema.String),
+  cause: Schema.Defect()
+}) {}
+
+export type SessionError = SessionNotFound | SessionStorageError;
+
 class SessionRepo extends Context.Service<
   SessionRepo,
   {
-    readonly create: (systemPrompt?: string) => Effect.Effect<Session, never>;
-    readonly save: (session: Session) => Effect.Effect<void, unknown, never>;
-    readonly load: (id: string) => Effect.Effect<Session, unknown, never>;
-    readonly list: () => Effect.Effect<ReadonlyArray<Pick<Session, "id" | "createdAt" | "updatedAt">>, unknown, never>;
-    readonly delete: (id: string) => Effect.Effect<void, unknown, never>;
+    readonly create: (systemPrompt?: string) => Effect.Effect<Session, SessionStorageError>;
+    readonly save: (session: Session) => Effect.Effect<void, SessionStorageError>;
+    readonly load: (id: string) => Effect.Effect<Session, SessionNotFound | SessionStorageError>;
+    readonly list: () => Effect.Effect<
+      ReadonlyArray<Pick<Session, "id" | "createdAt" | "updatedAt">>,
+      SessionStorageError
+    >;
+    readonly delete: (id: string) => Effect.Effect<void, SessionStorageError>;
   }
 >()("SessionRepo") {
   static readonly layer = (sessionDir: string) =>
@@ -104,15 +119,15 @@ class SessionRepo extends Context.Service<
           return SessionId.make(id);
         };
 
-        const create = (systemPrompt?: string) =>
-          Effect.gen(function* () {
-            yield* ensureDir.pipe(Effect.orDie);
+        const create = Effect.fnUntraced(
+          function* (systemPrompt?: string) {
+            yield* ensureDir;
             const now = yield* clock.currentTimeMillis;
             const nowDate = new Date(now);
 
             let id = generateId();
             let attempts = 0;
-            while ((yield* fs.exists(sessionPath(id)).pipe(Effect.orDie)) && attempts < 10) {
+            while ((yield* fs.exists(sessionPath(id))) && attempts < 10) {
               id = generateId();
               attempts++;
             }
@@ -125,49 +140,75 @@ class SessionRepo extends Context.Service<
               createdAt: nowDate,
               updatedAt: nowDate
             };
-          });
+          },
+          (effect) => Effect.mapError(effect, (cause) => new SessionStorageError({ operation: "create", cause }))
+        );
 
-        const save = Effect.fnUntraced(function* (session: Session) {
-          const now = yield* clock.currentTimeMillis;
-          const updated = { ...session, updatedAt: new Date(now) };
-          const json = Schema.encodeUnknownSync(Schema.fromJsonString(SessionSchema))(updated);
-          yield* fs.writeFileString(sessionPath(session.id), json);
-        });
+        const save = Effect.fnUntraced(
+          function* (session: Session) {
+            const now = yield* clock.currentTimeMillis;
+            const updated = { ...session, updatedAt: new Date(now) };
+            const json = yield* Schema.encodeUnknownEffect(Schema.fromJsonString(SessionSchema))(updated);
+            yield* fs.writeFileString(sessionPath(session.id), json);
+          },
+          (effect, session) =>
+            effect.pipe(
+              Effect.mapError((cause) => new SessionStorageError({ operation: "save", id: session.id, cause }))
+            )
+        );
 
         const load = Effect.fnUntraced(function* (id: string) {
-          const content = yield* fs.readFileString(sessionPath(id));
-          return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(SessionSchema))(content);
+          const content = yield* fs
+            .readFileString(sessionPath(id))
+            .pipe(
+              Effect.mapError((e) =>
+                e.reason._tag === "NotFound"
+                  ? new SessionNotFound({ id })
+                  : new SessionStorageError({ operation: "load", id, cause: e })
+              )
+            );
+          return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(SessionSchema))(content).pipe(
+            Effect.mapError((cause) => new SessionStorageError({ operation: "load", id, cause }))
+          );
         });
 
-        const list = Effect.fnUntraced(function* () {
-          yield* ensureDir;
-          const entries = yield* fs.readDirectory(sessionDir);
-          const jsonFiles = entries.filter((f) => f.endsWith(".json"));
+        const list = Effect.fnUntraced(
+          function* () {
+            yield* ensureDir;
+            const entries = yield* fs.readDirectory(sessionDir);
+            const jsonFiles = entries.filter((f) => f.endsWith(".json"));
 
-          const sessions: { id: SessionId; createdAt: Date; updatedAt: Date }[] = [];
+            const sessions: { id: SessionId; createdAt: Date; updatedAt: Date }[] = [];
 
-          for (const entry of jsonFiles) {
-            const id = entry.replace(".json", "");
-            const result = yield* load(id).pipe(Effect.option);
-            if (Option.isSome(result)) {
-              sessions.push({
-                id: result.value.id,
-                createdAt: result.value.createdAt,
-                updatedAt: result.value.updatedAt
-              });
+            for (const entry of jsonFiles) {
+              const id = entry.replace(".json", "");
+              // Skip sessions that were deleted between readDirectory and load (TOCTOU race).
+              const result = yield* load(id).pipe(Effect.option);
+              if (Option.isSome(result)) {
+                sessions.push({
+                  id: result.value.id,
+                  createdAt: result.value.createdAt,
+                  updatedAt: result.value.updatedAt
+                });
+              }
             }
-          }
 
-          return sessions.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
-        });
+            return sessions.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+          },
+          (effect) => Effect.mapError(effect, (cause) => new SessionStorageError({ operation: "list", cause }))
+        );
 
-        const deleteSession = Effect.fnUntraced(function* (id: string) {
-          const path = sessionPath(id);
-          const exists = yield* fs.exists(path);
-          if (exists) {
-            yield* fs.remove(path);
-          }
-        });
+        const deleteSession = Effect.fnUntraced(
+          function* (id: string) {
+            const path = sessionPath(id);
+            const exists = yield* fs.exists(path);
+            if (exists) {
+              yield* fs.remove(path);
+            }
+          },
+          (effect, id) =>
+            effect.pipe(Effect.mapError((cause) => new SessionStorageError({ operation: "delete", id, cause })))
+        );
 
         return { create, save, load, list, delete: deleteSession };
       })

@@ -36,7 +36,15 @@ const runAgent = (
 
     const sessionEffect = Option.match(sessionId, {
       onNone: () => sessionRepo.create(combinedSystemPrompt),
-      onSome: (id) => sessionRepo.load(id).pipe(Effect.orDie)
+      onSome: (id) =>
+        sessionRepo.load(id).pipe(
+          Effect.catchTag("SessionNotFound", () =>
+            Effect.andThen(
+              Console.log(`Session ${id} not found, starting a new session.`),
+              () => sessionRepo.create(combinedSystemPrompt)
+            )
+          )
+        )
     });
 
     const session = yield* sessionEffect;

@@ -153,7 +153,7 @@ describe("session", () => {
         Effect.provide(testLayer),
         Effect.flip,
         Effect.map((error) => {
-          expect(error !== undefined).toBe(true);
+          expect(error._tag).toBe("SessionNotFound");
         })
       )
     );
