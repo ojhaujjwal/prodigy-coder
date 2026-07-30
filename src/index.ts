@@ -28,8 +28,8 @@ const runAgent = (
   sessionId: Option.Option<string>,
   config: ConfigData,
   skills: Skill[]
-) => {
-  return Effect.gen(function* () {
+) =>
+  Effect.gen(function* () {
     const sessionRepo = yield* SessionRepo;
 
     const combinedSystemPrompt = systemPromptBuilder(skills, config);
@@ -37,14 +37,15 @@ const runAgent = (
     const sessionEffect = Option.match(sessionId, {
       onNone: () => sessionRepo.create(combinedSystemPrompt),
       onSome: (id) =>
-        sessionRepo.load(id).pipe(
-          Effect.catchTag("SessionNotFound", () =>
-            Effect.andThen(
-              Console.log(`Session ${id} not found, starting a new session.`),
-              () => sessionRepo.create(combinedSystemPrompt)
+        sessionRepo
+          .load(id)
+          .pipe(
+            Effect.catchTag("SessionNotFound", () =>
+              Effect.andThen(Console.log(`Session ${id} not found, starting a new session.`), () =>
+                sessionRepo.create(combinedSystemPrompt)
+              )
             )
           )
-        )
     });
 
     const session = yield* sessionEffect;
@@ -65,7 +66,6 @@ const runAgent = (
     yield* sessionRepo.save(session);
     return { outputEvents, sessionId: session.id };
   });
-};
 
 const promptArg = Argument.string("prompt").pipe(Argument.optional, Argument.withDescription("The prompt to process"));
 

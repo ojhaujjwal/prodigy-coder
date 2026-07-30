@@ -17,7 +17,7 @@ export class SkillsRepo extends Context.Service<
     readonly findByName: (name: string) => Effect.Effect<Option.Option<Skill>>;
     readonly autoInvokable: Effect.Effect<readonly Skill[]>;
   }
->()("prodigy-coder/SkillsRepo") {
+>()("prodigy-coder/skills/SkillsRepo") {
   static readonly layer = (skills: readonly Skill[]) =>
     Layer.succeed(
       SkillsRepo,

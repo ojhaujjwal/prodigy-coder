@@ -86,8 +86,9 @@ export const createStubToolkit = (
 ): StubToolkit => {
   const calls: Record<string, unknown[]> = {};
 
-  const makeHandler = <A>(toolName: string, defaultResult: A) => {
-    return (_params: unknown, _context: unknown): Effect.Effect<A, AiError.AiError, never> => {
+  const makeHandler =
+    <A>(toolName: string, defaultResult: A) =>
+    (_params: unknown, _context: unknown): Effect.Effect<A, AiError.AiError, never> => {
       if (!calls[toolName]) {
         calls[toolName] = [];
       }
@@ -105,7 +106,6 @@ export const createStubToolkit = (
       }
       return Effect.succeed(defaultResult);
     };
-  };
 
   const toolConfig = config ?? { approvalMode: "none" as const, nonInteractive: false };
 

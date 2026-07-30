@@ -32,10 +32,9 @@ const withLogging =
   <P, C, A, E, R>(toolName: string, handler: (params: P, context: C) => Effect.Effect<A, E, R>) =>
   (params: P, context: C): Effect.Effect<A, E, R> =>
     Effect.gen(function* () {
-      yield* Effect.logDebug(`Tool call: ${toolName}(${JSON.stringify(params)})`);
+      yield* Effect.logDebug(`Tool call: ${toolName}`, params);
       const result = yield* handler(params, context);
-      const resultStr = typeof result === "string" ? result.slice(0, 200) : JSON.stringify(result).slice(0, 200);
-      yield* Effect.logDebug(`Tool result: ${toolName} -> ${resultStr}...`);
+      yield* Effect.logDebug(`Tool result: ${toolName}`, result);
       return result;
     }).pipe(
       Effect.catch((error: E) =>

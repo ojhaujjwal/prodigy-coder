@@ -1,5 +1,5 @@
-import { describe, it, expect } from "@effect/vitest";
-import { Effect, Layer, Queue } from "effect";
+import { describe, it, expect, assert } from "@effect/vitest";
+import { Effect, Layer, Queue, Schema } from "effect";
 import { BunServices } from "@effect/platform-bun";
 import * as Terminal from "effect/Terminal";
 import * as Option from "effect/Option";
@@ -67,10 +67,8 @@ describe("askUser tool", () => {
       const handler = makeAskUserHandler(true);
       const result = yield* handler({ question: "What is your name?" }, dummyContext).pipe(Effect.flip);
       expect(result._tag).toBe("AiError");
-      expect(result.reason._tag).toBe("UnknownError");
-      if (result.reason instanceof AiError.UnknownError) {
-        expect(result.reason.description).toContain("non-interactive mode");
-      }
+      assert(Schema.is(AiError.UnknownError)(result.reason));
+      expect(result.reason.description).toContain("non-interactive mode");
     }).pipe(Effect.provide(BunServices.layer))
   );
 });

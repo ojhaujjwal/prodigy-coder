@@ -151,15 +151,7 @@ describe("config", () => {
     it.effect("invalid config file throws error", () =>
       setupTmpDir().pipe(
         Effect.andThen(writeConfigFile('{"provider":{"type":"invalid-provider"},"approvalMode":"invalid"}')),
-        Effect.andThen(
-          runWithConfig(
-            Effect.gen(function* () {
-              yield* AppConfig;
-            })
-          )
-        ),
-        Effect.flip,
-        Effect.ensuring(teardownTmpDir())
+        Effect.andThen(runWithConfig(AppConfig).pipe(Effect.flip, Effect.ensuring(teardownTmpDir())))
       )
     );
 
