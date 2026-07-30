@@ -139,9 +139,9 @@ export const createTestConfig = (overrides?: Partial<ConfigData>): ConfigData =>
   ...overrides
 });
 
-export const createTestSession = (messages?: Message[]): Session =>
+export const createTestSession = (id: string, messages?: Message[]): Session =>
   Schema.decodeUnknownSync(SessionSchema)({
-    id: crypto.randomUUID(),
+    id,
     messages: messages ?? [],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()

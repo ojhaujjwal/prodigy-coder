@@ -1,5 +1,5 @@
 import { describe, it, expect } from "@effect/vitest";
-import { Effect, Layer } from "effect";
+import { Crypto, Effect, Layer } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import { Tool } from "effect/unstable/ai";
@@ -31,7 +31,8 @@ const runAgentWithMockServer = (
       ...configOverrides
     });
 
-    const session = createTestSession();
+    const sessionId = yield* (yield* Crypto.Crypto).randomUUIDv4;
+    const session = createTestSession(sessionId);
     const agentConfig: AgentConfig = { session, config };
 
     const tl = toolkitLayer ?? AgenticToolkitLayer;
@@ -94,7 +95,8 @@ describe("e2e", () => {
   it.effect("executes multiple tool calls in one turn", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      const tmpDir = `/tmp/prodigy-e2e-${crypto.randomUUID()}`;
+      const uuid = yield* (yield* Crypto.Crypto).randomUUIDv4;
+      const tmpDir = `/tmp/prodigy-e2e-${uuid}`;
       yield* fs.makeDirectory(tmpDir);
       yield* fs.writeFileString(`${tmpDir}/a.txt`, "content-a");
       yield* fs.writeFileString(`${tmpDir}/b.txt`, "");
@@ -132,7 +134,8 @@ describe("e2e", () => {
   it.effect("executes sequential tool calls across turns", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      const tmpDir = `/tmp/prodigy-e2e-${crypto.randomUUID()}`;
+      const uuid = yield* (yield* Crypto.Crypto).randomUUIDv4;
+      const tmpDir = `/tmp/prodigy-e2e-${uuid}`;
       yield* fs.makeDirectory(tmpDir);
       yield* fs.makeDirectory(`${tmpDir}/src`);
       yield* fs.writeFileString(`${tmpDir}/src/a.ts`, "const x = 1;");
@@ -232,7 +235,8 @@ describe("e2e", () => {
   it.effect("accumulates session messages across turns", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      const tmpDir = `/tmp/prodigy-e2e-${crypto.randomUUID()}`;
+      const uuid = yield* (yield* Crypto.Crypto).randomUUIDv4;
+      const tmpDir = `/tmp/prodigy-e2e-${uuid}`;
       yield* fs.makeDirectory(tmpDir);
       yield* fs.writeFileString(`${tmpDir}/test.txt`, "file content");
 
@@ -269,7 +273,8 @@ describe("e2e", () => {
   it.effect("approvalMode dangerous: blocks dangerous tool, allows safe tool", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      const tmpDir = `/tmp/prodigy-e2e-${crypto.randomUUID()}`;
+      const uuid = yield* (yield* Crypto.Crypto).randomUUIDv4;
+      const tmpDir = `/tmp/prodigy-e2e-${uuid}`;
       yield* fs.makeDirectory(tmpDir);
       yield* fs.writeFileString(`${tmpDir}/safe.txt`, "data");
 
@@ -313,7 +318,8 @@ describe("e2e", () => {
   it.effect("approvalMode all: blocks all tools in non-interactive mode", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      const tmpDir = `/tmp/prodigy-e2e-${crypto.randomUUID()}`;
+      const uuid = yield* (yield* Crypto.Crypto).randomUUIDv4;
+      const tmpDir = `/tmp/prodigy-e2e-${uuid}`;
       yield* fs.makeDirectory(tmpDir);
       yield* fs.writeFileString(`${tmpDir}/safe.txt`, "data");
 
@@ -382,7 +388,8 @@ describe("e2e", () => {
   it.effect("completes multi-step glob → read → write workflow", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      const tmpDir = `/tmp/prodigy-e2e-${crypto.randomUUID()}`;
+      const uuid = yield* (yield* Crypto.Crypto).randomUUIDv4;
+      const tmpDir = `/tmp/prodigy-e2e-${uuid}`;
       yield* fs.makeDirectory(tmpDir);
       yield* fs.makeDirectory(`${tmpDir}/src`);
       yield* fs.writeFileString(`${tmpDir}/README.md`, "# Prodigy Coder\n\nInitial content.\n");

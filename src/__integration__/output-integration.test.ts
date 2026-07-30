@@ -1,5 +1,5 @@
 import { describe, it, expect } from "@effect/vitest";
-import { Effect, Layer } from "effect";
+import { Crypto, Effect, Layer } from "effect";
 import { runAgent, type AgentConfig } from "../agent.ts";
 import type { OutputEvent } from "../output.ts";
 import { makeTextFormatter, makeStreamJsonFormatter } from "../output.ts";
@@ -10,20 +10,22 @@ import { EmptySkillsRepoLayer } from "../tools/index.ts";
 const runAgentWithMocks = (
   mockResponses: import("./helpers.ts").TurnResponse[],
   configOverrides?: Partial<import("../config.ts").ConfigData>
-) => {
-  const config = createTestConfig(configOverrides);
-  const session = createTestSession();
-  const { layer } = createStubToolkit();
+) =>
+  Effect.gen(function* () {
+    const config = createTestConfig(configOverrides);
+    const sessionId = yield* (yield* Crypto.Crypto).randomUUIDv4;
+    const session = createTestSession(sessionId);
+    const { layer } = createStubToolkit();
 
-  const agentConfig: AgentConfig = {
-    session,
-    config
-  };
+    const agentConfig: AgentConfig = {
+      session,
+      config
+    };
 
-  const mockLLMLayer = createMockLLMLayer(mockResponses);
+    const mockLLMLayer = createMockLLMLayer(mockResponses);
 
-  return runAgent(["test prompt"], agentConfig, Layer.merge(mockLLMLayer, layer));
-};
+    return yield* runAgent(["test prompt"], agentConfig, Layer.merge(mockLLMLayer, layer));
+  });
 
 describe("output integration", () => {
   it.effect("Test 1: Stream-json formatter through agent", () =>
