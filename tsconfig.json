@@ -77,7 +77,7 @@
           "scopeInLayerEffect": "error",
           "serviceNotAsClass": "error",
           "strictBooleanExpressions": "warn",
-          "strictEffectProvide": "off",
+          "strictEffectProvide": "error",
           "tryCatchInEffectGen": "error",
           "unknownInEffectCatch": "error",
           "unnecessaryArrowBlock": "error",
