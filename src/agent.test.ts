@@ -1,34 +1,7 @@
 import { describe, it, expect } from "@effect/vitest";
-import { Effect, Layer, Schema, Stream } from "effect";
-import * as LanguageModel from "effect/unstable/ai/LanguageModel";
-import * as Response from "effect/unstable/ai/Response";
-import * as AiError from "effect/unstable/ai/AiError";
+import { Schema } from "effect";
 import { runAgent, type AgentConfig } from "../src/agent.ts";
-import { AgenticToolkit, EmptySkillsRepoLayer } from "../src/tools/index.ts";
 import { SessionSchema } from "../src/session.ts";
-
-const mockLanguageModelLayer = Layer.effect(
-  LanguageModel.LanguageModel,
-  LanguageModel.make({
-    streamText: () => {
-      const empty: Stream.Stream<Response.StreamPartEncoded, AiError.AiError> = Stream.empty;
-      return empty;
-    },
-    generateText: () => Effect.succeed([])
-  })
-);
-
-const mockToolkitLayer = AgenticToolkit.toLayer({
-  shell: () => Effect.succeed(""),
-  read: () => Effect.succeed(""),
-  write: () => Effect.succeed(""),
-  edit: () => Effect.succeed(""),
-  grep: () => Effect.succeed([]),
-  glob: () => Effect.succeed([]),
-  webfetch: () => Effect.succeed(""),
-  ask_user: () => Effect.succeed(""),
-  load_skill: () => Effect.succeed("")
-}).pipe(Layer.provide(EmptySkillsRepoLayer));
 
 describe("agent", () => {
   it("runAgent should have correct type signature", () => {
@@ -56,7 +29,7 @@ describe("agent", () => {
       }
     };
 
-    const result = runAgent(["test prompt"], agentConfig, Layer.merge(mockLanguageModelLayer, mockToolkitLayer));
+    const result = runAgent(["test prompt"], agentConfig);
     expect(result).toBeDefined();
   });
 
@@ -84,7 +57,7 @@ describe("agent", () => {
       }
     };
 
-    const result = runAgent(["test prompt"], agentConfig, Layer.merge(mockLanguageModelLayer, mockToolkitLayer));
+    const result = runAgent(["test prompt"], agentConfig);
     expect(result).toBeDefined();
   });
 });

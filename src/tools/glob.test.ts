@@ -1,16 +1,14 @@
-import { describe, it, expect } from "@effect/vitest";
+import { layer, expect } from "@effect/vitest";
 import { Effect } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import { layer as bunServicesLayer } from "@effect/platform-bun/BunServices";
 import { globHandler } from "./glob.ts";
 
-const testLayer = bunServicesLayer;
-
 const mockContext = {
   preliminary: () => Effect.void
 };
 
-describe("glob tool", () => {
+layer(bunServicesLayer)("glob tool", (it) => {
   it.effect("finds files matching *.txt pattern", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
@@ -24,13 +22,13 @@ describe("glob tool", () => {
       const result = yield* globHandler({ pattern: "*.txt", path: "/tmp/test-glob" }, mockContext);
       expect(result.length >= 2).toBe(true);
       expect(result.every((f) => f.endsWith(".txt"))).toBe(true);
-    }).pipe(Effect.provide(testLayer))
+    })
   );
 
   it.effect("returns empty array when no matches", () =>
     Effect.gen(function* () {
       const result = yield* globHandler({ pattern: "*.nonexistent", path: "/tmp" }, mockContext);
       expect(result.length).toBe(0);
-    }).pipe(Effect.provide(testLayer))
+    })
   );
 });

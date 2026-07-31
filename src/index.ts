@@ -1,6 +1,7 @@
 import { BunRuntime, BunServices } from "@effect/platform-bun";
 import { Argument, Command, Flag } from "effect/unstable/cli";
 import { Config, Console, Effect, Layer, Option, Schema } from "effect";
+import * as Stdio from "effect/Stdio";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import { AppConfig, loadConfig, maskConfig, type ConfigData } from "./config.ts";
 import { SessionRepo } from "./session.ts";
@@ -9,6 +10,7 @@ import { runAgent as runAgentLoop } from "./agent.ts";
 import type { AgentConfig } from "./agent.ts";
 import { makeToolkitLayer } from "./tools/index.ts";
 import { buildProviderLayer } from "./provider.ts";
+import { makeApprovalGateLayer } from "./approval-gate.ts";
 import { makeFileLoggerLayer } from "./logger.ts";
 import { parseCommand } from "./slash-commands.ts";
 import { discoverSkills, SkillsRepo, formatSkillsIndex, formatSkillContent } from "./skills.ts";
@@ -23,49 +25,67 @@ const systemPromptBuilder = (skills: Skill[], config: ConfigData) => {
   return [skillsIndex, explicitPrompt].filter(Boolean).join("\n\n");
 };
 
+const configPathFromArgs = (args: readonly string[]): string | undefined => {
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index];
+    if (arg?.startsWith("--config=")) {
+      return arg.slice("--config=".length);
+    }
+    if (arg === "--config") {
+      return args[index + 1];
+    }
+  }
+  return undefined;
+};
+
 const runAgent = (
   userMessages: readonly string[],
   sessionId: Option.Option<string>,
   config: ConfigData,
   skills: Skill[]
 ) =>
-  Effect.gen(function* () {
-    const sessionRepo = yield* SessionRepo;
+  Effect.scoped(
+    Effect.gen(function* () {
+      const sessionRepo = yield* SessionRepo;
 
-    const combinedSystemPrompt = systemPromptBuilder(skills, config);
+      const combinedSystemPrompt = systemPromptBuilder(skills, config);
 
-    const sessionEffect = Option.match(sessionId, {
-      onNone: () => sessionRepo.create(combinedSystemPrompt),
-      onSome: (id) =>
-        sessionRepo
-          .load(id)
-          .pipe(
-            Effect.catchTag("SessionNotFound", () =>
-              Effect.andThen(Console.log(`Session ${id} not found, starting a new session.`), () =>
-                sessionRepo.create(combinedSystemPrompt)
+      const sessionEffect = Option.match(sessionId, {
+        onNone: () => sessionRepo.create(combinedSystemPrompt),
+        onSome: (id) =>
+          sessionRepo
+            .load(id)
+            .pipe(
+              Effect.catchTag("SessionNotFound", () =>
+                Effect.andThen(Console.log(`Session ${id} not found, starting a new session.`), () =>
+                  sessionRepo.create(combinedSystemPrompt)
+                )
               )
             )
-          )
-    });
+      });
 
-    const session = yield* sessionEffect;
+      const session = yield* sessionEffect;
 
-    const agentConfig: AgentConfig = { session, config: { ...config, systemPrompt: combinedSystemPrompt } };
-    const skillsRepoLayer = SkillsRepo.layer(skills);
-    const providerLayer = Layer.mergeAll(
-      buildProviderLayer(config.provider),
-      makeToolkitLayer({
-        approvalMode: config.approvalMode,
-        nonInteractive: config.nonInteractive ?? false,
+      const agentConfig: AgentConfig = { session, config: { ...config, systemPrompt: combinedSystemPrompt } };
+      const skillsRepoLayer = SkillsRepo.layer(skills);
+      const providerLayer = buildProviderLayer(config.provider).pipe(Layer.provideMerge(FetchHttpClient.layer));
+      const agentLayer = Layer.mergeAll(
+        providerLayer,
+        makeToolkitLayer({
+          nonInteractive: config.nonInteractive ?? false,
+          skillsRepoLayer
+        }),
         skillsRepoLayer
-      }),
-      skillsRepoLayer
-    ).pipe(Layer.provide(FetchHttpClient.layer));
+      ).pipe(Layer.provide(makeApprovalGateLayer(config)));
 
-    const outputEvents = yield* runAgentLoop(userMessages, agentConfig, providerLayer);
-    yield* sessionRepo.save(session);
-    return { outputEvents, sessionId: session.id };
-  });
+      const outputEvents = yield* runAgentLoop(userMessages, agentConfig).pipe(
+        // @effect-diagnostics-next-line effect/strictEffectProvide:off
+        Effect.provide(agentLayer)
+      );
+      yield* sessionRepo.save(session);
+      return { outputEvents, sessionId: session.id };
+    })
+  );
 
 const promptArg = Argument.string("prompt").pipe(Argument.optional, Argument.withDescription("The prompt to process"));
 
@@ -128,18 +148,7 @@ const mainCommand = Command.make(
     config: configFlag,
     nonInteractive: nonInteractiveFlag
   },
-  ({
-    prompt,
-    outputFormat,
-    session,
-    continue: cont,
-    model,
-    maxTurns,
-    approvalMode,
-    systemPrompt,
-    nonInteractive,
-    config
-  }) =>
+  ({ prompt, outputFormat, session, continue: cont, model, maxTurns, approvalMode, systemPrompt, nonInteractive }) =>
     Effect.gen(function* () {
       const appConfig = yield* AppConfig;
 
@@ -198,9 +207,7 @@ const mainCommand = Command.make(
       }
 
       yield* formatter({ type: "session-info", sessionId: resultingSessionId });
-    }).pipe(
-      Effect.provide(Option.getOrElse(config, () => "") ? loadConfig(Option.getOrElse(config, () => "")) : loadConfig())
-    )
+    })
 ).pipe(Command.withDescription("Run the AI coder"));
 
 const listSessionsCommand = Command.make("list", {}, () =>
@@ -241,7 +248,7 @@ const configShowCommand = Command.make("show", {}, () =>
     const masked = maskConfig(config);
     const json = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown))(masked);
     yield* Console.log(json);
-  }).pipe(Effect.provide(loadConfig()))
+  })
 ).pipe(Command.withDescription("Show current config (masked)"));
 
 const configCommand = Command.make("config", {}, () => Effect.void).pipe(
@@ -254,17 +261,25 @@ export const app = Command.make("prodigy", {}).pipe(
   Command.withSubcommands([mainCommand, sessionCommand, configCommand])
 );
 
+const appConfigLayer = Layer.unwrap(
+  Stdio.Stdio.pipe(
+    Effect.flatMap((stdio) => stdio.args),
+    Effect.map((args) => loadConfig(configPathFromArgs(args)))
+  )
+);
+
+const applicationLayer = Layer.mergeAll(
+  appConfigLayer,
+  makeFileLoggerLayer(),
+  SessionRepo.layer(".prodigy-coder/sessions"),
+  SkillsRepo.layer([])
+).pipe(Layer.provideMerge(BunServices.layer));
+
 const cli = Command.run(app, {
   version: "0.0.1"
 }).pipe(
-  Effect.provide(
-    Layer.mergeAll(
-      BunServices.layer,
-      makeFileLoggerLayer().pipe(Layer.provide(BunServices.layer)),
-      SessionRepo.layer(".prodigy-coder/sessions").pipe(Layer.provide(BunServices.layer)),
-      SkillsRepo.layer([])
-    )
-  )
+  // @effect-diagnostics-next-line effect/strictEffectProvide:off
+  Effect.provide(applicationLayer)
 );
 
 BunRuntime.runMain(cli);

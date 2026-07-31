@@ -1,23 +1,21 @@
-import { describe, it, expect } from "@effect/vitest";
+import { layer, expect } from "@effect/vitest";
 import { Effect } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import { layer as bunServicesLayer } from "@effect/platform-bun/BunServices";
 import { readHandler } from "./read.ts";
 
-const testLayer = bunServicesLayer;
-
 const mockContext = {
   preliminary: () => Effect.void
 };
 
-describe("read tool", () => {
+layer(bunServicesLayer)("read tool", (it) => {
   it.effect("reads existing file and returns contents", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       yield* fs.writeFileString("/tmp/test-read.txt", "Hello, world!");
       const result = yield* readHandler({ filePath: "/tmp/test-read.txt" }, mockContext);
       expect(result).toBe("Hello, world!");
-    }).pipe(Effect.provide(testLayer))
+    })
   );
 
   it.effect("returns error message for non-existent file", () =>
@@ -26,6 +24,6 @@ describe("read tool", () => {
         Effect.catch((e) => Effect.succeed(`Error: ${e}`))
       );
       expect(result.includes("Error")).toBe(true);
-    }).pipe(Effect.provide(testLayer))
+    })
   );
 });

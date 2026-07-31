@@ -1,4 +1,4 @@
-import { describe, it, expect } from "@effect/vitest";
+import { describe, layer, expect } from "@effect/vitest";
 import { Crypto, Effect, Layer } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
@@ -6,7 +6,8 @@ import { Tool } from "effect/unstable/ai";
 import { BunServices } from "@effect/platform-bun";
 import { runAgent, type AgentConfig } from "../agent.ts";
 import { buildProviderLayer } from "../provider.ts";
-import { AgenticToolkitLayer, makeToolkitLayer, AgenticToolkit, EmptySkillsRepoLayer } from "../tools/index.ts";
+import { makeToolkitLayer, AgenticToolkit, EmptySkillsRepoLayer } from "../tools/index.ts";
+import { ApprovalGate, makeApprovalGateLayer } from "../approval-gate.ts";
 import type { OutputEvent } from "../output.ts";
 import type { Message } from "../session.ts";
 import { createMockOpenAIServer, createTestConfig, createTestSession, type MockOpenAIResponse } from "./helpers.ts";
@@ -16,7 +17,7 @@ const runAgentWithMockServer = (
   userMessages: readonly string[],
   responses: MockOpenAIResponse[][],
   configOverrides?: Partial<ConfigData>,
-  toolkitLayer?: Layer.Layer<Tool.HandlersFor<typeof AgenticToolkit.tools>>
+  toolkitLayer?: Layer.Layer<Tool.HandlersFor<typeof AgenticToolkit.tools>, never, ApprovalGate>
 ) =>
   Effect.gen(function* () {
     const server = yield* createMockOpenAIServer(responses);
@@ -35,17 +36,23 @@ const runAgentWithMockServer = (
     const session = createTestSession(sessionId);
     const agentConfig: AgentConfig = { session, config };
 
-    const tl = toolkitLayer ?? AgenticToolkitLayer;
-    const providerLayer = Layer.merge(buildProviderLayer(config.provider), tl).pipe(
-      Layer.provide(FetchHttpClient.layer)
-    );
-
-    const result = yield* runAgent(userMessages, agentConfig, providerLayer).pipe(Effect.provide(EmptySkillsRepoLayer));
+    const tl =
+      toolkitLayer ??
+      makeToolkitLayer({
+        nonInteractive: config.nonInteractive ?? false,
+        skillsRepoLayer: EmptySkillsRepoLayer
+      });
+    const agentLayer = Layer.merge(
+      buildProviderLayer(config.provider).pipe(Layer.provideMerge(FetchHttpClient.layer)),
+      tl
+    ).pipe(Layer.provide(makeApprovalGateLayer(config)));
+    const agentContext = yield* Layer.build(agentLayer);
+    const result = yield* runAgent(userMessages, agentConfig).pipe(Effect.provide(agentContext));
 
     return { result, server, session };
   });
 
-describe("e2e", () => {
+layer(Layer.merge(BunServices.layer, EmptySkillsRepoLayer))("e2e", (it) => {
   it.effect("responds with text from mock OpenAI server", () =>
     Effect.gen(function* () {
       const { result } = yield* runAgentWithMockServer(
@@ -60,7 +67,7 @@ describe("e2e", () => {
       expect(textDeltas.length).toBeGreaterThan(0);
       expect(finishes.length).toBeGreaterThanOrEqual(1);
       expect(toolCalls.length).toBe(0);
-    }).pipe(Effect.provide(BunServices.layer))
+    })
   );
 
   it.effect("executes single tool-call then returns text", () =>
@@ -89,7 +96,7 @@ describe("e2e", () => {
 
       expect(textDeltas.length).toBeGreaterThan(0);
       expect(finishes.length).toBeGreaterThanOrEqual(1);
-    }).pipe(Effect.provide(BunServices.layer))
+    })
   );
 
   it.effect("executes multiple tool calls in one turn", () =>
@@ -128,7 +135,7 @@ describe("e2e", () => {
       expect(toolCalls[1].type === "tool-call" && toolCalls[1].name).toBe("write");
       expect(toolResults.length).toBe(2);
       expect(finishes.length).toBeGreaterThanOrEqual(1);
-    }).pipe(Effect.provide(BunServices.layer))
+    })
   );
 
   it.effect("executes sequential tool calls across turns", () =>
@@ -175,7 +182,7 @@ describe("e2e", () => {
       expect(toolCalls[1].type === "tool-call" && toolCalls[1].name).toBe("read");
       expect(toolResults.length).toBe(2);
       expect(finishes.length).toBeGreaterThanOrEqual(1);
-    }).pipe(Effect.provide(BunServices.layer))
+    })
   );
 
   it.effect("continues loop when turn has both text and tool-calls", () =>
@@ -199,7 +206,7 @@ describe("e2e", () => {
       expect(toolCalls.length).toBeGreaterThanOrEqual(2);
       expect(toolResults.length).toBeGreaterThanOrEqual(2);
       expect(finishes.length).toBeGreaterThanOrEqual(1);
-    }).pipe(Effect.provide(BunServices.layer))
+    })
   );
 
   it.effect("reports tool execution error", () =>
@@ -215,7 +222,7 @@ describe("e2e", () => {
       const toolResults = result.filter((e: OutputEvent) => e.type === "tool-result");
       expect(toolResults.length).toBe(1);
       expect(toolResults[0].type === "tool-result" && toolResults[0].isError).toBe(true);
-    }).pipe(Effect.provide(BunServices.layer))
+    })
   );
 
   it.effect("emits max-turns-exceeded error when loop limit reached", () =>
@@ -229,7 +236,7 @@ describe("e2e", () => {
       const errors = result.filter((e: OutputEvent) => e.type === "error");
       expect(errors.length).toBe(1);
       expect(errors[0].type === "error" && errors[0].message).toContain("Max turns exceeded");
-    }).pipe(Effect.provide(BunServices.layer))
+    })
   );
 
   it.effect("accumulates session messages across turns", () =>
@@ -267,7 +274,7 @@ describe("e2e", () => {
 
       const toolMessages = session.messages.filter((m: Message) => m.role === "tool");
       expect(toolMessages.length).toBeGreaterThanOrEqual(1);
-    }).pipe(Effect.provide(BunServices.layer))
+    })
   );
 
   it.effect("approvalMode dangerous: blocks dangerous tool, allows safe tool", () =>
@@ -293,7 +300,7 @@ describe("e2e", () => {
           [{ type: "text", content: "Done" }]
         ],
         { approvalMode: "dangerous", nonInteractive: true },
-        makeToolkitLayer({ approvalMode: "dangerous", nonInteractive: true, skillsRepoLayer: EmptySkillsRepoLayer })
+        makeToolkitLayer({ nonInteractive: true, skillsRepoLayer: EmptySkillsRepoLayer })
       );
 
       yield* fs.remove(tmpDir, { recursive: true }).pipe(Effect.catch(() => Effect.void));
@@ -312,7 +319,7 @@ describe("e2e", () => {
       if (readResult && readResult.type === "tool-result") {
         expect(readResult.isError).toBe(false);
       }
-    }).pipe(Effect.provide(BunServices.layer))
+    })
   );
 
   it.effect("approvalMode all: blocks all tools in non-interactive mode", () =>
@@ -338,7 +345,7 @@ describe("e2e", () => {
           [{ type: "text", content: "Done" }]
         ],
         { approvalMode: "all", nonInteractive: true },
-        makeToolkitLayer({ approvalMode: "all", nonInteractive: true, skillsRepoLayer: EmptySkillsRepoLayer })
+        makeToolkitLayer({ nonInteractive: true, skillsRepoLayer: EmptySkillsRepoLayer })
       );
 
       yield* fs.remove(tmpDir, { recursive: true }).pipe(Effect.catch(() => Effect.void));
@@ -352,7 +359,7 @@ describe("e2e", () => {
 
       expect(readResult).toBeDefined();
       if (readResult && readResult.type === "tool-result") expect(readResult.isError).toBe(true);
-    }).pipe(Effect.provide(BunServices.layer))
+    })
   );
 
   it.effect("askUserTool fails in non-interactive mode", () =>
@@ -371,7 +378,7 @@ describe("e2e", () => {
           [{ type: "text", content: "Asked" }]
         ],
         { approvalMode: "none", nonInteractive: true },
-        makeToolkitLayer({ approvalMode: "none", nonInteractive: true, skillsRepoLayer: EmptySkillsRepoLayer })
+        makeToolkitLayer({ nonInteractive: true, skillsRepoLayer: EmptySkillsRepoLayer })
       );
 
       const toolResults = result.filter((e: OutputEvent) => e.type === "tool-result");
@@ -382,7 +389,7 @@ describe("e2e", () => {
         expect(askResult.isError).toBe(true);
         expect(askResult.result).toContain("non-interactive");
       }
-    }).pipe(Effect.provide(BunServices.layer))
+    })
   );
 
   it.effect("completes multi-step glob → read → write workflow", () =>
@@ -470,7 +477,7 @@ describe("e2e", () => {
 
       expect(updatedContent).toContain("Coding Agent CLI");
       expect(updatedContent).toContain("prodigy <prompt>");
-    }).pipe(Effect.provide(BunServices.layer))
+    })
   );
 
   describe("System Prompt", () => {
@@ -483,7 +490,7 @@ describe("e2e", () => {
         expect(requestBody).toContain("AI Agentic Coding CLI");
         expect(requestBody).toContain("system");
         expect(requestBody).not.toContain("You are a helpful assistant");
-      }).pipe(Effect.provide(BunServices.layer))
+      })
     );
 
     it.effect("prepends both AGENTS.md and explicit systemPrompt when both present", () =>
@@ -497,7 +504,7 @@ describe("e2e", () => {
         expect(requestBody).toContain("AI Agentic Coding CLI");
         expect(requestBody).toContain("You are a helpful assistant");
         expect(requestBody).toContain("system");
-      }).pipe(Effect.provide(BunServices.layer))
+      })
     );
   });
 });

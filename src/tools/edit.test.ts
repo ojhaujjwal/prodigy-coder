@@ -1,16 +1,14 @@
-import { describe, it, expect } from "@effect/vitest";
+import { layer, expect } from "@effect/vitest";
 import { Effect } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import { layer as bunServicesLayer } from "@effect/platform-bun/BunServices";
 import { editHandler } from "./edit.ts";
 
-const testLayer = bunServicesLayer;
-
 const mockContext = {
   preliminary: () => Effect.void
 };
 
-describe("edit tool", () => {
+layer(bunServicesLayer)("edit tool", (it) => {
   it.effect("replaces oldString with newString in file", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
@@ -22,7 +20,7 @@ describe("edit tool", () => {
       expect(result).toBe("Edited /tmp/test-edit.txt");
       const content = yield* fs.readFileString("/tmp/test-edit.txt");
       expect(content).toBe("Hello, universe!");
-    }).pipe(Effect.provide(testLayer))
+    })
   );
 
   it.effect("returns error when oldString not found in file", () =>
@@ -34,7 +32,7 @@ describe("edit tool", () => {
         mockContext
       );
       expect(result.includes("Error: oldString not found")).toBe(true);
-    }).pipe(Effect.provide(testLayer))
+    })
   );
 
   it.effect("returns error when file doesn't exist", () =>
@@ -44,6 +42,6 @@ describe("edit tool", () => {
         mockContext
       ).pipe(Effect.catch((e) => Effect.succeed(`Error: ${e}`)));
       expect(result.includes("Error")).toBe(true);
-    }).pipe(Effect.provide(testLayer))
+    })
   );
 });

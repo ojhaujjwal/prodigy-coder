@@ -1,16 +1,14 @@
-import { describe, expect, it } from "@effect/vitest";
+import { layer, expect } from "@effect/vitest";
 import { Effect } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import { layer as bunServicesLayer } from "@effect/platform-bun/BunServices";
 import { grepHandler } from "./grep.ts";
 
-const testLayer = bunServicesLayer;
-
 const mockContext = {
   preliminary: () => Effect.void
 };
 
-describe("grep tool", () => {
+layer(bunServicesLayer)("grep tool", (it) => {
   it.effect("finds matches in file", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
@@ -18,7 +16,7 @@ describe("grep tool", () => {
       yield* fs.writeFileString("/tmp/test-grep.txt", "hello world\nfoo bar\n");
       const result = yield* grepHandler({ pattern: "hello", path: "/tmp/test-grep.txt" }, mockContext);
       expect(result.length > 0).toBe(true);
-    }).pipe(Effect.provide(testLayer))
+    })
   );
 
   it.effect("returns empty array when no matches", () =>
@@ -28,6 +26,6 @@ describe("grep tool", () => {
       yield* fs.writeFileString("/tmp/test-grep2.txt", "hello world\nfoo bar\n");
       const result = yield* grepHandler({ pattern: "goodbye", path: "/tmp/test-grep2.txt" }, mockContext);
       expect(Array.isArray(result)).toBe(true);
-    }).pipe(Effect.provide(testLayer))
+    })
   );
 });

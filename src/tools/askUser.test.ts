@@ -1,4 +1,4 @@
-import { describe, it, expect, assert } from "@effect/vitest";
+import { assert, expect, layer } from "@effect/vitest";
 import { Effect, Layer, Queue, Schema } from "effect";
 import { BunServices } from "@effect/platform-bun";
 import * as Terminal from "effect/Terminal";
@@ -39,36 +39,36 @@ const dummyContext: Toolkit.HandlerContext<typeof AskUserTool> = {
   preliminary: () => Effect.void
 };
 
-describe("askUser tool", () => {
+layer(
+  Layer.merge(
+    BunServices.layer,
+    makeMockTerminalLayer([
+      toUserInput("A"),
+      toUserInput("l"),
+      toUserInput("i"),
+      toUserInput("c"),
+      toUserInput("e"),
+      enterInput
+    ])
+  )
+)("askUser tool", (it) => {
   it.effect("handler returns user input when Terminal is available", () =>
     Effect.gen(function* () {
       const handler = makeAskUserHandler(false);
       const result = yield* handler({ question: "What is your name?" }, dummyContext);
       expect(result).toBe("Alice");
-    }).pipe(
-      Effect.provide(
-        Layer.merge(
-          BunServices.layer,
-          makeMockTerminalLayer([
-            toUserInput("A"),
-            toUserInput("l"),
-            toUserInput("i"),
-            toUserInput("c"),
-            toUserInput("e"),
-            enterInput
-          ])
-        )
-      )
-    )
+    })
   );
+});
 
-  it.effect("handler fails with error in non-interactive mode", () =>
+layer(BunServices.layer)("askUser non-interactive", (it) => {
+  it.effect("does not require a terminal", () =>
     Effect.gen(function* () {
       const handler = makeAskUserHandler(true);
       const result = yield* handler({ question: "What is your name?" }, dummyContext).pipe(Effect.flip);
       expect(result._tag).toBe("AiError");
       assert(Schema.is(AiError.UnknownError)(result.reason));
       expect(result.reason.description).toContain("non-interactive mode");
-    }).pipe(Effect.provide(BunServices.layer))
+    })
   );
 });

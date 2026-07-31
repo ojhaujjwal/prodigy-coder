@@ -1,11 +1,13 @@
-import { describe, it, expect } from "@effect/vitest";
+import { layer, expect } from "@effect/vitest";
 import { Crypto, Effect, Layer } from "effect";
+import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import { runAgent, type AgentConfig } from "../agent.ts";
 import type { OutputEvent } from "../output.ts";
 import { makeTextFormatter, makeStreamJsonFormatter } from "../output.ts";
 import { createMockLLMLayer, createStubToolkit, createTestConfig, createTestSession } from "./helpers.ts";
 import { BunServices } from "@effect/platform-bun";
 import { EmptySkillsRepoLayer } from "../tools/index.ts";
+import { makeApprovalGateLayer } from "../approval-gate.ts";
 
 const runAgentWithMocks = (
   mockResponses: import("./helpers.ts").TurnResponse[],
@@ -24,10 +26,12 @@ const runAgentWithMocks = (
 
     const mockLLMLayer = createMockLLMLayer(mockResponses);
 
-    return yield* runAgent(["test prompt"], agentConfig, Layer.merge(mockLLMLayer, layer));
+    const agentLayer = Layer.merge(mockLLMLayer, layer).pipe(Layer.provide(makeApprovalGateLayer(config)));
+    const agentContext = yield* Layer.build(agentLayer);
+    return yield* runAgent(["test prompt"], agentConfig).pipe(Effect.provide(agentContext));
   });
 
-describe("output integration", () => {
+layer(Layer.mergeAll(BunServices.layer, EmptySkillsRepoLayer, FetchHttpClient.layer))("output integration", (it) => {
   it.effect("Test 1: Stream-json formatter through agent", () =>
     Effect.gen(function* () {
       const mockResponses: import("./helpers.ts").TurnResponse[] = [
@@ -49,7 +53,7 @@ describe("output integration", () => {
       const finishes = events.filter((e) => e.type === "finish");
       expect(textDeltas.length >= 1).toBe(true);
       expect(finishes.length >= 1).toBe(true);
-    }).pipe(Effect.provide(Layer.merge(BunServices.layer, EmptySkillsRepoLayer)))
+    })
   );
 
   it.effect("Test 2: Text formatter through agent", () =>
@@ -70,7 +74,7 @@ describe("output integration", () => {
 
       const textDeltas = events.filter((e) => e.type === "text-delta");
       expect(textDeltas[0].delta).toBe("Hello, world!");
-    }).pipe(Effect.provide(Layer.merge(BunServices.layer, EmptySkillsRepoLayer)))
+    })
   );
 
   it.effect("Test 3: All event types produce valid output", () =>

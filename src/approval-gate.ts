@@ -1,8 +1,8 @@
 import { Context, Effect, Layer } from "effect";
-import * as Prompt from "effect/unstable/cli/Prompt";
 import * as AiError from "effect/unstable/ai/AiError";
-import { BunServices } from "@effect/platform-bun";
+import type * as Prompt from "effect/unstable/cli/Prompt";
 import { needsApproval } from "./approval.ts";
+import { ApprovalPrompt, makeApprovalPromptLayer } from "./approval-prompt.ts";
 import type { ConfigData } from "./config.ts";
 
 export class ApprovalGate extends Context.Service<
@@ -24,10 +24,13 @@ export const DefaultApprovalGateLayer = Layer.succeed(
   ApprovalGate.of({ approve: () => Effect.succeed(true) })
 );
 
-export const createApprovalGate = (config: {
-  approvalMode: ConfigData["approvalMode"];
-  nonInteractive: boolean;
-}): typeof ApprovalGate.Service => ({
+export const createApprovalGate = (
+  config: {
+    approvalMode: ConfigData["approvalMode"];
+    nonInteractive: boolean;
+  },
+  prompt: typeof ApprovalPrompt.Service
+): typeof ApprovalGate.Service => ({
   approve: (toolName: string, params: unknown) => {
     if (config.approvalMode === "none") {
       return Effect.succeed(true);
@@ -38,25 +41,25 @@ export const createApprovalGate = (config: {
     if (config.nonInteractive) {
       return Effect.succeed(false);
     }
-    return Prompt.run(
-      Prompt.confirm({
-        message: `Allow ${toolName}(${JSON.stringify(params)})?`,
-        initial: false
-      })
-    ).pipe(
-      Effect.orElseSucceed(() => false),
-      Effect.provide(BunServices.layer)
-    );
+    return prompt.confirm(`Allow ${toolName}(${JSON.stringify(params)})?`);
   }
 });
 
-export const makeApprovalGateLayer = (config: ConfigData): Layer.Layer<ApprovalGate> =>
-  Layer.succeed(
-    ApprovalGate,
-    ApprovalGate.of(
-      createApprovalGate({
-        approvalMode: config.approvalMode,
-        nonInteractive: config.nonInteractive ?? false
-      })
-    )
-  );
+export const makeApprovalGate = (
+  config: ConfigData
+): Effect.Effect<typeof ApprovalGate.Service, never, ApprovalPrompt> =>
+  Effect.gen(function* () {
+    const prompt = yield* ApprovalPrompt;
+    return ApprovalGate.of(
+      createApprovalGate(
+        {
+          approvalMode: config.approvalMode,
+          nonInteractive: config.nonInteractive ?? false
+        },
+        prompt
+      )
+    );
+  });
+
+export const makeApprovalGateLayer = (config: ConfigData): Layer.Layer<ApprovalGate, never, Prompt.Environment> =>
+  Layer.effect(ApprovalGate, makeApprovalGate(config)).pipe(Layer.provide(makeApprovalPromptLayer()));

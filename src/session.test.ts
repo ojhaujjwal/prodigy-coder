@@ -1,4 +1,4 @@
-import { describe, it, expect } from "@effect/vitest";
+import { describe, expect, layer } from "@effect/vitest";
 import { Effect, Layer } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import { SessionRepo } from "./session.ts";
@@ -17,7 +17,7 @@ const cleanupSessions = () =>
     }
   });
 
-describe("session", () => {
+layer(testLayer)("session", (it) => {
   describe("createSession", () => {
     it.effect("returns session with 8-char base-36 ID and empty messages", () =>
       Effect.gen(function* () {
@@ -31,7 +31,7 @@ describe("session", () => {
         expect(session.messages.length === 0).toBe(true);
         expect(session.createdAt instanceof Date).toBe(true);
         expect(session.updatedAt instanceof Date).toBe(true);
-      }).pipe(Effect.provide(testLayer))
+      })
     );
 
     it.effect("generates unique IDs for multiple sessions", () =>
@@ -44,7 +44,7 @@ describe("session", () => {
           ids.add(session.id);
         }
         expect(ids.size).toBe(20);
-      }).pipe(Effect.provide(testLayer))
+      })
     );
 
     it.effect("createSession with systemPrompt adds it as first message", () =>
@@ -56,7 +56,7 @@ describe("session", () => {
         expect(session.messages.length).toBe(1);
         expect(session.messages[0].role).toBe("system");
         expect(session.messages[0].content).toBe("You are a helpful assistant");
-      }).pipe(Effect.provide(testLayer))
+      })
     );
   });
 
@@ -81,7 +81,7 @@ describe("session", () => {
         expect(loaded.messages[1].content).toBe("Hello");
         expect(loaded.messages[2].role).toBe("assistant");
         expect(loaded.messages[2].content).toBe("Hi there!");
-      }).pipe(Effect.provide(testLayer))
+      })
     );
   });
 
@@ -93,7 +93,7 @@ describe("session", () => {
         const sessions = yield* repo.list();
         expect(Array.isArray(sessions)).toBe(true);
         expect(sessions.length === 0).toBe(true);
-      }).pipe(Effect.provide(testLayer))
+      })
     );
 
     it.effect("returns created sessions", () =>
@@ -111,7 +111,7 @@ describe("session", () => {
         const ids: string[] = sessions.map((s) => s.id);
         expect(ids.includes(session1.id)).toBe(true);
         expect(ids.includes(session2.id)).toBe(true);
-      }).pipe(Effect.provide(testLayer))
+      })
     );
   });
 
@@ -131,7 +131,7 @@ describe("session", () => {
 
         const sessionsAfter = yield* repo.list();
         expect(sessionsAfter.some((s) => s.id === sessionId)).toBe(false);
-      }).pipe(Effect.provide(testLayer))
+      })
     );
 
     it.effect("does not throw for non-existent session", () =>
@@ -139,7 +139,7 @@ describe("session", () => {
         yield* cleanupSessions();
         const repo = yield* SessionRepo;
         yield* repo.delete("non-existent-id");
-      }).pipe(Effect.provide(testLayer))
+      })
     );
   });
 
@@ -150,7 +150,6 @@ describe("session", () => {
         const repo = yield* SessionRepo;
         yield* repo.load("non-existent-id");
       }).pipe(
-        Effect.provide(testLayer),
         Effect.flip,
         Effect.map((error) => {
           expect(error._tag).toBe("SessionNotFound");
@@ -170,7 +169,6 @@ describe("session", () => {
 
         yield* repo.load(session.id);
       }).pipe(
-        Effect.provide(testLayer),
         Effect.flip,
         Effect.map((error) => {
           expect(error !== undefined).toBe(true);
@@ -201,7 +199,7 @@ describe("session", () => {
         expect(sessions.length).toBe(2);
 
         yield* cleanupSessions();
-      }).pipe(Effect.provide(testLayer))
+      })
     );
   });
 });

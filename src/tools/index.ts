@@ -11,8 +11,7 @@ import { WebFetchTool, webfetchHandler } from "./webfetch.ts";
 import { AskUserTool, makeAskUserHandler } from "./askUser.ts";
 import { LoadSkillTool, loadSkillHandler } from "./loadSkill.ts";
 import { SkillsRepo } from "../skills.ts";
-import { createApprovalGate, DefaultApprovalGateLayer, approvalDeniedError } from "../approval-gate.ts";
-import type { ApprovalMode } from "../config.ts";
+import { ApprovalGate, DefaultApprovalGateLayer, approvalDeniedError } from "../approval-gate.ts";
 
 export const AgenticToolkit = Toolkit.make(
   ShellTool,
@@ -48,7 +47,7 @@ const withLogging =
 export const withApproval =
   <P, C, A, E, R>(
     toolName: string,
-    gate: { approve: (toolName: string, params: unknown) => Effect.Effect<boolean, never, never> },
+    gate: typeof ApprovalGate.Service,
     handler: (params: P, context: C) => Effect.Effect<A, E, R>
   ) =>
   (params: P, context: C): Effect.Effect<A, E | AiError.AiError, R> =>
@@ -62,23 +61,25 @@ export const withApproval =
     });
 
 export const makeToolkitLayer = (config: {
-  approvalMode: ApprovalMode;
   nonInteractive: boolean;
   skillsRepoLayer: Layer.Layer<SkillsRepo>;
-}): Layer.Layer<import("effect/unstable/ai").Tool.HandlersFor<typeof AgenticToolkit.tools>> => {
-  const gate = createApprovalGate({ approvalMode: config.approvalMode, nonInteractive: config.nonInteractive });
-  return AgenticToolkit.toLayer({
-    shell: withApproval("shell", gate, shellHandler),
-    read: withApproval("read", gate, readHandler),
-    write: withApproval("write", gate, writeHandler),
-    edit: withApproval("edit", gate, editHandler),
-    grep: withApproval("grep", gate, grepHandler),
-    glob: withApproval("glob", gate, globHandler),
-    webfetch: withApproval("webfetch", gate, webfetchHandler),
-    ask_user: makeAskUserHandler(config.nonInteractive),
-    load_skill: withLogging("load_skill", loadSkillHandler)
-  }).pipe(Layer.provide(config.skillsRepoLayer));
-};
+}): Layer.Layer<import("effect/unstable/ai").Tool.HandlersFor<typeof AgenticToolkit.tools>, never, ApprovalGate> =>
+  AgenticToolkit.toLayer(
+    Effect.gen(function* () {
+      const gate = yield* ApprovalGate;
+      return {
+        shell: withApproval("shell", gate, shellHandler),
+        read: withApproval("read", gate, readHandler),
+        write: withApproval("write", gate, writeHandler),
+        edit: withApproval("edit", gate, editHandler),
+        grep: withApproval("grep", gate, grepHandler),
+        glob: withApproval("glob", gate, globHandler),
+        webfetch: withApproval("webfetch", gate, webfetchHandler),
+        ask_user: makeAskUserHandler(config.nonInteractive),
+        load_skill: withLogging("load_skill", loadSkillHandler)
+      };
+    })
+  ).pipe(Layer.provide(config.skillsRepoLayer));
 
 export const EmptySkillsRepoLayer = SkillsRepo.layer([]);
 

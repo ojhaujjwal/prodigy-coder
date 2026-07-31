@@ -19,8 +19,6 @@ const parseJson = (input: string) => Schema.decodeUnknownSync(Schema.fromJsonStr
 
 const decodeContentOutput = (input: string) => Schema.decodeUnknownSync(Schema.fromJsonString(ContentOutput))(input);
 
-const testLayer = TestConsole.layer;
-
 describe("output", () => {
   describe("text formatter", () => {
     it.effect("text formatter processes text-delta event", () =>
@@ -28,7 +26,7 @@ describe("output", () => {
         const formatter = makeTextFormatter();
         const event: OutputEvent = { type: "text-delta", delta: "Hello, world!" };
         yield* formatter(event);
-      }).pipe(Effect.provide(testLayer))
+      })
     );
 
     it.effect("text formatter processes tool-call event", () =>
@@ -41,7 +39,7 @@ describe("output", () => {
           params: { filePath: "/test/file.txt" }
         };
         yield* formatter(event);
-      }).pipe(Effect.provide(testLayer))
+      })
     );
 
     it.effect("text formatter processes tool-result event", () =>
@@ -55,7 +53,7 @@ describe("output", () => {
           isError: false
         };
         yield* formatter(event);
-      }).pipe(Effect.provide(testLayer))
+      })
     );
 
     it.effect("text formatter processes finish event", () =>
@@ -63,7 +61,7 @@ describe("output", () => {
         const formatter = makeTextFormatter();
         const event: OutputEvent = { type: "finish", text: "Task completed successfully." };
         yield* formatter(event);
-      }).pipe(Effect.provide(testLayer))
+      })
     );
 
     it.effect("text formatter processes error event", () =>
@@ -71,7 +69,7 @@ describe("output", () => {
         const formatter = makeTextFormatter();
         const event: OutputEvent = { type: "error", message: "Something went wrong" };
         yield* formatter(event);
-      }).pipe(Effect.provide(testLayer))
+      })
     );
 
     it.effect("text formatter processes session-info event", () =>
@@ -85,7 +83,7 @@ describe("output", () => {
         expect(log).toContain("abc-123");
         expect(log).toContain("export PRODIGY_SESSION_ID=abc-123");
         expect(log).toContain("---");
-      }).pipe(Effect.provide(testLayer))
+      })
     );
   });
 
@@ -102,7 +100,7 @@ describe("output", () => {
         expect(parsed.type).toBe("content");
         expect(parsed.content[0].type).toBe("text");
         expect(parsed.content[0].text).toBe("Hello");
-      }).pipe(Effect.provide(testLayer))
+      })
     );
 
     it.effect("stream-json formatter outputs valid LDJSON for tool-call", () =>
@@ -121,7 +119,7 @@ describe("output", () => {
         expect(parsed.type).toBe("tool_use");
         expect(parsed.name).toBe("read");
         expect(parsed.input).toEqual({ filePath: "/test.txt" });
-      }).pipe(Effect.provide(testLayer))
+      })
     );
 
     it.effect("stream-json formatter outputs valid LDJSON for tool-result", () =>
@@ -141,7 +139,7 @@ describe("output", () => {
         expect(parsed.type).toBe("tool_result");
         expect(parsed.content).toBe("file contents");
         expect(parsed.is_error).toBe(false);
-      }).pipe(Effect.provide(testLayer))
+      })
     );
 
     it.effect("stream-json formatter outputs valid LDJSON for finish", () =>
@@ -154,7 +152,7 @@ describe("output", () => {
         const parsed = parseJson(String(outputs[0]));
         expect(parsed.type).toBe("final");
         expect(parsed.content).toBe("Done");
-      }).pipe(Effect.provide(testLayer))
+      })
     );
 
     it.effect("stream-json formatter outputs valid LDJSON for error", () =>
@@ -167,7 +165,7 @@ describe("output", () => {
         const parsed = parseJson(String(outputs[0]));
         expect(parsed.type).toBe("error");
         expect(parsed.message).toBe("Failed");
-      }).pipe(Effect.provide(testLayer))
+      })
     );
 
     it.effect("stream-json formatter outputs valid LDJSON for session-info", () =>
@@ -181,7 +179,7 @@ describe("output", () => {
         expect(parsed.type).toBe("session");
         expect(parsed.session_id).toBe("abc-123");
         expect(parsed.export_command).toBe("export PRODIGY_SESSION_ID=abc-123");
-      }).pipe(Effect.provide(testLayer))
+      })
     );
 
     it.effect("all event types are handled without errors", () =>
@@ -198,7 +196,7 @@ describe("output", () => {
         for (const event of events) {
           yield* formatter(event);
         }
-      }).pipe(Effect.provide(testLayer))
+      })
     );
   });
 });

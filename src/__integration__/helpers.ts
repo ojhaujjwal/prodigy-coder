@@ -11,7 +11,7 @@ import * as BunHttpServer from "@effect/platform-bun/BunHttpServer";
 import type { ConfigData } from "../config.ts";
 import { SessionSchema, type Session, type Message } from "../session.ts";
 import { AgenticToolkit, withApproval, EmptySkillsRepoLayer } from "../tools/index.ts";
-import { createApprovalGate } from "../approval-gate.ts";
+import { ApprovalGate } from "../approval-gate.ts";
 
 export type MockPart =
   | { type: "text-delta"; delta: string }
@@ -76,14 +76,11 @@ export const createMockLLMLayer = (
 };
 
 export interface StubToolkit {
-  layer: Layer.Layer<Tool.HandlersFor<typeof AgenticToolkit.tools>>;
+  layer: Layer.Layer<Tool.HandlersFor<typeof AgenticToolkit.tools>, never, ApprovalGate>;
   calls: Record<string, unknown[]>;
 }
 
-export const createStubToolkit = (
-  overrides?: Record<string, string | Error>,
-  config?: { approvalMode: "none" | "dangerous" | "all"; nonInteractive: boolean }
-): StubToolkit => {
+export const createStubToolkit = (overrides?: Record<string, string | Error>): StubToolkit => {
   const calls: Record<string, unknown[]> = {};
 
   const makeHandler =
@@ -107,21 +104,22 @@ export const createStubToolkit = (
       return Effect.succeed(defaultResult);
     };
 
-  const toolConfig = config ?? { approvalMode: "none" as const, nonInteractive: false };
-
-  const gate = createApprovalGate(toolConfig);
-
-  const layer = AgenticToolkit.toLayer({
-    shell: withApproval("shell", gate, makeHandler("shell", "stub shell result")),
-    read: withApproval("read", gate, makeHandler("read", "stub read result")),
-    write: withApproval("write", gate, makeHandler("write", "stub write result")),
-    edit: withApproval("edit", gate, makeHandler("edit", "stub edit result")),
-    grep: withApproval("grep", gate, makeHandler("grep", ["stub grep result"])),
-    glob: withApproval("glob", gate, makeHandler("glob", ["stub glob result"])),
-    webfetch: withApproval("webfetch", gate, makeHandler("webfetch", "stub webfetch result")),
-    ask_user: withApproval("ask_user", gate, makeHandler("ask_user", "stub ask result")),
-    load_skill: withApproval("load_skill", gate, makeHandler("load_skill", "stub load_skill result"))
-  }).pipe(Layer.provide(EmptySkillsRepoLayer));
+  const layer = AgenticToolkit.toLayer(
+    Effect.gen(function* () {
+      const gate = yield* ApprovalGate;
+      return {
+        shell: withApproval("shell", gate, makeHandler("shell", "stub shell result")),
+        read: withApproval("read", gate, makeHandler("read", "stub read result")),
+        write: withApproval("write", gate, makeHandler("write", "stub write result")),
+        edit: withApproval("edit", gate, makeHandler("edit", "stub edit result")),
+        grep: withApproval("grep", gate, makeHandler("grep", ["stub grep result"])),
+        glob: withApproval("glob", gate, makeHandler("glob", ["stub glob result"])),
+        webfetch: withApproval("webfetch", gate, makeHandler("webfetch", "stub webfetch result")),
+        ask_user: withApproval("ask_user", gate, makeHandler("ask_user", "stub ask result")),
+        load_skill: withApproval("load_skill", gate, makeHandler("load_skill", "stub load_skill result"))
+      };
+    })
+  ).pipe(Layer.provide(EmptySkillsRepoLayer));
 
   return { layer, calls };
 };

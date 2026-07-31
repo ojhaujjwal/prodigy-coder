@@ -1,20 +1,18 @@
-import { describe, it, expect } from "@effect/vitest";
+import { layer, expect } from "@effect/vitest";
 import { Effect } from "effect";
 import { layer as bunServicesLayer } from "@effect/platform-bun/BunServices";
 import { shellHandler } from "./shell.ts";
-
-const testLayer = bunServicesLayer;
 
 const mockContext = {
   preliminary: () => Effect.void
 };
 
-describe("shell tool", () => {
+layer(bunServicesLayer)("shell tool", (it) => {
   it.effect("executes echo hello and returns output", () =>
     Effect.gen(function* () {
       const result = yield* shellHandler({ command: "echo hello" }, mockContext);
       expect(result).toBe("hello\n");
-    }).pipe(Effect.provide(testLayer))
+    })
   );
 
   it.effect("command fails with non-zero exit, returns error message", () =>
@@ -22,7 +20,7 @@ describe("shell tool", () => {
       const result = yield* shellHandler({ command: "exit 1" }, mockContext);
       expect(result.includes("Command failed")).toBe(true);
       expect(result.includes("exit code 1")).toBe(true);
-    }).pipe(Effect.provide(testLayer))
+    })
   );
 
   it.effect("captures both stdout and stderr", () =>
@@ -30,13 +28,13 @@ describe("shell tool", () => {
       const result = yield* shellHandler({ command: "echo stdout; echo stderr >&2" }, mockContext);
       expect(result.includes("stdout")).toBe(true);
       expect(result.includes("stderr")).toBe(true);
-    }).pipe(Effect.provide(testLayer))
+    })
   );
 
   it.effect("returns empty string for command with no output", () =>
     Effect.gen(function* () {
       const result = yield* shellHandler({ command: "true" }, mockContext);
       expect(result).toBe("");
-    }).pipe(Effect.provide(testLayer))
+    })
   );
 });

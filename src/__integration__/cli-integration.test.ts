@@ -1,32 +1,30 @@
-import { describe, it, expect } from "@effect/vitest";
+import { layer, expect } from "@effect/vitest";
 import { Effect, Layer, ConfigProvider } from "effect";
 import { Command } from "effect/unstable/cli";
 import * as TestConsole from "effect/testing/TestConsole";
 import * as FileSystem from "effect/FileSystem";
 import { layer as bunServicesLayer } from "@effect/platform-bun/BunServices";
 import { app } from "../index.ts";
+import { loadConfig } from "../config.ts";
 import { SessionRepo } from "../session.ts";
 import { EmptySkillsRepoLayer } from "../tools/index.ts";
 
-const runApp = (args: ReadonlyArray<string>) =>
-  Command.runWith(app, { version: "0.0.1" })(args).pipe(Effect.provide(bunServicesLayer));
+const runApp = (args: ReadonlyArray<string>) => Command.runWith(app, { version: "0.0.1" })(args);
 
 const testConfigProvider = ConfigProvider.fromUnknown({
+  HOME: "/tmp/prodigy-cli-test-home",
   PRODIGY_CODER_API_KEY: "test-key"
 });
 
 const TEST_SESSION_DIR = ".prodigy-coder/test-sessions";
 
-const testLayer = Layer.merge(
-  TestConsole.layer,
-  Layer.mergeAll(
-    ConfigProvider.layerAdd(testConfigProvider, { asPrimary: true }),
-    SessionRepo.layer(TEST_SESSION_DIR),
-    EmptySkillsRepoLayer
-  )
+const appConfigLayer = loadConfig().pipe(
+  Layer.provideMerge(Layer.merge(bunServicesLayer, ConfigProvider.layerAdd(testConfigProvider, { asPrimary: true })))
 );
 
-const combinedLayer = Layer.merge(bunServicesLayer, testLayer).pipe(Layer.provide(bunServicesLayer));
+const sessionLayer = SessionRepo.layer(TEST_SESSION_DIR).pipe(Layer.provideMerge(bunServicesLayer));
+
+const testLayer = Layer.mergeAll(TestConsole.layer, appConfigLayer, sessionLayer, EmptySkillsRepoLayer);
 
 const cleanupSessions = () =>
   Effect.gen(function* () {
@@ -37,14 +35,14 @@ const cleanupSessions = () =>
     }
   });
 
-describe("CLI integration", () => {
+layer(testLayer)("CLI integration", (it) => {
   it.effect("session list with no sessions", () =>
     Effect.gen(function* () {
       yield* cleanupSessions();
       yield* runApp(["session", "list"]);
       const logs = yield* TestConsole.logLines;
       expect(logs.some((log) => String(log).includes("No sessions found"))).toBe(true);
-    }).pipe(Effect.provide(combinedLayer))
+    })
   );
 
   it.effect("session list with sessions", () =>
@@ -58,7 +56,7 @@ describe("CLI integration", () => {
       expect(logs.some((log) => String(log).includes(session.id))).toBe(true);
 
       yield* repo.delete(session.id);
-    }).pipe(Effect.provide(combinedLayer))
+    })
   );
 
   it.effect("session delete", () =>
@@ -70,7 +68,7 @@ describe("CLI integration", () => {
       yield* runApp(["session", "delete", session.id]);
       const logs = yield* TestConsole.logLines;
       expect(logs.some((log) => String(log).includes("Deleted session"))).toBe(true);
-    }).pipe(Effect.provide(combinedLayer))
+    })
   );
 
   it.effect("config show", () =>
@@ -78,7 +76,7 @@ describe("CLI integration", () => {
       yield* runApp(["config", "show"]);
       const logs = yield* TestConsole.logLines;
       expect(logs.some((log) => String(log).includes("***"))).toBe(true);
-    }).pipe(Effect.provide(combinedLayer))
+    })
   );
 
   it.effect("main command with no prompt", () =>
@@ -86,7 +84,7 @@ describe("CLI integration", () => {
       yield* runApp(["prodigy"]);
       const logs = yield* TestConsole.logLines;
       expect(logs.some((log) => String(log).includes("No prompt provided"))).toBe(true);
-    }).pipe(Effect.provide(combinedLayer))
+    })
   );
 
   it.effect("main command accepts --continue flag", () =>
@@ -94,7 +92,7 @@ describe("CLI integration", () => {
       yield* runApp(["prodigy", "--continue"]);
       const logs = yield* TestConsole.logLines;
       expect(logs.some((log) => String(log).includes("No prompt provided"))).toBe(true);
-    }).pipe(Effect.provide(combinedLayer))
+    })
   );
 
   it.effect("main command accepts --continue with --session", () =>
@@ -102,7 +100,7 @@ describe("CLI integration", () => {
       yield* runApp(["prodigy", "--continue", "--session", "abc123"]);
       const logs = yield* TestConsole.logLines;
       expect(logs.some((log) => String(log).includes("No prompt provided"))).toBe(true);
-    }).pipe(Effect.provide(combinedLayer))
+    })
   );
 
   it.effect("session save and load roundtrip persists messages", () =>
@@ -132,6 +130,6 @@ describe("CLI integration", () => {
       expect(loaded2.messages[3].content).toBe("how are you?");
 
       yield* cleanupSessions();
-    }).pipe(Effect.provide(combinedLayer))
+    })
   );
 });

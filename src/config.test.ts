@@ -1,4 +1,4 @@
-import { describe, it, expect } from "@effect/vitest";
+import { describe, expect, layer } from "@effect/vitest";
 import { ConfigProvider, Effect, Layer, Schema } from "effect";
 import { AppConfig, loadConfig, maskConfig, ConfigSchema } from "./config.ts";
 import * as FileSystem from "effect/FileSystem";
@@ -60,14 +60,14 @@ const setupTmpDir = () =>
     counter++;
     testTmpDir = `/tmp/prodigy-config-test-${Date.now()}-${counter}`;
     yield* fs.makeDirectory(testTmpDir);
-  }).pipe(Effect.provide(bunServicesLayer));
+  });
 
 const teardownTmpDir = () =>
   Effect.flatMap(getTmpDir(), (tmpDir) =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       yield* fs.remove(tmpDir, { recursive: true }).pipe(Effect.catchTag("PlatformError", () => Effect.void));
-    }).pipe(Effect.provide(bunServicesLayer))
+    })
   );
 
 const writeConfigFile = (content: string, filename = ".prodigy-coder.json") =>
@@ -75,40 +75,40 @@ const writeConfigFile = (content: string, filename = ".prodigy-coder.json") =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       yield* fs.writeFileString(`${tmpDir}/${filename}`, content);
-    }).pipe(Effect.provide(bunServicesLayer))
+    })
   );
 
 const runWithConfig = <A, E, R>(effect: Effect.Effect<A, E, R | AppConfig>) =>
   Effect.flatMap(getTmpDir(), (home) =>
-    effect.pipe(Effect.provide(loadConfig().pipe(Layer.provideMerge(Layer.merge(bunServicesLayer, homeLayer(home))))))
+    Effect.gen(function* () {
+      const context = yield* Layer.build(loadConfig().pipe(Layer.provide(homeLayer(home))));
+      return yield* effect.pipe(Effect.provide(context));
+    })
   );
 
 const runWithConfigPath = <A, E, R>(filename: string, effect: Effect.Effect<A, E, R | AppConfig>) =>
   Effect.flatMap(getTmpDir(), (home) =>
-    effect.pipe(
-      Effect.provide(
-        loadConfig(`${home}/${filename}`).pipe(Layer.provideMerge(Layer.merge(bunServicesLayer, homeLayer(home))))
-      )
-    )
+    Effect.gen(function* () {
+      const context = yield* Layer.build(loadConfig(`${home}/${filename}`).pipe(Layer.provide(homeLayer(home))));
+      return yield* effect.pipe(Effect.provide(context));
+    })
   );
 
 const runWithConfigAndEnv = <A, E, R>(env: Record<string, string>, effect: Effect.Effect<A, E, R | AppConfig>) =>
   Effect.flatMap(getTmpDir(), (home) =>
-    effect.pipe(
-      Effect.provide(
+    Effect.gen(function* () {
+      const context = yield* Layer.build(
         loadConfig().pipe(
-          Layer.provideMerge(
-            Layer.merge(
-              Layer.merge(bunServicesLayer, homeLayer(home)),
-              ConfigProvider.layer(ConfigProvider.fromUnknown({ HOME: home, ...env }))
-            )
+          Layer.provide(
+            Layer.merge(homeLayer(home), ConfigProvider.layer(ConfigProvider.fromUnknown({ HOME: home, ...env })))
           )
         )
-      )
-    )
+      );
+      return yield* effect.pipe(Effect.provide(context));
+    })
   );
 
-describe("config", () => {
+layer(bunServicesLayer)("config", (it) => {
   describe("loadConfig", () => {
     it.effect("loads from .prodigy-coder.json file correctly", () =>
       setupTmpDir().pipe(
