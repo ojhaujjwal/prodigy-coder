@@ -42,6 +42,40 @@ Per-run execution policy such as `maxTurns` may override the configured agent pr
 **Toolkit**:
 The declared set of tools that an agent profile may offer to the model, together with the rules governing their execution.
 
+**Agent profile**:
+A named, runtime-bound plain typed value for one agent instance. It selects one typed toolkit and the policies governing its use across that instance's runs, including behavior defaults such as the system prompt and turn limit. A run may override bounded execution policy, but it cannot replace the profile's toolkit. Providers, execution authorities, session identity, and approval decisions remain outside the profile.
+
+**Typed profile binding**:
+The generic composition step that checks a profile's toolkit against its handler Layers and closes over the validated result in a stable `ProdigyAgent` service. The exact toolkit type is hidden after construction; no dynamic toolkit mutation or unchecked type escape is permitted. Profile handler Layers preserve their requirements on the canonical capability services; composition roots provide concrete local or remote authorities.
+
+**Toolkit composition**:
+The explicit construction of an agent's available tools using Effect AI's `Toolkit` values and merge semantics. Callers may use the built-in toolkit, replace a built-in definition, add custom tools, or compose a toolkit from scratch. Same-name replacement is intentional; there is no parallel Prodigy toolkit builder or implicit handler selection.
+
+**Tool governance**:
+Effect AI's native approval metadata and approval-response protocol are the SDK seam when a toolkit declares approval requirements. The existing CLI `ApprovalGate` and `approvalMode` remain the first authorization adapter and must preserve their current `none`, `dangerous`, `all`, and non-interactive behavior; this model does not infer a new built-in sensitivity policy.
+
+Native approval requests are projected as the existing `interaction-requested` agent event with a typed tool-approval request. The runtime awaits the interaction response, supplies Effect AI's native approval response to the next model turn, and preserves denial as a tool result.
+
+**Tool definition**:
+The model-facing, typed Effect AI `Tool` value: its name, description, parameter and result schemas, failure mode, and approval metadata. It does not choose a local or remote execution authority.
+
+**Tool compatibility surface**:
+The existing built-in tool names, model-facing parameter schemas, and result shapes remain stable during re-architecture. Handlers parse and translate those inputs into canonical authority types such as `WorkspacePath` and `CommandRequest`, then project authority outcomes back into the tool's declared result/failure shape.
+
+The exact per-tool failure schemas remain an open follow-up: the current tools predate the `Workspace` and `CommandExecutor` error families, so this ticket fixes only the translation boundary.
+
+**Remote tool**:
+An ordinary typed tool whose handler delegates to a remote authority. Remote execution is a property of the handler's dependencies and Layer, not a separate tool kind or toolkit composition mechanism.
+
+**Handler Layer composition**:
+The handler context for a composed toolkit is assembled with Effect's Layer algebra. A toolkit merged from built-in and custom definitions may use the corresponding merged handler Layers; later definitions own same-name execution.
+
+**Built-in profile**:
+The ready default profile for ordinary local execution. For the first migration it reuses the existing `AgenticToolkit` and `AgenticToolkitLayer`; CLI-specific approval and non-interactive behavior remains in `makeToolkitLayer(config)`. It is a thin composition, not a toolkit builder or a second tool model.
+
+**Built-in toolkit**:
+The existing `AgenticToolkit` tool surface is migration input for the SDK's default Effect AI toolkit. Its definitions and compatibility exports may be reused, but canonical handlers must depend on the separate `Workspace`, `CommandExecutor`, and optional `HumanInteraction` authorities rather than platform services directly.
+
 **AgentRunner**:
 The contract used by an outer harness to start an agent run and consume its progress. Prodigy, OpenCode, and remote workers can each implement it.
 
