@@ -20,7 +20,7 @@ Established constraints from the destination discussion:
 - Toolkits are typed and composed at runtime construction; built-in tools are replaceable or extendable through agent profiles.
 - The core depends on application-owned `Workspace` and `CommandExecutor` authorities.
 - Sessions use a replaceable `SessionStore`, with file storage as the local default.
-- The Ralph-style loop is separate and consumes a generic `AgentRunner`.
+- The Ralph-style loop is separate from core and consumes a generic `AgentRunner`; whether it ships as its own package remains open.
 - Providers are caller-configured Effect Layers; the core depends only on `LanguageModel`.
 - Agent output is a structured Effect `Stream`; formatting belongs to adapters.
 - Human approval and questions start as an injectable Effect service.
@@ -36,13 +36,13 @@ Established constraints from the destination discussion:
 - [Define Capability Services and Layer Composition](tickets/02-define-capability-services-and-layer-composition.md) — Separate Workspace, CommandExecutor, SessionStore, and HumanInteraction authorities compose through explicit Layers and one caller-owned ManagedRuntime; Effect built-ins provide observability.
 - [Define Typed Toolkit Profiles and Custom Tool Composition](tickets/03-define-typed-toolkit-profiles-and-custom-tool-composition.md) — Effect AI `Toolkit` values and Layers compose typed, runtime-fixed profiles; existing tools remain a compatibility surface while handlers migrate behind the authorities established by Define Capability Services and Layer Composition, and native approval adapts the existing CLI policy.
 - [Define SessionStore Checkpoint Semantics](tickets/04-define-sessionstore-checkpoint-semantics.md) — Session state is committed as versioned, atomic transcript snapshots with prompt-first and complete-turn checkpoints; optimistic revisions prevent lost updates, while interruption recovery and continuation remain caller policy.
+- [Define Package and Public Export Boundaries](tickets/08-define-package-and-public-export-boundaries.md) — The existing CLI moves mechanically into `@prodigy/cli` as a temporary compatibility scaffold, then is rebuilt against `@prodigy/core`; Ralph package placement remains a follow-up decision.
 
 ## Not yet specified
 
 - How remote sandbox messages are transported and resumed.
 - Session retention policy and administrative lifecycle beyond runtime create/load/save.
 - Harness retry, interruption, commit, rollback, and partial-progress semantics.
-- Package boundaries, export maps, versioning, and compatibility guarantees.
 - Observability, quotas, multi-tenant identity, and worker scheduling.
 
 ## Out of scope

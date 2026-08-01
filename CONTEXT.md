@@ -112,3 +112,17 @@ The outer iterative controller that builds prompts, invokes an `AgentRunner`, ru
 
 **Prodigy CLI**:
 The compatibility entrypoint that parses command-line input and composes the Prodigy SDK; it is not the agent runtime itself.
+
+## Packages
+
+**`@prodigy/core`**:
+The canonical SDK package. It owns `ProdigyAgent`, the generic `AgentRunner` contract, agent events and errors, capability services, typed toolkit composition, built-in tools, and local filesystem/process adapters. Local adapters implement core authorities; their runtime-specific Layers are supplied by the composition root.
+
+**Ralph harness package**:
+A possible package for the Ralph-specific outer loop. It would consume the generic `AgentRunner` contract from `@prodigy/core` and own prompt, progress, checks, completion, retry, interruption, and Git policy. Whether it is published as `@prodigy/ralph-harness` or remains an application-level composition is unresolved.
+
+**`@prodigy/cli`**:
+The separate command-line adapter. It owns flags, configuration, terminal I/O, output formatting, Bun startup, and compatibility behavior while composing `@prodigy/core`.
+
+**Specialized package**:
+A future package for an alternative execution scenario, such as a remote workspace or container sandbox. It depends on core authorities and supplies alternative Layers; it is not part of the initial package split.
