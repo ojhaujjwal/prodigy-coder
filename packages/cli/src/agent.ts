@@ -10,6 +10,7 @@ import { AgenticToolkit } from "./tools/index.ts";
 export interface AgentConfig {
   readonly session: Session;
   readonly config: ConfigData;
+  readonly cwd?: string;
 }
 
 const formatToolResult = (encodedResult: unknown): string => {
@@ -68,7 +69,7 @@ export const runAgent = (userMessages: readonly string[], agentConfig: AgentConf
 
     if (messages.length === 0) {
       const fs = yield* FileSystem.FileSystem;
-      const agentsMdOption = yield* loadAgentsMd(fs);
+      const agentsMdOption = yield* loadAgentsMd(fs, agentConfig.cwd);
       const agentsMd = Option.getOrElse(agentsMdOption, () => DEFAULT_AGENTS_MD);
       const explicitPrompt = config.systemPrompt ?? "";
       const combined = [agentsMd, explicitPrompt].filter(Boolean).join("\n\n");

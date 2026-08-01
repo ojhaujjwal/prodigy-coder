@@ -10,7 +10,7 @@ export class ApprovalGate extends Context.Service<
   {
     readonly approve: (toolName: string, params: unknown) => Effect.Effect<boolean, never, never>;
   }
->()("prodigy-coder/approval-gate/ApprovalGate") {}
+>()("@prodigy/cli/approval-gate/ApprovalGate") {}
 
 export const approvalDeniedError = (toolName: string): AiError.AiError =>
   AiError.make({

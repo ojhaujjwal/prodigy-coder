@@ -1,0 +1,31 @@
+{
+  "name": "@prodigy/core",
+  "version": "0.0.0",
+  "description": "Runtime-neutral Prodigy SDK core",
+  "files": [
+    "src/**/*.ts"
+  ],
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "ci": "bun run lint && bun run typecheck && bun run test --run",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "bun --bun oxlint --disable-nested-config src",
+    "lint-fix": "bun --bun oxlint --disable-nested-config --fix src",
+    "test": "bun --bun vitest",
+    "coverage": "bun --bun vitest --coverage"
+  },
+  "devDependencies": {
+    "@effect/language-service": "^0.85.1",
+    "effect": "^4.0.0-beta.101",
+    "oxlint": "^1.60.0",
+    "typescript": "^6.0.2",
+    "vitest": "^4.0.0"
+  },
+  "peerDependencies": {
+    "effect": "^4.0.0-beta.101"
+  }
+}

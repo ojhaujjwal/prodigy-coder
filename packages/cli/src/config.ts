@@ -125,7 +125,7 @@ const readConfigFile = Effect.fnUntraced(function* (path: string) {
   );
 });
 
-class AppConfig extends Context.Service<AppConfig, ConfigData>()("prodigy-coder/config/AppConfig") {
+class AppConfig extends Context.Service<AppConfig, ConfigData>()("@prodigy/cli/config/AppConfig") {
   static readonly layer = Layer.effect(
     AppConfig,
     Effect.gen(function* () {

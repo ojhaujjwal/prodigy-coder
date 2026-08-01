@@ -310,7 +310,7 @@ commit_changes() {
 
     log "INFO" "Committing changes..."
 
-    git add src/ specs/ RALPH_AUTO_PROMPT.md 2>/dev/null || true
+    git add packages/ specs/ RALPH_AUTO_PROMPT.md 2>/dev/null || true
     git add -u
 
     if git diff --cached --quiet; then

@@ -90,7 +90,7 @@ class SessionRepo extends Context.Service<
     >;
     readonly delete: (id: string) => Effect.Effect<void, SessionStorageError>;
   }
->()("prodigy-coder/session/SessionRepo") {
+>()("@prodigy/cli/session/SessionRepo") {
   static readonly layer = (sessionDir: string) =>
     Layer.effect(
       SessionRepo,

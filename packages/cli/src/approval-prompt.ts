@@ -6,7 +6,7 @@ export class ApprovalPrompt extends Context.Service<
   {
     readonly confirm: (message: string) => Effect.Effect<boolean, never, never>;
   }
->()("prodigy-coder/approval-prompt/ApprovalPrompt") {}
+>()("@prodigy/cli/approval-prompt/ApprovalPrompt") {}
 
 export const makeApprovalPromptLayer = (): Layer.Layer<ApprovalPrompt, never, Prompt.Environment> =>
   Layer.effect(

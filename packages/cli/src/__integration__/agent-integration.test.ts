@@ -17,7 +17,8 @@ const runAgentWithMockServer = (
   userMessages: readonly string[],
   responses: MockOpenAIResponse[][],
   configOverrides?: Partial<ConfigData>,
-  toolkitLayer?: Layer.Layer<Tool.HandlersFor<typeof AgenticToolkit.tools>, never, ApprovalGate>
+  toolkitLayer?: Layer.Layer<Tool.HandlersFor<typeof AgenticToolkit.tools>, never, ApprovalGate>,
+  cwd = "."
 ) =>
   Effect.gen(function* () {
     const server = yield* createMockOpenAIServer(responses);
@@ -34,7 +35,7 @@ const runAgentWithMockServer = (
 
     const sessionId = yield* (yield* Crypto.Crypto).randomUUIDv4;
     const session = createTestSession(sessionId);
-    const agentConfig: AgentConfig = { session, config };
+    const agentConfig: AgentConfig = { session, config, cwd };
 
     const tl =
       toolkitLayer ??
@@ -481,9 +482,24 @@ layer(Layer.merge(BunServices.layer, EmptySkillsRepoLayer))("e2e", (it) => {
   );
 
   describe("System Prompt", () => {
+    const makeAgentsWorkspace = (content: string) =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const cwd = yield* fs.makeTempDirectoryScoped();
+        yield* fs.writeFileString(`${cwd}/AGENTS.md`, content);
+        return cwd;
+      });
+
     it.effect("prepends AGENTS.md content when no explicit systemPrompt", () =>
       Effect.gen(function* () {
-        const { server } = yield* runAgentWithMockServer(["hello"], [[{ type: "text", content: "Hi there" }]]);
+        const cwd = yield* makeAgentsWorkspace("AI Agentic Coding CLI");
+        const { server } = yield* runAgentWithMockServer(
+          ["hello"],
+          [[{ type: "text", content: "Hi there" }]],
+          undefined,
+          undefined,
+          cwd
+        );
 
         expect(server.calls.length).toBe(1);
         const requestBody = JSON.stringify(server.calls[0]);
@@ -495,9 +511,16 @@ layer(Layer.merge(BunServices.layer, EmptySkillsRepoLayer))("e2e", (it) => {
 
     it.effect("prepends both AGENTS.md and explicit systemPrompt when both present", () =>
       Effect.gen(function* () {
-        const { server } = yield* runAgentWithMockServer(["hello"], [[{ type: "text", content: "Hi there" }]], {
-          systemPrompt: "You are a helpful assistant."
-        });
+        const cwd = yield* makeAgentsWorkspace("AI Agentic Coding CLI");
+        const { server } = yield* runAgentWithMockServer(
+          ["hello"],
+          [[{ type: "text", content: "Hi there" }]],
+          {
+            systemPrompt: "You are a helpful assistant."
+          },
+          undefined,
+          cwd
+        );
 
         expect(server.calls.length).toBe(1);
         const requestBody = JSON.stringify(server.calls[0]);
