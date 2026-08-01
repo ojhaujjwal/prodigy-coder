@@ -79,6 +79,18 @@ The existing `AgenticToolkit` tool surface is migration input for the SDK's defa
 **AgentRunner**:
 The contract used by an outer harness to start an agent run and consume its progress. Prodigy, OpenCode, and remote workers can each implement it.
 
+**SessionStore**:
+The replaceable authority for committed conversation state. It creates and loads sessions and accepts conditional checkpoints; it does not own run orchestration, retention, locking, or rollback of external effects.
+
+**Session checkpoint**:
+A durable boundary in a session's conversation history. The user prompt is checkpointed before model execution, and each completed assistant/tool exchange is checkpointed before another model turn. Stream fragments and incomplete exchanges are not committed state.
+
+**Session revision**:
+The identity of a committed session snapshot used to detect competing updates. A revision is storage concurrency metadata, not part of the conversation's meaning.
+
+**Session continuation**:
+A fresh agent run that loads an existing session by `SessionId` and supplies a new prompt. Continuation does not implicitly resume an interrupted run or replay its effects.
+
 ## Execution Boundaries
 
 **Workspace**:

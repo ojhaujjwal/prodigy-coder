@@ -35,11 +35,12 @@ Established constraints from the destination discussion:
 - [Define the ProdigyAgent Run Contract](tickets/01-define-the-prodigyagent-run-contract.md) — The canonical API is a lazy Effect service returning semantic `AgentEvent`s with explicit session identity, typed union failures, terminal results, and interruption-based cancellation.
 - [Define Capability Services and Layer Composition](tickets/02-define-capability-services-and-layer-composition.md) — Separate Workspace, CommandExecutor, SessionStore, and HumanInteraction authorities compose through explicit Layers and one caller-owned ManagedRuntime; Effect built-ins provide observability.
 - [Define Typed Toolkit Profiles and Custom Tool Composition](tickets/03-define-typed-toolkit-profiles-and-custom-tool-composition.md) — Effect AI `Toolkit` values and Layers compose typed, runtime-fixed profiles; existing tools remain a compatibility surface while handlers migrate behind the authorities established by Define Capability Services and Layer Composition, and native approval adapts the existing CLI policy.
+- [Define SessionStore Checkpoint Semantics](tickets/04-define-sessionstore-checkpoint-semantics.md) — Session state is committed as versioned, atomic transcript snapshots with prompt-first and complete-turn checkpoints; optimistic revisions prevent lost updates, while interruption recovery and continuation remain caller policy.
 
 ## Not yet specified
 
 - How remote sandbox messages are transported and resumed.
-- Session concurrency, checkpoint conflict handling, and retention policy.
+- Session retention policy and administrative lifecycle beyond runtime create/load/save.
 - Harness retry, interruption, commit, rollback, and partial-progress semantics.
 - Package boundaries, export maps, versioning, and compatibility guarantees.
 - Observability, quotas, multi-tenant identity, and worker scheduling.

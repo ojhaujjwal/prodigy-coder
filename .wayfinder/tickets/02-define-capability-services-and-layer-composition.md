@@ -135,3 +135,5 @@ This resolution supersedes the older architecture draft where its proposed servi
 **Date:** 2026-08-01
 
 Error channels use cohesive families rather than one broad error per method or one error class per method. `Workspace` groups lookup, persistence, and search failures; `SessionStore` groups lookup and persistence failures. A module-level error such as `SessionError` or `WorkspaceError` is a plain union of those family errors. Each family carries a tagged `reason` union containing the precise failure kind and operation-safe detail. Single-operation services such as `CommandExecutor` use one wrapper with a `reason` union.
+
+**Session checkpoint refinement:** The `SessionStore` port remains limited to runtime `create`, `load`, and `save`, but `save` is conditional on an expected session revision and returns the committed revision. The complete checkpoint, atomicity, conflict, interruption, and serialization guarantees are defined by [Define SessionStore Checkpoint Semantics](04-define-sessionstore-checkpoint-semantics.md).
