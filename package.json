@@ -2,7 +2,22 @@
   "name": "prodigy-coder",
   "private": true,
   "type": "module",
-  "workspaces": ["packages/*"],
+  "workspaces": {
+    "packages": ["packages/*"],
+    "catalog": {
+      "@effect/ai-anthropic": "^4.0.0-beta.101",
+      "@effect/ai-openai": "^4.0.0-beta.101",
+      "@effect/ai-openai-compat": "^4.0.0-beta.101",
+      "@effect/ai-openrouter": "^4.0.0-beta.101",
+      "@effect/language-service": "^0.85.1",
+      "@effect/platform-bun": "^4.0.0-beta.101",
+      "@effect/vitest": "^4.0.0-beta.101",
+      "effect": "^4.0.0-beta.101",
+      "oxlint": "^1.60.0",
+      "typescript": "^6.0.2",
+      "vitest": "^4.0.0"
+    }
+  },
   "scripts": {
     "ci": "bun run --workspaces --sequential ci",
     "typecheck": "bun run --workspaces --sequential typecheck",
@@ -15,12 +30,13 @@
     "prepare": "husky; effect-language-service patch"
   },
   "devDependencies": {
-    "@effect/language-service": "^0.85.1",
+    "@effect/language-service": "catalog:",
     "@oxlint/plugins": "^1.60.0",
     "husky": "^9.1.7",
     "lint-staged": "^16.4.0",
     "oxfmt": "^0.45.0",
-    "oxlint": "^1.60.0"
+    "oxlint": "catalog:",
+    "typescript": "catalog:"
   },
   "lint-staged": {
     "packages/**/*.{ts}": [

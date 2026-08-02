@@ -19,13 +19,13 @@
     "coverage": "bun --bun vitest --coverage"
   },
   "devDependencies": {
-    "@effect/language-service": "^0.85.1",
-    "effect": "^4.0.0-beta.101",
-    "oxlint": "^1.60.0",
-    "typescript": "^6.0.2",
-    "vitest": "^4.0.0"
+    "@effect/language-service": "catalog:",
+    "effect": "catalog:",
+    "oxlint": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   },
   "peerDependencies": {
-    "effect": "^4.0.0-beta.101"
+    "effect": "catalog:"
   }
 }

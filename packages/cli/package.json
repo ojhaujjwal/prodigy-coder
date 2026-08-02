@@ -21,21 +21,21 @@
     "start": "bun run src/index.ts"
   },
   "dependencies": {
-    "@effect/ai-anthropic": "^4.0.0-beta.101",
-    "@effect/ai-openai": "^4.0.0-beta.101",
-    "@effect/ai-openai-compat": "^4.0.0-beta.101",
-    "@effect/ai-openrouter": "^4.0.0-beta.101",
-    "@effect/platform-bun": "^4.0.0-beta.101",
+    "@effect/ai-anthropic": "catalog:",
+    "@effect/ai-openai": "catalog:",
+    "@effect/ai-openai-compat": "catalog:",
+    "@effect/ai-openrouter": "catalog:",
+    "@effect/platform-bun": "catalog:",
     "@prodigy/core": "workspace:*",
-    "effect": "^4.0.0-beta.101"
+    "effect": "catalog:"
   },
   "devDependencies": {
-    "@effect/language-service": "^0.85.1",
-    "@effect/vitest": "^4.0.0-beta.101",
+    "@effect/language-service": "catalog:",
+    "@effect/vitest": "catalog:",
     "@types/bun": "latest",
     "@vitest/coverage-v8": "^4.1.5",
-    "oxlint": "^1.60.0",
-    "typescript": "^6.0.2",
-    "vitest": "^4.0.0"
+    "oxlint": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   }
 }
