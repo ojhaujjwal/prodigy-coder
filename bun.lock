@@ -44,6 +44,8 @@
       "version": "0.0.0",
       "devDependencies": {
         "@effect/language-service": "catalog:",
+        "@effect/platform-bun": "catalog:",
+        "@effect/vitest": "catalog:",
         "effect": "catalog:",
         "oxlint": "catalog:",
         "typescript": "catalog:",
