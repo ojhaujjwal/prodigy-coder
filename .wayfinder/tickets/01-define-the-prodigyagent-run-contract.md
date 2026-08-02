@@ -79,6 +79,6 @@ type AgentError =
 
 `ModelError` owns a provider-neutral reason union covering transport, authentication, rate limit, quota, invalid request, content policy, invalid output, and provider failure. Retryability is derived from the concrete reason. Run-level retries belong to callers and `HarnessLoop`; provider adapters may safely retry an individual model request.
 
-Cancellation is Effect interruption. Early consumer cancellation interrupts the run and runs finalizers; it does not emit `run-ended` or become an `AgentError`. Human interaction is an optional injected `HumanInteraction` capability: requests are visible as events, while a Queue/Deferred-based adapter correlates external responses without turning the public stream into a bidirectional protocol.
+Cancellation is Effect interruption. Early consumer cancellation interrupts the run and runs finalizers; it does not emit `run-ended` or become an `AgentError`. Human interaction is an optional `HumanInteraction` capability at composition time (a toolkit with no interaction tools has no such requirement): requests are visible as events, while a Queue/Deferred-based adapter correlates external responses without turning the public stream into a bidirectional protocol.
 
 Event ordering is causal: `run-started` is first; tool calls precede matching results; interaction requests precede the wait for their response; no events follow `run-ended`; failures and interruption may terminate without `run-ended`.

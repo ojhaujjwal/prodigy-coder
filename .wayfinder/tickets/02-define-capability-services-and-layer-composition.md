@@ -114,7 +114,7 @@ interface HumanInteraction {
 }
 ```
 
-Authorization policy remains separate from this channel. Interactive authorization may use `HumanInteraction`; automated policies do not need it. Adapter timeouts are typed interaction failures, while caller cancellation remains interruption. Human interaction is an optional Layer dependency.
+Authorization policy remains separate from this channel. Interactive authorization may use `HumanInteraction`; automated policies do not need it. Adapter timeouts are typed interaction failures, while caller cancellation remains interruption. `HumanInteraction` is optional only at composition time: it is a required dependency when the selected toolkit's `ToolkitAuthorities` includes it, and absent otherwise — never an optional context read.
 
 Configuration such as agent profiles, prompts, turn limits, and governance is explicit typed data rather than an ambient configuration service. Provider construction and toolkit selection are caller-owned; the core depends on the provider-neutral `LanguageModel` and selected toolkit Layers. Execution safety remains in the Workspace and CommandExecutor adapters, not in approval policy.
 
