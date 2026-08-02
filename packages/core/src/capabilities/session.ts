@@ -16,6 +16,8 @@ export type SessionId = Schema.Schema.Type<typeof SessionId>;
  *
  * Revisions are produced only by the store's compare-and-set, never
  * caller-supplied, and the schema is never re-exported from the package root.
+ *
+ * TODO: check that the revision is a non-negative integer.
  */
 export const SessionRevision = Schema.Int.pipe(Schema.brand("SessionRevision"));
 export type SessionRevision = Schema.Schema.Type<typeof SessionRevision>;
@@ -71,14 +73,6 @@ export type ToolMessage = Schema.Schema.Type<typeof ToolMessage>;
 const Message = Schema.Union([SystemMessage, UserMessage, AssistantMessage, ToolMessage]);
 export type Message = Schema.Schema.Type<typeof Message>;
 
-/** The domain transcript: a session id, its messages, and timestamps. */
-export type Session = {
-  readonly id: SessionId;
-  readonly messages: Message[];
-  readonly createdAt: Date;
-  readonly updatedAt: Date;
-};
-
 /** Inputs to `create`; the `SessionId` is always allocated by the store. */
 export type SessionInitial = {
   readonly systemPrompt?: string;
@@ -95,6 +89,24 @@ export type SessionCheckpoint = {
   readonly session: Session;
   readonly expectedRevision: SessionRevision;
 };
+
+/**
+ * The canonical session type: a session id, its messages, and timestamps.
+ *
+ * Persisted via `DateFromString` timestamps and the validating message
+ * schemas, so decoding a stored record re-validates and re-brands the
+ * `SessionId` at the persistence boundary.
+ *
+ * Internal module export — used by the file adapter (and tests) but never
+ * re-exported from the package root.
+ */
+export const Session = Schema.Struct({
+  id: SessionId,
+  messages: Schema.mutable(Schema.Array(Message)),
+  createdAt: Schema.DateFromString,
+  updatedAt: Schema.DateFromString
+});
+export type Session = Schema.Schema.Type<typeof Session>;
 
 /**
  * Allocate a fresh `SessionId` from the `Crypto` service.

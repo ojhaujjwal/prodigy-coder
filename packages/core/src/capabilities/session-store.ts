@@ -34,19 +34,25 @@ export class SessionLookupError extends Schema.TaggedErrorClass<SessionLookupErr
   reason: Schema.Union([SessionNotFound, SessionReadFailure, SessionDecodeFailure])
 }) {}
 
-/** Persistence failures: the save conflicted or could not be encoded/written. */
+/** Persistence failures: the save conflicted, could not validate the existing record, or could not be encoded/written. */
 export class SessionPersistenceError extends Schema.TaggedErrorClass<SessionPersistenceError>()(
   "SessionPersistenceError",
   {
-    reason: Schema.Union([SessionConflict, SessionEncodeFailure, SessionWriteFailure])
+    reason: Schema.Union([
+      SessionConflict,
+      SessionDecodeFailure,
+      SessionEncodeFailure,
+      SessionReadFailure,
+      SessionWriteFailure
+    ])
   }
 ) {}
 
 export type SessionError = SessionLookupError | SessionPersistenceError;
 
 /**
- * The runtime `SessionStore` port: create/load/save a `Session` transcript with
- * optimistic compare-and-set. Callers match the family tag first
+ * The runtime `SessionStore` port: create/load/save a `SessionRecord` transcript
+ * with optimistic compare-and-set. Callers match the family tag first
  * (`SessionLookupError` / `SessionPersistenceError`), then the precise `reason`.
  */
 export class SessionStore extends Context.Service<

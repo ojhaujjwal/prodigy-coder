@@ -32,7 +32,7 @@ export const makeTempDirectory = (
   });
 
 /**
- * Build a `Session` with the given (already well-formed) raw id and optional
+ * Build a `SessionRecord` with the given (already well-formed) raw id and optional
  * messages, for tests that need a session without going through the store's
  * `create` (e.g. to load an id the store has never seen).
  */
