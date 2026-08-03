@@ -16,10 +16,11 @@ export type SessionId = Schema.Schema.Type<typeof SessionId>;
  *
  * Revisions are produced only by the store's compare-and-set, never
  * caller-supplied, and the schema is never re-exported from the package root.
- *
- * TODO: check that the revision is a non-negative integer.
  */
-export const SessionRevision = Schema.Int.pipe(Schema.brand("SessionRevision"));
+export const SessionRevision = Schema.Int.pipe(
+  Schema.check(Schema.isGreaterThanOrEqualTo(0)),
+  Schema.brand("SessionRevision")
+);
 export type SessionRevision = Schema.Schema.Type<typeof SessionRevision>;
 
 const TextPart = Schema.Struct({

@@ -94,10 +94,10 @@ const make = Effect.gen(function* () {
  * implementation lives in `@effect/platform-bun` and is installed by the
  * composition root or tests (e.g. `Layer.merge(layerNoDeps, BunCrypto.layer)`).
  */
-export const layerNoDeps: Layer.Layer<SessionStore, never, Crypto.Crypto> = Layer.effect(SessionStore, make);
+export const layerNoDeps = Layer.effect(SessionStore, make);
 
 /**
  * Alias of {@link layerNoDeps} for composition roots that install the platform
  * `Crypto` layer themselves. Same dependency-preserving contract.
  */
-export const layer: Layer.Layer<SessionStore, never, Crypto.Crypto> = layerNoDeps;
+export const layer = layerNoDeps;

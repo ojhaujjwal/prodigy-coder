@@ -148,11 +148,17 @@ const make = (sessionDir: string) =>
 
       const suffix = yield* crypto.randomBytes(4).pipe(Effect.orDie);
       const tempPath = `${sessionDir}/.${id}.tmp-${toHex(suffix)}`;
+
+      // Atomic save
+      // Step 1: Write to a unique temp file in the same directory
       yield* fs
         .writeFileString(tempPath, json)
         .pipe(
           Effect.mapError((cause) => new SessionPersistenceError({ reason: new SessionWriteFailure({ id, cause }) }))
         );
+
+      // Atomic save
+      // Step 2: Rename the temp file to the final session file path
       yield* fs
         .rename(tempPath, sessionPath(id))
         .pipe(
@@ -175,5 +181,4 @@ const make = (sessionDir: string) =>
  * (`formatVersion`, `revision`, `session`) written atomically via a temp file
  * plus rename. A session is durable only after its first successful `save`.
  */
-export const layer = (sessionDir: string): Layer.Layer<SessionStore, never, FileSystem.FileSystem | Crypto.Crypto> =>
-  Layer.effect(SessionStore, make(sessionDir));
+export const layer = (sessionDir: string) => Layer.effect(SessionStore, make(sessionDir));
