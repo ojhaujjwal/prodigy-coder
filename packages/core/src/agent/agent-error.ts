@@ -1,20 +1,58 @@
 import { Schema } from "effect";
-import { SessionId } from "../capabilities/session.ts";
+import type { AiError } from "effect/unstable/ai";
+import type { SessionError } from "../capabilities/session-store.ts";
 
-/**
- * A supplied `sessionId` did not resolve. Never a fallback to a new session.
- */
-export class SessionNotFound extends Schema.TaggedErrorClass<SessionNotFound>()("SessionNotFound", {
-  sessionId: SessionId
+/** The provider-neutral categories used to classify model failures. */
+export type ModelReason =
+  | "transport"
+  | "authentication"
+  | "rate-limit"
+  | "quota"
+  | "invalid-request"
+  | "content-policy"
+  | "invalid-output"
+  | "provider";
+
+/** A model failure projected into the agent's public error vocabulary. */
+export class ModelError extends Schema.TaggedErrorClass<ModelError>()("ModelError", {
+  reason: Schema.Literals([
+    "transport",
+    "authentication",
+    "rate-limit",
+    "quota",
+    "invalid-request",
+    "content-policy",
+    "invalid-output",
+    "provider"
+  ]),
+  cause: Schema.Defect()
 }) {}
 
-/** A session-store operation failed during a run (read/decode/write/encode/conflict). */
-export class SessionStorageError extends Schema.TaggedErrorClass<SessionStorageError>()("SessionStorageError", {
-  reason: Schema.Literals(["conflict", "encode", "write", "read", "decode"])
-}) {}
+/** The typed failures a run stream can fail with. */
+export type AgentError = SessionError | ModelError;
 
-/**
- * The typed failures a run stream can fail with. The full union grows in later
- * slices (`InvalidRunRequest`, `ModelError`, `ToolSystemError`, `RemoteError`).
- */
-export type AgentError = SessionNotFound | SessionStorageError;
+const modelReasonFromAiError = (reason: AiError.AiErrorReason): ModelReason => {
+  switch (reason._tag) {
+    case "NetworkError":
+      return reason.reason === "TransportError" ? "transport" : "provider";
+    case "AuthenticationError":
+      return "authentication";
+    case "RateLimitError":
+      return "rate-limit";
+    case "QuotaExhaustedError":
+      return "quota";
+    case "InvalidRequestError":
+      return "invalid-request";
+    case "ContentPolicyError":
+      return "content-policy";
+    case "InvalidOutputError":
+    case "StructuredOutputError":
+      return "invalid-output";
+    default:
+      return "provider";
+  }
+};
+
+/** Map a provider `AiError` onto the agent's public error channel. */
+export const agentErrorFromModelError = (error: AiError.AiError): ModelError =>
+  new ModelError({ reason: modelReasonFromAiError(error.reason), cause: error });

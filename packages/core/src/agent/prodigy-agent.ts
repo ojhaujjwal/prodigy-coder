@@ -1,9 +1,9 @@
-import { Context, Crypto, Effect, Layer, Stream } from "effect";
+import { Context, Crypto, Effect, Layer, Ref, Result, Stream } from "effect";
 import { LanguageModel, Prompt } from "effect/unstable/ai";
 import type { Message, SessionCheckpoint, SessionSnapshot } from "../capabilities/session.ts";
-import { SessionStore } from "../capabilities/session-store.ts";
-import { SessionNotFound, SessionStorageError, type AgentError } from "./agent-error.ts";
-import { mapAgentFinishReason, type AgentEvent, type AgentFinishReason, type AgentResult } from "./agent-event.ts";
+import { SessionStore, type SessionError } from "../capabilities/session-store.ts";
+import { agentErrorFromModelError, type AgentError } from "./agent-error.ts";
+import { mapAgentFinishReason, type AgentEvent, type AgentFinishReason } from "./agent-event.ts";
 import { generateRunId, type RunRequest } from "./run-request.ts";
 
 /**
@@ -24,22 +24,6 @@ type ResolvedSession = {
   messages: Message[];
 };
 
-/** Map a store persistence reason tag onto the agent's neutral vocabulary. */
-const storageReason = (tag: string): SessionStorageError["reason"] => {
-  switch (tag) {
-    case "SessionConflict":
-      return "conflict";
-    case "SessionEncodeFailure":
-      return "encode";
-    case "SessionWriteFailure":
-      return "write";
-    case "SessionReadFailure":
-      return "read";
-    default:
-      return "decode";
-  }
-};
-
 /** Resolve session identity: load a supplied id, otherwise create a fresh session. */
 const resolveSession = (
   sessionId: RunRequest["sessionId"],
@@ -47,20 +31,11 @@ const resolveSession = (
 ): Effect.Effect<ResolvedSession, AgentError> =>
   Effect.gen(function* () {
     if (sessionId === undefined) {
-      const snapshot = yield* store
-        .create({})
-        .pipe(Effect.mapError((error) => new SessionStorageError({ reason: storageReason(error.reason._tag) })));
+      const snapshot = yield* store.create({});
       return { snapshot, messages: [...snapshot.session.messages] };
     }
-    const snapshot = yield* store
-      .load(sessionId)
-      .pipe(
-        Effect.mapError((error) =>
-          error.reason._tag === "SessionNotFound"
-            ? new SessionNotFound({ sessionId })
-            : new SessionStorageError({ reason: storageReason(error.reason._tag) })
-        )
-      );
+    const snapshot = yield* store.load(sessionId);
+
     return { snapshot, messages: [...snapshot.session.messages] };
   });
 
@@ -69,61 +44,61 @@ const appendAndSave = (
   store: SessionStore["Service"],
   resolved: ResolvedSession,
   message: Message
-): Effect.Effect<SessionSnapshot, SessionStorageError> =>
+): Effect.Effect<SessionSnapshot, SessionError> =>
   Effect.gen(function* () {
     const messages = [...resolved.messages, message];
     const checkpoint: SessionCheckpoint = {
       session: { ...resolved.snapshot.session, messages },
       expectedRevision: resolved.snapshot.revision
     };
-    const saved = yield* store
-      .save(checkpoint)
-      .pipe(Effect.mapError((error) => new SessionStorageError({ reason: storageReason(error.reason._tag) })));
+    const saved = yield* store.save(checkpoint);
     resolved.messages = saved.session.messages;
     resolved.snapshot = saved;
     return saved;
   });
 
 /**
- * Run one model turn: stream the model over the transcript plus the user
- * prompt, project parts, and persist the completed assistant exchange.
- * Returns the projected `text-delta` events for the turn.
+ * Project one model turn into a stream of `text-delta` events, pulling parts
+ * lazily from the model. The completed assistant text (a single string, never
+ * a full event buffer) and the finish reason are returned once the model
+ * stream ends.
  */
 const runTurn = (
   store: SessionStore["Service"],
   model: LanguageModel.LanguageModel["Service"],
   resolved: ResolvedSession,
-  prompt: string
-): Effect.Effect<{ readonly finishReason: AgentFinishReason; readonly deltas: string[] }, AgentError> =>
-  Effect.gen(function* () {
-    const deltas: string[] = [];
-    let finishReason: AgentFinishReason | undefined;
+  prompt: string,
+  finishReasonRef: Ref.Ref<AgentFinishReason>
+): Stream.Stream<AgentEvent, AgentError> => {
+  let assistantText = "";
 
-    const modelPrompt: Prompt.RawInput = [...resolved.messages, { role: "user", content: prompt }];
+  const modelPrompt: Prompt.RawInput = [...resolved.messages, { role: "user", content: prompt }];
 
-    yield* model.streamText({ prompt: modelPrompt }).pipe(
-      Stream.runForEach((part) => {
-        switch (part.type) {
-          case "text-delta":
-            deltas.push(part.delta);
-            return Effect.void;
-          case "finish":
-            finishReason = mapAgentFinishReason(part.reason);
-            return Effect.void;
-          default:
-            return Effect.void;
+  return model.streamText({ prompt: modelPrompt }).pipe(
+    Stream.filter((part) => part.type === "text-delta" || part.type === "finish"),
+    Stream.filterMap((part) => {
+      switch (part.type) {
+        case "text-delta":
+          assistantText += part.delta;
+          return Result.succeed({ type: "text-delta", delta: part.delta } satisfies AgentEvent);
+        case "finish":
+          Effect.runSync(Ref.update(finishReasonRef, () => mapAgentFinishReason(part.reason)));
+          return Result.fail(part);
+        default:
+          return Result.fail(part);
+      }
+    }),
+    Stream.mapError(agentErrorFromModelError),
+    Stream.ensuring(
+      Effect.gen(function* () {
+        if (assistantText.length > 0) {
+          yield* appendAndSave(store, resolved, { role: "assistant", content: assistantText });
         }
-      }),
-      Effect.orDie
-    );
-
-    const assistantText = deltas.join("");
-    if (assistantText.length > 0) {
-      yield* appendAndSave(store, resolved, { role: "assistant", content: assistantText });
-    }
-
-    return { finishReason: finishReason ?? "unknown", deltas };
-  });
+      }).pipe(Effect.orDie)
+    ),
+    Stream.orDie
+  );
+};
 
 /**
  * Build the body of a run: session resolution, the prompt checkpoint, the
@@ -135,32 +110,42 @@ const runBody = (
   model: LanguageModel.LanguageModel["Service"],
   crypto: Crypto.Crypto,
   request: RunRequest
-): Effect.Effect<ReadonlyArray<AgentEvent>, AgentError> =>
-  Effect.gen(function* () {
-    const resolved = yield* resolveSession(request.sessionId, store);
+): Stream.Stream<AgentEvent, AgentError> =>
+  Stream.unwrap(
+    Effect.gen(function* () {
+      const resolved = yield* resolveSession(request.sessionId, store);
 
-    const runId = yield* generateRunId.pipe(Effect.provideService(Crypto.Crypto, crypto));
-    const sessionId = resolved.snapshot.session.id;
-    const events: AgentEvent[] = [{ type: "run-started", runId, sessionId }];
+      const runId = yield* generateRunId.pipe(Effect.provideService(Crypto.Crypto, crypto));
+      const sessionId = resolved.snapshot.session.id;
 
-    yield* appendAndSave(store, resolved, { role: "user", content: request.prompt });
+      yield* appendAndSave(store, resolved, { role: "user", content: request.prompt });
 
-    let turn = 1;
-    let finishReason: AgentFinishReason;
-    while (true) {
-      events.push({ type: "turn-started", turn });
-      const outcome = yield* runTurn(store, model, resolved, request.prompt);
-      for (const delta of outcome.deltas) {
-        events.push({ type: "text-delta", delta });
-      }
-      finishReason = outcome.finishReason;
-      break;
-    }
+      let turn = 1;
+      const finishReasonRef = Ref.makeUnsafe<AgentFinishReason>("unknown");
 
-    const result: AgentResult = { _tag: "Finished", sessionId, turns: turn, finishReason };
-    events.push({ type: "run-ended", result });
-    return events;
-  });
+      const turnLoop = Stream.concat(
+        Stream.succeed({ type: "turn-started", turn } satisfies AgentEvent),
+        runTurn(store, model, resolved, request.prompt, finishReasonRef)
+      );
+
+      // Built lazily: `run-ended` must carry the finish reason captured from
+      // the model's `finish` part, which is only known once the turn stream
+      // has been fully consumed.
+      const runEnded = Stream.unwrap(
+        Effect.map(Ref.get(finishReasonRef), (reason) =>
+          Stream.succeed({
+            type: "run-ended",
+            result: { _tag: "Finished", sessionId, turns: turn, finishReason: reason }
+          } satisfies AgentEvent)
+        )
+      );
+
+      return Stream.concat(
+        Stream.succeed({ type: "run-started", runId, sessionId } satisfies AgentEvent),
+        Stream.concat(turnLoop, runEnded)
+      );
+    })
+  );
 
 const make = Effect.gen(function* () {
   const store = yield* SessionStore;
@@ -168,7 +153,7 @@ const make = Effect.gen(function* () {
   const crypto = yield* Crypto.Crypto;
 
   const run = (request: RunRequest): Stream.Stream<AgentEvent, AgentError> =>
-    Stream.suspend(() => Stream.fromIterableEffect(runBody(store, model, crypto, request)));
+    Stream.suspend(() => runBody(store, model, crypto, request));
 
   return ProdigyAgent.of({ run });
 });
