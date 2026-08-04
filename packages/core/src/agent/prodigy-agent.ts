@@ -1,17 +1,17 @@
-import { Context, Crypto, Effect, Layer, Ref, Result, Stream } from "effect";
-import { LanguageModel, Prompt } from "effect/unstable/ai";
-import type { Message, SessionCheckpoint, SessionSnapshot } from "../capabilities/session.ts";
+import { Context, Crypto, Effect, Layer, Result, Schema, Stream } from "effect";
+import { LanguageModel, Prompt, Tool, Toolkit } from "effect/unstable/ai";
+import type {
+  Message,
+  SessionCheckpoint,
+  SessionSnapshot,
+  ToolCallPart,
+  ToolResultPart
+} from "../capabilities/session.ts";
 import { SessionStore, type SessionError } from "../capabilities/session-store.ts";
-import { agentErrorFromModelError, type AgentError } from "./agent-error.ts";
-import { mapAgentFinishReason, type AgentEvent, type AgentFinishReason } from "./agent-event.ts";
+import { agentErrorFromToolError, type AgentError, ToolSystemError } from "./agent-error.ts";
+import { mapAgentFinishReason, type AgentEvent, type AgentFinishReason, type JsonValue } from "./agent-event.ts";
 import { generateRunId, type RunRequest } from "./run-request.ts";
 
-/**
- * The canonical Prodigy agent service: `run` returns a lazy stream of
- * `AgentEvent`s. Calling `run` performs no effects; each consumption of the
- * stream is a fresh run with a fresh `RunId`. Interruption terminates the run
- * without `run-ended` and without an `AgentError`.
- */
 export class ProdigyAgent extends Context.Service<
   ProdigyAgent,
   {
@@ -24,7 +24,33 @@ type ResolvedSession = {
   messages: Message[];
 };
 
-/** Resolve session identity: load a supplied id, otherwise create a fresh session. */
+type AssistantPart = { readonly type: "text"; readonly text: string } | ToolCallPart;
+
+type TurnState = {
+  assistantText: string;
+  assistantParts: Array<ToolCallPart>;
+  toolParts: Array<ToolResultPart>;
+  hasToolCalls: boolean;
+  finishReason: AgentFinishReason;
+};
+
+type ToolkitServices<TTools extends Record<string, Tool.Any>> =
+  | Tool.HandlerServices<TTools[keyof TTools]>
+  | Tool.ResultDecodingServices<TTools[keyof TTools]>;
+
+type TurnPlan = {
+  readonly stream: Stream.Stream<AgentEvent, AgentError>;
+  readonly state: TurnState;
+};
+
+const emptyTurnState = (): TurnState => ({
+  assistantText: "",
+  assistantParts: [],
+  toolParts: [],
+  hasToolCalls: false,
+  finishReason: "unknown"
+});
+
 const resolveSession = (
   sessionId: RunRequest["sessionId"],
   store: SessionStore["Service"]
@@ -35,11 +61,9 @@ const resolveSession = (
       return { snapshot, messages: [...snapshot.session.messages] };
     }
     const snapshot = yield* store.load(sessionId);
-
     return { snapshot, messages: [...snapshot.session.messages] };
   });
 
-/** Append a message to the working transcript and checkpoint the session. */
 const appendAndSave = (
   store: SessionStore["Service"],
   resolved: ResolvedSession,
@@ -57,113 +81,210 @@ const appendAndSave = (
     return saved;
   });
 
-/**
- * Project one model turn into a stream of `text-delta` events, pulling parts
- * lazily from the model. The completed assistant text (a single string, never
- * a full event buffer) and the finish reason are returned once the model
- * stream ends.
- */
-const runTurn = (
+const decodeJson = (value: unknown): Effect.Effect<JsonValue, ToolSystemError> =>
+  Schema.decodeUnknownEffect(Schema.Json)(value).pipe(
+    Effect.mapError((cause) => new ToolSystemError({ reason: "serialization", cause }))
+  );
+
+const appendTurnCheckpoint = (
+  store: SessionStore["Service"],
+  resolved: ResolvedSession,
+  state: TurnState
+): Effect.Effect<void, SessionError> =>
+  Effect.gen(function* () {
+    if (state.assistantParts.length > 0 || state.assistantText.length > 0) {
+      const content: string | ReadonlyArray<AssistantPart> =
+        state.assistantParts.length > 0
+          ? [
+              ...(state.assistantText.length > 0
+                ? [{ type: "text", text: state.assistantText } satisfies AssistantPart]
+                : []),
+              ...state.assistantParts
+            ]
+          : state.assistantText;
+      yield* appendAndSave(store, resolved, { role: "assistant", content });
+    }
+    if (state.toolParts.length > 0) {
+      yield* appendAndSave(store, resolved, { role: "tool", content: state.toolParts });
+    }
+  });
+
+const runTurn = <TTools extends Record<string, Tool.Any>>(
   store: SessionStore["Service"],
   model: LanguageModel.LanguageModel["Service"],
+  toolkit: Toolkit.WithHandler<TTools>,
+  toolkitContext: Context.Context<ToolkitServices<TTools>>,
   resolved: ResolvedSession,
-  prompt: string,
-  finishReasonRef: Ref.Ref<AgentFinishReason>
-): Stream.Stream<AgentEvent, AgentError> => {
-  let assistantText = "";
+  turn: number,
+  prompt: string
+): TurnPlan => {
+  const state = emptyTurnState();
+  const modelPrompt: Prompt.RawInput =
+    turn === 1 ? [...resolved.messages, { role: "user", content: prompt }] : resolved.messages;
 
-  const modelPrompt: Prompt.RawInput = [...resolved.messages, { role: "user", content: prompt }];
-
-  return model.streamText({ prompt: modelPrompt }).pipe(
-    Stream.filter((part) => part.type === "text-delta" || part.type === "finish"),
-    Stream.filterMap((part) => {
+  const parts = model.streamText({ prompt: modelPrompt, toolkit }).pipe(
+    Stream.provideContext(toolkitContext),
+    Stream.mapError(agentErrorFromToolError),
+    Stream.filterMapEffect((part): Effect.Effect<Result.Result<AgentEvent, unknown>, ToolSystemError> => {
       switch (part.type) {
         case "text-delta":
-          assistantText += part.delta;
-          return Result.succeed({ type: "text-delta", delta: part.delta } satisfies AgentEvent);
+          state.assistantText += part.delta;
+          return Effect.succeed(Result.succeed({ type: "text-delta", delta: part.delta } satisfies AgentEvent));
+        case "tool-call":
+          if (!Object.hasOwn(toolkit.tools, part.name)) {
+            return Effect.fail(
+              new ToolSystemError({ reason: "unknown-tool", cause: new Error(`Unknown tool: ${part.name}`) })
+            );
+          }
+          return decodeJson(part.params).pipe(
+            Effect.tap((input) =>
+              Effect.sync(() => {
+                state.hasToolCalls = true;
+                state.assistantParts.push({
+                  type: "tool-call",
+                  id: part.id,
+                  name: part.name,
+                  params: input,
+                  providerExecuted: part.providerExecuted
+                });
+              })
+            ),
+            Effect.map((input) =>
+              Result.succeed({
+                type: "tool-call",
+                callId: part.id,
+                toolName: part.name,
+                input
+              } satisfies AgentEvent)
+            )
+          );
+        case "tool-result":
+          if (part.preliminary) return Effect.succeed(Result.fail(part));
+          return decodeJson(part.encodedResult).pipe(
+            Effect.tap((output) =>
+              Effect.sync(() => {
+                state.toolParts.push({
+                  type: "tool-result",
+                  id: part.id,
+                  name: part.name,
+                  isFailure: part.isFailure,
+                  result: output
+                });
+              })
+            ),
+            Effect.map((output) =>
+              Result.succeed({
+                type: "tool-result",
+                callId: part.id,
+                toolName: part.name,
+                outcome: part.isFailure
+                  ? { _tag: "Failed", error: JSON.stringify(output) ?? "Tool execution failed" }
+                  : { _tag: "Success", output }
+              } satisfies AgentEvent)
+            )
+          );
         case "finish":
-          Effect.runSync(Ref.update(finishReasonRef, () => mapAgentFinishReason(part.reason)));
-          return Result.fail(part);
+          state.finishReason = mapAgentFinishReason(part.reason);
+          return Effect.succeed(Result.fail(part));
         default:
-          return Result.fail(part);
+          return Effect.succeed(Result.fail(part));
       }
-    }),
-    Stream.mapError(agentErrorFromModelError),
-    Stream.ensuring(
-      Effect.gen(function* () {
-        if (assistantText.length > 0) {
-          yield* appendAndSave(store, resolved, { role: "assistant", content: assistantText });
-        }
-      }).pipe(Effect.orDie)
-    ),
-    Stream.orDie
-  );
-};
-
-/**
- * Build the body of a run: session resolution, the prompt checkpoint, the
- * turn loop, and the terminal `run-ended`. All of it runs inside the returned
- * stream's pull effect, so it is lazy per consumption and interruptible.
- */
-const runBody = (
-  store: SessionStore["Service"],
-  model: LanguageModel.LanguageModel["Service"],
-  crypto: Crypto.Crypto,
-  request: RunRequest
-): Stream.Stream<AgentEvent, AgentError> =>
-  Stream.unwrap(
-    Effect.gen(function* () {
-      const resolved = yield* resolveSession(request.sessionId, store);
-
-      const runId = yield* generateRunId.pipe(Effect.provideService(Crypto.Crypto, crypto));
-      const sessionId = resolved.snapshot.session.id;
-
-      yield* appendAndSave(store, resolved, { role: "user", content: request.prompt });
-
-      let turn = 1;
-      const finishReasonRef = Ref.makeUnsafe<AgentFinishReason>("unknown");
-
-      const turnLoop = Stream.concat(
-        Stream.succeed({ type: "turn-started", turn } satisfies AgentEvent),
-        runTurn(store, model, resolved, request.prompt, finishReasonRef)
-      );
-
-      // Built lazily: `run-ended` must carry the finish reason captured from
-      // the model's `finish` part, which is only known once the turn stream
-      // has been fully consumed.
-      const runEnded = Stream.unwrap(
-        Effect.map(Ref.get(finishReasonRef), (reason) =>
-          Stream.succeed({
-            type: "run-ended",
-            result: { _tag: "Finished", sessionId, turns: turn, finishReason: reason }
-          } satisfies AgentEvent)
-        )
-      );
-
-      return Stream.concat(
-        Stream.succeed({ type: "run-started", runId, sessionId } satisfies AgentEvent),
-        Stream.concat(turnLoop, runEnded)
-      );
     })
   );
 
-const make = Effect.gen(function* () {
-  const store = yield* SessionStore;
-  const model = yield* LanguageModel.LanguageModel;
-  const crypto = yield* Crypto.Crypto;
+  return {
+    state,
+    stream: Stream.concat(
+      Stream.succeed({ type: "turn-started", turn } satisfies AgentEvent),
+      Stream.concat(
+        parts,
+        Stream.unwrap(
+          Effect.gen(function* () {
+            yield* appendTurnCheckpoint(store, resolved, state);
+            return Stream.empty;
+          })
+        )
+      )
+    )
+  };
+};
 
-  const run = (request: RunRequest): Stream.Stream<AgentEvent, AgentError> =>
-    Stream.suspend(() => runBody(store, model, crypto, request));
+const makeRun =
+  <TTools extends Record<string, Tool.Any>>(
+    store: SessionStore["Service"],
+    model: LanguageModel.LanguageModel["Service"],
+    toolkit: Toolkit.WithHandler<TTools>,
+    toolkitContext: Context.Context<ToolkitServices<TTools>>,
+    crypto: Crypto.Crypto
+  ): ((request: RunRequest) => Stream.Stream<AgentEvent, AgentError>) =>
+  (request) =>
+    Stream.suspend(() =>
+      Stream.unwrap(
+        Effect.gen(function* () {
+          const resolved = yield* resolveSession(request.sessionId, store);
+          const runId = yield* generateRunId.pipe(Effect.provideService(Crypto.Crypto, crypto));
+          const sessionId = resolved.snapshot.session.id;
+          yield* appendAndSave(store, resolved, { role: "user", content: request.prompt });
 
-  return ProdigyAgent.of({ run });
-});
+          const runTurns = (turn: number): Stream.Stream<AgentEvent, AgentError> =>
+            Stream.unwrap(
+              Effect.sync(() => {
+                const plan = runTurn(store, model, toolkit, toolkitContext, resolved, turn, request.prompt);
+                return Stream.concat(
+                  plan.stream,
+                  Stream.unwrap(
+                    Effect.sync(() =>
+                      plan.state.hasToolCalls
+                        ? runTurns(turn + 1)
+                        : Stream.succeed({
+                            type: "run-ended",
+                            result: { _tag: "Finished", sessionId, turns: turn, finishReason: plan.state.finishReason }
+                          } satisfies AgentEvent)
+                    )
+                  )
+                );
+              })
+            );
 
-/**
- * The dependency-preserving `ProdigyAgent` layer: requires `SessionStore`,
- * `LanguageModel`, and `Crypto`. The module never constructs a concrete
- * toolkit or provider.
- */
-export const layerNoDeps = Layer.effect(ProdigyAgent, make);
+          return Stream.concat(
+            Stream.succeed({ type: "run-started", runId, sessionId } satisfies AgentEvent),
+            runTurns(1)
+          );
+        })
+      )
+    );
 
-/** Alias of {@link layerNoDeps} for composition roots that install the platform services themselves. */
+const makeAgentLayer = <TTools extends Record<string, Tool.Any>>(
+  toolkit: Toolkit.WithHandler<TTools>,
+  toolkitContext: Context.Context<ToolkitServices<TTools>>
+) =>
+  Layer.effect(
+    ProdigyAgent,
+    Effect.gen(function* () {
+      const store = yield* SessionStore;
+      const model = yield* LanguageModel.LanguageModel;
+      const crypto = yield* Crypto.Crypto;
+      return ProdigyAgent.of({ run: makeRun(store, model, toolkit, toolkitContext, crypto) });
+    })
+  );
+
+export const layerNoDeps = Layer.unwrap(
+  Effect.map(Toolkit.empty, (toolkit) => makeAgentLayer(toolkit, Context.empty()))
+);
 export const layer = layerNoDeps;
+
+export const makeLayer = <TTools extends Record<string, Tool.Any>>(toolkit: Toolkit.Toolkit<TTools>) =>
+  Layer.unwrap(
+    Effect.map(toolkit, (withHandlers) =>
+      Layer.effect(
+        ProdigyAgent,
+        Effect.gen(function* () {
+          const store = yield* SessionStore;
+          const model = yield* LanguageModel.LanguageModel;
+          const crypto = yield* Crypto.Crypto;
+          const toolkitContext = yield* Effect.context<ToolkitServices<TTools>>();
+          return ProdigyAgent.of({ run: makeRun(store, model, withHandlers, toolkitContext, crypto) });
+        })
+      )
+    )
+  );

@@ -28,8 +28,17 @@ export class ModelError extends Schema.TaggedErrorClass<ModelError>()("ModelErro
   cause: Schema.Defect()
 }) {}
 
+/** The orchestration failures that prevent a tool call from producing a model-visible result. */
+export type ToolSystemReason = "unknown-tool" | "toolkit-misconfiguration" | "serialization";
+
+/** A tool orchestration failure projected into the agent's public error vocabulary. */
+export class ToolSystemError extends Schema.TaggedErrorClass<ToolSystemError>()("ToolSystemError", {
+  reason: Schema.Literals(["unknown-tool", "toolkit-misconfiguration", "serialization"]),
+  cause: Schema.Defect()
+}) {}
+
 /** The typed failures a run stream can fail with. */
-export type AgentError = SessionError | ModelError;
+export type AgentError = SessionError | ModelError | ToolSystemError;
 
 const modelReasonFromAiError = (reason: AiError.AiErrorReason): ModelReason => {
   switch (reason._tag) {
@@ -53,6 +62,24 @@ const modelReasonFromAiError = (reason: AiError.AiErrorReason): ModelReason => {
   }
 };
 
-/** Map a provider `AiError` onto the agent's public error channel. */
+/** Map a provider `AiError` onto the agent's public error vocabulary. */
 export const agentErrorFromModelError = (error: AiError.AiError): ModelError =>
   new ModelError({ reason: modelReasonFromAiError(error.reason), cause: error });
+
+/** Map an Effect AI tool-system failure onto the agent's public error vocabulary. */
+export const agentErrorFromToolError = (error: AiError.AiError): ToolSystemError | ModelError => {
+  switch (error.reason._tag) {
+    case "ToolNotFoundError":
+      return new ToolSystemError({ reason: "unknown-tool", cause: error });
+    case "ToolConfigurationError":
+    case "ToolkitRequiredError":
+      return new ToolSystemError({ reason: "toolkit-misconfiguration", cause: error });
+    case "ToolParameterValidationError":
+    case "ToolResultEncodingError":
+    case "InvalidToolResultError":
+    case "InvalidOutputError":
+      return new ToolSystemError({ reason: "serialization", cause: error });
+    default:
+      return agentErrorFromModelError(error);
+  }
+};
