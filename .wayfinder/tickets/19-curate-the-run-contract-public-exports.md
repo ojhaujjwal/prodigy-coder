@@ -15,7 +15,7 @@ blocked_by:
 
 ## Summary
 
-`@prodigy/core`'s root entrypoint re-exports the stable run-contract API: `ProdigyAgent`, `RunRequest`, `AgentEvent`, `AgentResult`, `AgentFinishReason`, `AgentError`, and the session types + `SessionStore` (with the in-memory adapter). The entrypoint stays import-safe — no Bun/Node built-ins and no process startup on import — so the CLI, the future Ralph harness, and remote consumers can depend on the public API. Implementation helpers remain unexported.
+`@prodigy/core`'s root entrypoint re-exports the stable run-contract API: `ProdigyAgent`, `RunRequest`, `AgentEvent`, `AgentResult`, `AgentFinishReason`, `AgentError`, and the session types + `SessionStore` (with the in-memory adapter + file-system adapter). The entrypoint stays import-safe — no Bun/Node built-ins and no process startup on import — so the CLI, the future Ralph harness, and remote consumers can depend on the public API. Implementation helpers remain unexported.
 
 ## Context / Current State
 

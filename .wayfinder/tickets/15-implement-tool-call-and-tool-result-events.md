@@ -5,6 +5,7 @@ status: open
 parent: ../map.md
 blocked_by:
   - 14-implement-the-lazy-prodigyagent-run.md
+  - 21-implement-typed-agent-profile-and-toolkit-layer-composition.md
 ---
 
 # Implement Tool-Call and Tool-Result Events
@@ -119,7 +120,7 @@ Vertical red-green-refactor slices, integration-first through the public stream 
 - [ ] A scripted test toolkit/handler layer helper (recording calls, scriptable outcomes) is added to the integration helpers.
 - [ ] Integration tests drive the run end-to-end and assert: a model that requests a tool produces `tool-call` then the matching `tool-result` and continues to a further turn; a failed tool result does not fail the run; a tool-system failure (e.g. unknown tool) fails the run with `ToolSystemError`.
 - [ ] Unit tests are limited to hard-to-reach branches (e.g. tool-system failure tagging) per the testing guide `specs/guides/testing-core-integration.md`.
-- [ ] `bun run test --run` in `packages/core` passes.
+- [ ] `bun run ci` in `packages/core` passes.
 
 ## Blocked by
 

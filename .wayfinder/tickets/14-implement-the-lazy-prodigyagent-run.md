@@ -146,7 +146,7 @@ Vertical red-green-refactor slices, integration-first through the public stream 
 - [ ] A test-double `LanguageModel` layer helper is added to the integration helpers: a real conforming `LanguageModel` service (via `LanguageModel.make`) fed with scripted `Response.StreamPartEncoded` parts — a contract-boundary double, not a mock OpenAI HTTP server (those belong to `@prodigy/cli`).
 - [ ] Integration tests drive `ProdigyAgent.run` end-to-end with real Layers and assert the causal event order, the `Finished` metadata, and that early consumer cancellation interrupts without `run-ended` or an `AgentError`.
 - [ ] Unit tests cover only hard-to-reach pure logic such as the provider finish value → `AgentFinishReason` mapping, per the testing guide `specs/guides/testing-core-integration.md`.
-- [ ] `bun run test --run` in `packages/core` passes.
+- [ ] `bun run ci` in `packages/core` passes.
 
 ## Blocked by
 
