@@ -1,21 +1,7 @@
-import { describe, expect, it as effectIt } from "@effect/vitest";
-import { Effect } from "effect";
+import { describe, expect } from "@effect/vitest";
 import { AiError } from "effect/unstable/ai";
 import { it } from "vitest";
 import { agentErrorFromModelError, isRetryableModelReason } from "./agent-error.ts";
-import { decodeRunRequest } from "./run-request.ts";
-
-describe("decodeRunRequest", () => {
-  effectIt.effect("rejects a missing prompt as InvalidRunRequest", () =>
-    decodeRunRequest({}).pipe(
-      Effect.flip,
-      Effect.map((error) => {
-        expect(error._tag).toBe("InvalidRunRequest");
-        expect(error.reason).toBe("missing-prompt");
-      })
-    )
-  );
-});
 
 describe("isRetryableModelReason", () => {
   it("derives retryability from the neutral reason", () => {

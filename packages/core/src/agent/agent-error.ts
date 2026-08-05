@@ -3,11 +3,11 @@ import type { AiError } from "effect/unstable/ai";
 import type { SessionError } from "../capabilities/session-store.ts";
 
 /** Reasons for rejecting a run request before execution starts. */
-export type InvalidRunReason = "empty-prompt" | "missing-prompt" | "invalid-max-turns" | "out-of-bounds-override";
+export type InvalidRunReason = "empty-prompt" | "invalid-max-turns" | "out-of-bounds-override";
 
 /** A run request that fails validation at the agent boundary. */
 export class InvalidRunRequest extends Schema.TaggedErrorClass<InvalidRunRequest>()("InvalidRunRequest", {
-  reason: Schema.Literals(["empty-prompt", "missing-prompt", "invalid-max-turns", "out-of-bounds-override"]),
+  reason: Schema.Literals(["empty-prompt", "invalid-max-turns", "out-of-bounds-override"]),
   cause: Schema.optional(Schema.Defect())
 }) {}
 

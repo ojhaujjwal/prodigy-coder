@@ -14,7 +14,7 @@ export type RunRequest = {
 };
 
 const RunRequestShape = Schema.Struct({
-  prompt: Schema.optional(Schema.String),
+  prompt: Schema.String,
   sessionId: Schema.optional(SessionId)
 });
 
@@ -23,11 +23,8 @@ type DecodedRunRequest = Schema.Schema.Type<typeof RunRequestShape>;
 /** Validate a run request at the lazy agent boundary. */
 export const decodeRunRequest = (input: unknown): Effect.Effect<RunRequest, InvalidRunRequest> =>
   Schema.decodeUnknownEffect(RunRequestShape)(input).pipe(
-    Effect.mapError((cause) => new InvalidRunRequest({ reason: "missing-prompt", cause })),
+    Effect.mapError((cause) => new InvalidRunRequest({ reason: "empty-prompt", cause })),
     Effect.flatMap((request: DecodedRunRequest) => {
-      if (request.prompt === undefined) {
-        return Effect.fail(new InvalidRunRequest({ reason: "missing-prompt" }));
-      }
       if (request.prompt.trim().length === 0) {
         return Effect.fail(new InvalidRunRequest({ reason: "empty-prompt" }));
       }
