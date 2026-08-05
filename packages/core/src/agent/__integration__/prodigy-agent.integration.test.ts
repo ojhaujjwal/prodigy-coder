@@ -49,6 +49,7 @@ layer(runLayer)("ProdigyAgent", (it) => {
         expect(last).toMatchObject({ type: "run-ended" });
         if (last.type !== "run-ended") throw new Error("expected run-ended");
         expect(last.result._tag).toBe("Finished");
+        if (last.result._tag !== "Finished") throw new Error("expected Finished");
         expect(last.result.sessionId).toBe(started.sessionId);
         expect(last.result.turns).toBe(1);
         expect(last.result.finishReason).toBe("stop");

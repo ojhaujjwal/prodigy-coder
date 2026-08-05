@@ -28,13 +28,25 @@ export type AgentFinishReason =
 /** Map a provider `Response.FinishReason` onto the Prodigy-owned vocabulary. */
 export const mapAgentFinishReason = (reason: Response.FinishReason): AgentFinishReason => reason;
 
-/** The terminal result of a successful run. */
-export type AgentResult = {
-  readonly _tag: "Finished";
-  readonly sessionId: SessionId;
-  readonly turns: number;
-  readonly finishReason: AgentFinishReason;
-};
+/**
+ * The terminal result of a successful run.
+ * `Finished`: the model ended the run with a finish reason.
+ * `Stopped`: the run was stopped by the effective turn limit before a model finish.
+ */
+export type AgentResult =
+  | {
+      readonly _tag: "Finished";
+      readonly sessionId: SessionId;
+      readonly turns: number;
+      readonly finishReason: AgentFinishReason;
+    }
+  | {
+      readonly _tag: "Stopped";
+      readonly sessionId: SessionId;
+      readonly turns: number;
+      readonly reason: "max-turns";
+      readonly limit: number;
+    };
 
 /** The semantic event vocabulary of a run, in causal order. */
 export type AgentEvent =

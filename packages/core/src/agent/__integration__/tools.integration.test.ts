@@ -74,6 +74,8 @@ layer(
       const ended = events[events.length - 1];
       expect(ended.type).toBe("run-ended");
       if (ended.type === "run-ended") {
+        expect(ended.result._tag).toBe("Finished");
+        if (ended.result._tag !== "Finished") throw new Error("expected Finished");
         expect(ended.result.turns).toBe(2);
         expect(ended.result.finishReason).toBe("stop");
       }

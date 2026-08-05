@@ -15,7 +15,7 @@ import {
   ToolSystemError
 } from "./agent-error.ts";
 import { mapAgentFinishReason, type AgentEvent, type AgentFinishReason, type JsonValue } from "./agent-event.ts";
-import { decodeRunRequest, generateRunId, type RunRequest } from "./run-request.ts";
+import { decodeRunRequest, generateRunId, validateMaxTurnsOverride, type RunRequest } from "./run-request.ts";
 
 export class ProdigyAgent extends Context.Service<
   ProdigyAgent,
@@ -36,6 +36,7 @@ type TurnState = {
   assistantParts: Array<ToolCallPart>;
   toolParts: Array<ToolResultPart>;
   hasToolCalls: boolean;
+  hasFinish: boolean;
   finishReason: AgentFinishReason;
 };
 
@@ -48,11 +49,20 @@ type TurnPlan = {
   readonly state: TurnState;
 };
 
+/**
+ * The profile's default turn limit. The typed `AgentProfile.maxTurns` value
+ * (ticket 03 / slice 21) will supply this; until then a minimal in-memory
+ * default (mirroring the CLI's default of 50) keeps the profile seam testable
+ * (ticket 17).
+ */
+const profileMaxTurns = 50;
+
 const emptyTurnState = (): TurnState => ({
   assistantText: "",
   assistantParts: [],
   toolParts: [],
   hasToolCalls: false,
+  hasFinish: false,
   finishReason: "unknown"
 });
 
@@ -189,6 +199,7 @@ const runTurn = <TTools extends Record<string, Tool.Any>>(
             )
           );
         case "finish":
+          state.hasFinish = true;
           state.finishReason = mapAgentFinishReason(part.reason);
           return Effect.succeed(Result.fail(part));
         default:
@@ -227,30 +238,66 @@ const makeRun =
       Stream.unwrap(
         Effect.gen(function* () {
           const validatedRequest = yield* decodeRunRequest(request);
+          const effectiveMaxTurns =
+            validatedRequest.maxTurns === undefined
+              ? profileMaxTurns
+              : yield* validateMaxTurnsOverride(validatedRequest.maxTurns, profileMaxTurns);
           const resolved = yield* resolveSession(validatedRequest.sessionId, store);
           const runId = yield* generateRunId.pipe(Effect.provideService(Crypto.Crypto, crypto));
           const sessionId = resolved.snapshot.session.id;
           yield* appendAndSave(store, resolved, { role: "user", content: validatedRequest.prompt });
 
-          const runTurns = (turn: number): Stream.Stream<AgentEvent, AgentError> =>
-            Stream.unwrap(
+          const runTurns = (turn: number): Stream.Stream<AgentEvent, AgentError> => {
+            if (turn > effectiveMaxTurns) {
+              return Stream.succeed({
+                type: "run-ended",
+                result: {
+                  _tag: "Stopped",
+                  sessionId,
+                  turns: turn - 1,
+                  reason: "max-turns",
+                  limit: effectiveMaxTurns
+                }
+              } satisfies AgentEvent);
+            }
+            return Stream.unwrap(
               Effect.sync(() => {
                 const plan = runTurn(store, model, toolkit, toolkitContext, resolved, turn, validatedRequest.prompt);
+                const exhausted = turn >= effectiveMaxTurns;
                 return Stream.concat(
                   plan.stream,
                   Stream.unwrap(
                     Effect.sync(() =>
                       plan.state.hasToolCalls
                         ? runTurns(turn + 1)
-                        : Stream.succeed({
-                            type: "run-ended",
-                            result: { _tag: "Finished", sessionId, turns: turn, finishReason: plan.state.finishReason }
-                          } satisfies AgentEvent)
+                        : plan.state.hasFinish
+                          ? Stream.succeed({
+                              type: "run-ended",
+                              result: {
+                                _tag: "Finished",
+                                sessionId,
+                                turns: turn,
+                                finishReason: plan.state.finishReason
+                              }
+                            } satisfies AgentEvent)
+                          : exhausted
+                            ? Stream.succeed({
+                                type: "run-ended",
+                                result: {
+                                  _tag: "Stopped",
+                                  sessionId,
+                                  turns: turn,
+                                  reason: "max-turns",
+                                  limit: effectiveMaxTurns
+                                }
+                              } satisfies AgentEvent)
+                            : runTurns(turn + 1)
                     )
                   )
                 );
               })
             );
+          };
 
           return Stream.concat(
             Stream.succeed({ type: "run-started", runId, sessionId } satisfies AgentEvent),
