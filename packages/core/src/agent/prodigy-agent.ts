@@ -7,10 +7,15 @@ import type {
   ToolCallPart,
   ToolResultPart
 } from "../capabilities/session.ts";
-import { SessionStore, type SessionError } from "../capabilities/session-store.ts";
-import { agentErrorFromToolError, type AgentError, ToolSystemError } from "./agent-error.ts";
+import { SessionStore } from "../capabilities/session-store.ts";
+import {
+  agentErrorFromSessionError,
+  agentErrorFromToolError,
+  type AgentError,
+  ToolSystemError
+} from "./agent-error.ts";
 import { mapAgentFinishReason, type AgentEvent, type AgentFinishReason, type JsonValue } from "./agent-event.ts";
-import { generateRunId, type RunRequest } from "./run-request.ts";
+import { decodeRunRequest, generateRunId, type RunRequest } from "./run-request.ts";
 
 export class ProdigyAgent extends Context.Service<
   ProdigyAgent,
@@ -57,10 +62,10 @@ const resolveSession = (
 ): Effect.Effect<ResolvedSession, AgentError> =>
   Effect.gen(function* () {
     if (sessionId === undefined) {
-      const snapshot = yield* store.create({});
+      const snapshot = yield* store.create({}).pipe(Effect.mapError(agentErrorFromSessionError));
       return { snapshot, messages: [...snapshot.session.messages] };
     }
-    const snapshot = yield* store.load(sessionId);
+    const snapshot = yield* store.load(sessionId).pipe(Effect.mapError(agentErrorFromSessionError));
     return { snapshot, messages: [...snapshot.session.messages] };
   });
 
@@ -68,14 +73,14 @@ const appendAndSave = (
   store: SessionStore["Service"],
   resolved: ResolvedSession,
   message: Message
-): Effect.Effect<SessionSnapshot, SessionError> =>
+): Effect.Effect<SessionSnapshot, AgentError> =>
   Effect.gen(function* () {
     const messages = [...resolved.messages, message];
     const checkpoint: SessionCheckpoint = {
       session: { ...resolved.snapshot.session, messages },
       expectedRevision: resolved.snapshot.revision
     };
-    const saved = yield* store.save(checkpoint);
+    const saved = yield* store.save(checkpoint).pipe(Effect.mapError(agentErrorFromSessionError));
     resolved.messages = saved.session.messages;
     resolved.snapshot = saved;
     return saved;
@@ -90,7 +95,7 @@ const appendTurnCheckpoint = (
   store: SessionStore["Service"],
   resolved: ResolvedSession,
   state: TurnState
-): Effect.Effect<void, SessionError> =>
+): Effect.Effect<void, AgentError> =>
   Effect.gen(function* () {
     if (state.assistantParts.length > 0 || state.assistantText.length > 0) {
       const content: string | ReadonlyArray<AssistantPart> =
@@ -221,15 +226,16 @@ const makeRun =
     Stream.suspend(() =>
       Stream.unwrap(
         Effect.gen(function* () {
-          const resolved = yield* resolveSession(request.sessionId, store);
+          const validatedRequest = yield* decodeRunRequest(request);
+          const resolved = yield* resolveSession(validatedRequest.sessionId, store);
           const runId = yield* generateRunId.pipe(Effect.provideService(Crypto.Crypto, crypto));
           const sessionId = resolved.snapshot.session.id;
-          yield* appendAndSave(store, resolved, { role: "user", content: request.prompt });
+          yield* appendAndSave(store, resolved, { role: "user", content: validatedRequest.prompt });
 
           const runTurns = (turn: number): Stream.Stream<AgentEvent, AgentError> =>
             Stream.unwrap(
               Effect.sync(() => {
-                const plan = runTurn(store, model, toolkit, toolkitContext, resolved, turn, request.prompt);
+                const plan = runTurn(store, model, toolkit, toolkitContext, resolved, turn, validatedRequest.prompt);
                 return Stream.concat(
                   plan.stream,
                   Stream.unwrap(

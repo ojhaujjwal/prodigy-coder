@@ -13,3 +13,21 @@ export type CorePackage = {
   readonly packageName: typeof packageName;
   readonly status: "scaffold";
 };
+
+export { ProdigyAgent } from "./agent/prodigy-agent.ts";
+export type { RunRequest } from "./agent/run-request.ts";
+export type {
+  AgentError,
+  InvalidRunReason,
+  ModelReason,
+  SessionStorageReason,
+  ToolSystemReason
+} from "./agent/agent-error.ts";
+export {
+  InvalidRunRequest,
+  ModelError,
+  SessionNotFound,
+  SessionStorageError,
+  ToolSystemError
+} from "./agent/agent-error.ts";
+export type { AgentEvent, AgentFinishReason, AgentResult, JsonValue, ToolOutcome } from "./agent/agent-event.ts";

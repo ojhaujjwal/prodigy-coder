@@ -102,23 +102,19 @@ layer(runLayer)("ProdigyAgent", (it) => {
   });
 
   describe("SessionNotFound (R4)", () => {
-    it.effect(
-      "a missing sessionId fails with the typed SessionLookupError wrapping SessionNotFound, never a new session",
-      () =>
-        Effect.gen(function* () {
-          const unknown = createTestSession("00000000");
-          const agent = yield* ProdigyAgent;
+    it.effect("a missing sessionId fails with agent-level SessionNotFound, never a new session", () =>
+      Effect.gen(function* () {
+        const unknown = createTestSession("00000000");
+        const agent = yield* ProdigyAgent;
 
-          const failure: AgentError = yield* agent
-            .run({ prompt: "Hello", sessionId: unknown.id })
-            .pipe(Stream.runCollect, Effect.flip);
+        const failure: AgentError = yield* agent
+          .run({ prompt: "Hello", sessionId: unknown.id })
+          .pipe(Stream.runCollect, Effect.flip);
 
-          expect(failure._tag).toBe("SessionLookupError");
-          if (failure._tag !== "SessionLookupError") throw new Error("expected SessionLookupError");
-          expect(failure.reason._tag).toBe("SessionNotFound");
-          if (failure.reason._tag !== "SessionNotFound") throw new Error("expected SessionNotFound");
-          expect(failure.reason.id).toBe(unknown.id);
-        })
+        expect(failure._tag).toBe("SessionNotFound");
+        if (failure._tag !== "SessionNotFound") throw new Error("expected SessionNotFound");
+        expect(failure.sessionId).toBe(unknown.id);
+      })
     );
   });
 
