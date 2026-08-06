@@ -1,6 +1,11 @@
 import { Effect, Layer, Schema, Stream } from "effect";
 import { LanguageModel, Tool, Toolkit } from "effect/unstable/ai";
 import type { Response } from "effect/unstable/ai";
+import {
+  HumanInteraction,
+  type InteractionRequest,
+  type InteractionResponse
+} from "../../capabilities/human-interaction.ts";
 
 export const EchoTool = Tool.make("echo", {
   description: "Echo a value",
@@ -11,6 +16,19 @@ export const EchoTool = Tool.make("echo", {
 });
 
 export const EchoToolkit = Toolkit.make(EchoTool);
+
+/** A tool that requires human approval before the handler executes. */
+export const ApprovalTool = Tool.make("approval-gated", {
+  description: "A tool that requires human approval",
+  parameters: Schema.Struct({ value: Schema.String }),
+  success: Schema.Struct({ value: Schema.String }),
+  failure: Schema.Struct({ message: Schema.String }),
+  failureMode: "return",
+  needsApproval: true,
+  dependencies: [HumanInteraction]
+});
+
+export const ApprovalToolkit = Toolkit.make(ApprovalTool);
 
 export type ScriptedEchoOutcome =
   | { readonly _tag: "Success"; readonly value: string }
@@ -52,4 +70,31 @@ export const scriptedToolModelLayer = (
       }
     })
   );
+};
+
+export type ScriptedInteraction = {
+  readonly layer: Layer.Layer<HumanInteraction>;
+  readonly requests: Array<InteractionRequest>;
+};
+
+/**
+ * A scripted `HumanInteraction` adapter for integration tests: records every
+ * request and answers each in order from the supplied responses. The core
+ * analogue of the CLI's scripted approval tests.
+ */
+export const scriptedInteractionLayer = (responses: ReadonlyArray<InteractionResponse>): ScriptedInteraction => {
+  const requests: Array<InteractionRequest> = [];
+  let index = 0;
+  const layer = Layer.succeed(
+    HumanInteraction,
+    HumanInteraction.of({
+      request: (input) => {
+        requests.push(input);
+        const response = responses[index] ?? { _tag: "Denied", reason: "No scripted response" };
+        index += 1;
+        return Effect.succeed(response);
+      }
+    })
+  );
+  return { layer, requests };
 };

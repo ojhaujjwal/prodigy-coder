@@ -1,6 +1,7 @@
 import type { Response } from "effect/unstable/ai";
 import type { Schema } from "effect";
 import type { SessionId } from "../capabilities/session.ts";
+import type { InteractionRequest } from "../capabilities/human-interaction.ts";
 import type { RunId } from "./run-request.ts";
 
 /** JSON-safe data exposed at the agent boundary. */
@@ -55,4 +56,5 @@ export type AgentEvent =
   | { readonly type: "text-delta"; readonly delta: string }
   | { readonly type: "tool-call"; readonly callId: string; readonly toolName: string; readonly input: JsonValue }
   | { readonly type: "tool-result"; readonly callId: string; readonly toolName: string; readonly outcome: ToolOutcome }
+  | { readonly type: "interaction-requested"; readonly request: InteractionRequest }
   | { readonly type: "run-ended"; readonly result: AgentResult };

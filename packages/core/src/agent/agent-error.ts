@@ -1,5 +1,6 @@
 import { Schema } from "effect";
 import type { AiError } from "effect/unstable/ai";
+import type { HumanInteractionError as HumanInteractionErrorType } from "../capabilities/human-interaction.ts";
 import type { SessionError } from "../capabilities/session-store.ts";
 
 /** Reasons for rejecting a run request before execution starts. */
@@ -66,8 +67,23 @@ export class ToolSystemError extends Schema.TaggedErrorClass<ToolSystemError>()(
   cause: Schema.Defect()
 }) {}
 
+/** A failure of the human-interaction channel itself, projected into the agent's error vocabulary. */
+export class InteractionCapabilityError extends Schema.TaggedErrorClass<InteractionCapabilityError>()(
+  "InteractionCapabilityError",
+  {
+    reason: Schema.Literals(["timeout", "channel-closed", "invalid-response"]),
+    cause: Schema.optional(Schema.Defect())
+  }
+) {}
+
 /** The typed failures exposed by a run stream. */
-export type AgentError = InvalidRunRequest | SessionNotFound | SessionStorageError | ModelError | ToolSystemError;
+export type AgentError =
+  | InvalidRunRequest
+  | SessionNotFound
+  | SessionStorageError
+  | ModelError
+  | ToolSystemError
+  | InteractionCapabilityError;
 
 /** Map a neutral model reason to its retryability policy. */
 export const isRetryableModelReason = (reason: ModelReason): boolean =>
@@ -148,3 +164,7 @@ export const agentErrorFromSessionError = (error: SessionError): SessionNotFound
   const cause = error;
   return new SessionStorageError({ reason, cause });
 };
+
+/** Map a HumanInteraction channel failure onto the agent's public error vocabulary. */
+export const agentErrorFromHumanInteractionError = (error: HumanInteractionErrorType): InteractionCapabilityError =>
+  new InteractionCapabilityError({ reason: error.reason, cause: error });

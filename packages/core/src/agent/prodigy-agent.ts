@@ -4,11 +4,20 @@ import type {
   Message,
   SessionCheckpoint,
   SessionSnapshot,
+  ToolApprovalRequestPart,
+  ToolApprovalResponsePart,
   ToolCallPart,
   ToolResultPart
 } from "../capabilities/session.ts";
+import {
+  approvalDecisionFromInteraction,
+  HumanInteraction,
+  HumanInteractionError,
+  type ToolApprovalRequest
+} from "../capabilities/human-interaction.ts";
 import { SessionStore } from "../capabilities/session-store.ts";
 import {
+  agentErrorFromHumanInteractionError,
   agentErrorFromSessionError,
   agentErrorFromToolError,
   type AgentError,
@@ -29,12 +38,21 @@ type ResolvedSession = {
   messages: Message[];
 };
 
-type AssistantPart = { readonly type: "text"; readonly text: string } | ToolCallPart;
+type AssistantPart = { readonly type: "text"; readonly text: string } | ToolCallPart | ToolApprovalRequestPart;
+
+/** A native approval request booked during a turn, resolved after the parts stream ends. */
+type PendingApproval = {
+  readonly request: ToolApprovalRequest;
+  readonly approvalId: string;
+  readonly toolCallId: string;
+};
 
 type TurnState = {
   assistantText: string;
-  assistantParts: Array<ToolCallPart>;
+  assistantParts: Array<ToolCallPart | ToolApprovalRequestPart>;
   toolParts: Array<ToolResultPart>;
+  approvalParts: Array<ToolApprovalResponsePart>;
+  pendingApprovals: Array<PendingApproval>;
   hasToolCalls: boolean;
   hasFinish: boolean;
   finishReason: AgentFinishReason;
@@ -61,6 +79,8 @@ const emptyTurnState = (): TurnState => ({
   assistantText: "",
   assistantParts: [],
   toolParts: [],
+  approvalParts: [],
+  pendingApprovals: [],
   hasToolCalls: false,
   hasFinish: false,
   finishReason: "unknown"
@@ -101,6 +121,57 @@ const decodeJson = (value: unknown): Effect.Effect<JsonValue, ToolSystemError> =
     Effect.mapError((cause) => new ToolSystemError({ reason: "serialization", cause }))
   );
 
+/**
+ * Read the `HumanInteraction` service from the toolkit handler context.
+ *
+ * The toolkit context is `Context<ToolkitServices<TTools>>`, and
+ * `ToolkitServices` includes `HumanInteraction` exactly when a selected tool's
+ * handler declares it as a dependency. The layer R channel enforces that
+ * composition-time requirement, so this lookup is never an optional read: a
+ * toolkit that can produce `tool-approval-request` parts necessarily provides
+ * `HumanInteraction`, and one that cannot never reaches this code path.
+ */
+const readHumanInteraction = (context: Context.Context<never>): HumanInteraction["Service"] =>
+  Context.getUnsafe(context, HumanInteraction);
+
+/**
+ * Resolve a native approval request through the `HumanInteraction` channel.
+ *
+ * The native `tool-approval-request` part carries an `approvalId` and the
+ * `toolCallId` it refers to; the assistant message already records the
+ * `tool-call`. The resolution appends the native `tool-approval-response`
+ * part (into `approvalParts`) so the next `streamText` call pre-resolves the
+ * approval before calling the model again.
+ *
+ * `Approved` -> the next turn executes the tool handler.
+ * `Denied` -> the next turn injects a model-visible `execution-denied` result.
+ * `Answered` -> an ask-style answer to a native approval request is an
+ * invalid response from the interaction channel, so it is a capability
+ * failure (`invalid-response`), never a silent success.
+ */
+const resolveApproval = (
+  interaction: HumanInteraction["Service"],
+  request: ToolApprovalRequest,
+  approvalId: string
+): Effect.Effect<ToolApprovalResponsePart, AgentError> =>
+  Effect.gen(function* () {
+    const response = yield* interaction.request(request).pipe(Effect.mapError(agentErrorFromHumanInteractionError));
+    const decision = approvalDecisionFromInteraction(response);
+    switch (decision._tag) {
+      case "Approved":
+        return { type: "tool-approval-response", approvalId, approved: true };
+      case "Denied":
+        return {
+          type: "tool-approval-response",
+          approvalId,
+          approved: false,
+          ...(decision.reason === undefined ? {} : { reason: decision.reason })
+        };
+      case "invalid-response":
+        return yield* agentErrorFromHumanInteractionError(new HumanInteractionError({ reason: "invalid-response" }));
+    }
+  });
+
 const appendTurnCheckpoint = (
   store: SessionStore["Service"],
   resolved: ResolvedSession,
@@ -119,8 +190,12 @@ const appendTurnCheckpoint = (
           : state.assistantText;
       yield* appendAndSave(store, resolved, { role: "assistant", content });
     }
-    if (state.toolParts.length > 0) {
-      yield* appendAndSave(store, resolved, { role: "tool", content: state.toolParts });
+    if (state.toolParts.length > 0 || state.approvalParts.length > 0) {
+      const content: ReadonlyArray<ToolResultPart | ToolApprovalResponsePart> = [
+        ...state.toolParts,
+        ...state.approvalParts
+      ];
+      yield* appendAndSave(store, resolved, { role: "tool", content });
     }
   });
 
@@ -140,7 +215,7 @@ const runTurn = <TTools extends Record<string, Tool.Any>>(
   const parts = model.streamText({ prompt: modelPrompt, toolkit }).pipe(
     Stream.provideContext(toolkitContext),
     Stream.mapError(agentErrorFromToolError),
-    Stream.filterMapEffect((part): Effect.Effect<Result.Result<AgentEvent, unknown>, ToolSystemError> => {
+    Stream.filterMapEffect((part): Effect.Effect<Result.Result<AgentEvent, unknown>, AgentError> => {
       switch (part.type) {
         case "text-delta":
           state.assistantText += part.delta;
@@ -173,6 +248,36 @@ const runTurn = <TTools extends Record<string, Tool.Any>>(
               } satisfies AgentEvent)
             )
           );
+        case "tool-approval-request": {
+          const toolCall = state.assistantParts.find(
+            (p): p is ToolCallPart => p.type === "tool-call" && p.id === part.toolCallId
+          );
+          if (toolCall === undefined) {
+            return Effect.fail(
+              new ToolSystemError({
+                reason: "serialization",
+                cause: new Error(`Approval request ${part.approvalId} has no matching tool call`)
+              })
+            );
+          }
+          return decodeJson(toolCall.params).pipe(
+            Effect.map((input) => {
+              const request: ToolApprovalRequest = {
+                toolName: toolCall.name,
+                callId: toolCall.id,
+                input
+              };
+              state.hasToolCalls = true;
+              state.pendingApprovals.push({ request, approvalId: part.approvalId, toolCallId: part.toolCallId });
+              state.assistantParts.push({
+                type: "tool-approval-request",
+                approvalId: part.approvalId,
+                toolCallId: part.toolCallId
+              });
+              return Result.succeed({ type: "interaction-requested", request } satisfies AgentEvent);
+            })
+          );
+        }
         case "tool-result":
           if (part.preliminary) return Effect.succeed(Result.fail(part));
           return decodeJson(part.encodedResult).pipe(
@@ -216,6 +321,14 @@ const runTurn = <TTools extends Record<string, Tool.Any>>(
         parts,
         Stream.unwrap(
           Effect.gen(function* () {
+            if (state.pendingApprovals.length > 0) {
+              const interaction = readHumanInteraction(toolkitContext);
+              const responses: Array<ToolApprovalResponsePart> = [];
+              for (const pending of state.pendingApprovals) {
+                responses.push(yield* resolveApproval(interaction, pending.request, pending.approvalId));
+              }
+              state.approvalParts.push(...responses);
+            }
             yield* appendTurnCheckpoint(store, resolved, state);
             return Stream.empty;
           })

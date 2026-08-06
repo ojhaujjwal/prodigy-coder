@@ -124,7 +124,7 @@ Vertical red-green-refactor slices, integration-first through the public stream:
 - [ ] A scripted/Queue-based `HumanInteraction` helper is added to the integration helpers.
 - [ ] Integration tests drive the run end-to-end and assert: with an interaction-requiring toolkit (and its `HumanInteraction` adapter) a tool requiring interaction emits `interaction-requested` before waiting then resumes with the correlated response; a toolkit without interaction tools emits no `interaction-requested` event and runs normally; an interaction denial is a model-visible failed tool result, not a run failure.
 - [ ] Unit tests are limited to hard-to-reach branches (e.g. request/response correlation edge cases) per the testing guide `specs/guides/testing-core-integration.md`.
-- [ ] `bun run test --run` in `packages/core` passes.
+- [ ] `bun run ci` in `packages/core` passes.
 
 ## Blocked by
 

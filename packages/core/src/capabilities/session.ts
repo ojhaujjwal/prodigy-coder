@@ -38,6 +38,13 @@ const ToolCallPart = Schema.Struct({
 });
 export type ToolCallPart = Schema.Schema.Type<typeof ToolCallPart>;
 
+const ToolApprovalRequestPart = Schema.Struct({
+  type: Schema.Literal("tool-approval-request"),
+  approvalId: Schema.String,
+  toolCallId: Schema.String
+});
+export type ToolApprovalRequestPart = Schema.Schema.Type<typeof ToolApprovalRequestPart>;
+
 const ToolResultPart = Schema.Struct({
   type: Schema.Literal("tool-result"),
   id: Schema.String,
@@ -46,6 +53,14 @@ const ToolResultPart = Schema.Struct({
   result: Schema.Unknown
 });
 export type ToolResultPart = Schema.Schema.Type<typeof ToolResultPart>;
+
+const ToolApprovalResponsePart = Schema.Struct({
+  type: Schema.Literal("tool-approval-response"),
+  approvalId: Schema.String,
+  approved: Schema.Boolean,
+  reason: Schema.optional(Schema.String)
+});
+export type ToolApprovalResponsePart = Schema.Schema.Type<typeof ToolApprovalResponsePart>;
 
 const SystemMessage = Schema.Struct({
   role: Schema.Literal("system"),
@@ -61,13 +76,13 @@ export type UserMessage = Schema.Schema.Type<typeof UserMessage>;
 
 const AssistantMessage = Schema.Struct({
   role: Schema.Literal("assistant"),
-  content: Schema.Union([Schema.String, Schema.Array(Schema.Union([TextPart, ToolCallPart]))])
+  content: Schema.Union([Schema.String, Schema.Array(Schema.Union([TextPart, ToolCallPart, ToolApprovalRequestPart]))])
 });
 export type AssistantMessage = Schema.Schema.Type<typeof AssistantMessage>;
 
 const ToolMessage = Schema.Struct({
   role: Schema.Literal("tool"),
-  content: Schema.Array(ToolResultPart)
+  content: Schema.Array(Schema.Union([ToolResultPart, ToolApprovalResponsePart]))
 });
 export type ToolMessage = Schema.Schema.Type<typeof ToolMessage>;
 
