@@ -3,8 +3,8 @@ import { Effect, Layer, Stream } from "effect";
 import * as BunCrypto from "@effect/platform-bun/BunCrypto";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import { layerNoDeps as memoryStoreLayer } from "../../capabilities/memory-session-store.ts";
-import { ProdigyAgent, makeLayer } from "../prodigy-agent.ts";
-import { defaultAgenticProfile, defaultAgenticToolkitLayer } from "../../toolkit/default-toolkit.ts";
+import { ProdigyAgent, makeProdigyAgentLayer } from "../prodigy-agent.ts";
+import { defaultAgenticProfile } from "../../toolkit/default-toolkit.ts";
 import {
   scriptedCommandExecutorLayer,
   scriptedInteractionLayer,
@@ -31,17 +31,15 @@ const finish = (reason: "stop" | "tool-calls") => ({
 });
 
 /**
- * The default toolkit's handler Layer requires the full authority set
- * (`Workspace | CommandExecutor | HumanInteraction | SkillRepository` plus
- * `HttpClient` for webfetch). A profile built from it declares those
- * authorities; the composition root provides scripted/test layers.
+ * The profile owns the default toolkit's handler Layer. Its handler Layer
+ * requires the full authority set plus `HttpClient` for webfetch; the
+ * composition root provides scripted/test layers for those requirements.
  */
 const defaultProfile = defaultAgenticProfile();
 
 const storeLayer = Layer.provideMerge(memoryStoreLayer, BunCrypto.layer);
 
 const capabilityLayers = Layer.mergeAll(
-  defaultAgenticToolkitLayer,
   scriptedWorkspaceLayer({ "a.txt": "hello world" }).layer,
   scriptedCommandExecutorLayer({ "bash -c echo hi": { exitCode: 0, stdout: "hi\n", stderr: "" } }).layer,
   scriptedInteractionLayer([{ _tag: "Answered", answer: "42" }]).layer,
@@ -52,7 +50,7 @@ const capabilityLayers = Layer.mergeAll(
 );
 
 const runLayer = Layer.provideMerge(
-  Layer.provideMerge(makeLayer(defaultProfile), storeLayer),
+  Layer.provideMerge(makeProdigyAgentLayer(defaultProfile), storeLayer),
   Layer.provideMerge(capabilityLayers, scriptedToolModelLayer([]))
 );
 
@@ -71,7 +69,7 @@ layer(runLayer)("Default agentic toolkit", (it) => {
 // A focused run exercising read + shell + ask_user through the composed runtime.
 const exerciseLayer = Layer.provideMerge(
   Layer.provideMerge(
-    makeLayer(defaultProfile),
+    makeProdigyAgentLayer(defaultProfile),
     Layer.provideMerge(
       storeLayer,
       scriptedToolModelLayer([

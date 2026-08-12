@@ -12,7 +12,7 @@ import {
   defaultAgenticProfile,
   defaultAgenticToolkitLayer,
   fileSessionStoreLayer,
-  makeLayer,
+  makeProdigyAgentLayer,
   memorySessionStoreLayer
 } from "@prodigy/core";
 import type {
@@ -30,7 +30,6 @@ import type {
   HumanInteractionError,
   InteractionRequest,
   InteractionResponse,
-  ProfileAuthorities,
   RunId,
   RunRequest,
   Session,
@@ -41,8 +40,6 @@ import type {
   SessionSnapshot,
   Skill,
   ToolApprovalRequest,
-  ToolkitAuthorities,
-  ToolkitServices,
   UserQuestion,
   WorkspaceError,
   WorkspaceLookupError,
@@ -56,7 +53,7 @@ it("exposes the curated run-contract surface", () => {
   expect(SessionStore).toBeDefined();
   expect(memorySessionStoreLayer).toBeDefined();
   expect(fileSessionStoreLayer).toBeDefined();
-  expect(makeLayer).toBeDefined();
+  expect(makeProdigyAgentLayer).toBeDefined();
   expect(DefaultAgenticToolkit).toBeDefined();
   expect(defaultAgenticToolkitLayer).toBeDefined();
   expect(defaultAgenticProfile).toBeDefined();
@@ -89,9 +86,6 @@ type _Named = {
   snapshot: SessionSnapshot;
   checkpoint: SessionCheckpoint;
   profile: AgentProfile<typeof DefaultAgenticToolkit.tools>;
-  profileAuthorities: ProfileAuthorities<typeof DefaultAgenticToolkit.tools>;
-  toolkitAuthorities: ToolkitAuthorities;
-  toolkitServices: ToolkitServices<typeof DefaultAgenticToolkit.tools>;
   workspaceError: WorkspaceError;
   workspaceLookupError: WorkspaceLookupError;
   workspacePersistenceError: WorkspacePersistenceError;

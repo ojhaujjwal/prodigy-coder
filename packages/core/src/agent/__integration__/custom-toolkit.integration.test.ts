@@ -3,7 +3,7 @@ import { expect, layer } from "@effect/vitest";
 import * as BunCrypto from "@effect/platform-bun/BunCrypto";
 import { Tool, Toolkit } from "effect/unstable/ai";
 import { layerNoDeps as memoryStoreLayer } from "../../capabilities/memory-session-store.ts";
-import { ProdigyAgent, makeLayer } from "../prodigy-agent.ts";
+import { ProdigyAgent, makeProdigyAgentLayer } from "../prodigy-agent.ts";
 import { EchoToolkit, scriptedEchoToolkit, scriptedToolModelLayer } from "./helpers.ts";
 import type { AgentEvent } from "../agent-event.ts";
 import type { AgentProfile } from "../agent-profile.ts";
@@ -60,27 +60,25 @@ const echoToolkit = scriptedEchoToolkit();
 
 const mergedToolkit = Toolkit.merge(EchoToolkit, replacedToolkit);
 
-const mergedProfile: AgentProfile<typeof mergedToolkit.tools, never> = {
+const mergedProfile: AgentProfile<typeof mergedToolkit.tools> = {
   toolkit: mergedToolkit,
-  toolkitLayer: Layer.merge(echoToolkit.layer, replacedToolkitLayer),
+  toolkitHandlerLayer: Layer.merge(echoToolkit.layer, replacedToolkitLayer),
   systemPrompt: "",
   maxTurns: 50
 };
 
 const storeLayer = Layer.provideMerge(memoryStoreLayer, BunCrypto.layer);
 
-const handlerLayers = Layer.merge(echoToolkit.layer, replacedToolkitLayer);
-
 layer(
   Layer.provideMerge(
     Layer.provideMerge(
-      Layer.provideMerge(makeLayer(mergedProfile), storeLayer),
+      Layer.provideMerge(makeProdigyAgentLayer(mergedProfile), storeLayer),
       scriptedToolModelLayer([
         [{ type: "tool-call", id: "c1", name: "sum", params: { a: 2, b: 3 } }, finish("tool-calls")],
         [{ type: "text-delta", id: "t", delta: "done" }, finish("stop")]
       ])
     ),
-    Layer.merge(calculatorLayer, handlerLayers)
+    calculatorLayer
   )
 )("Custom and remote toolkit composition", (it) => {
   it.effect("a replaced same-name tool uses its complete new definition and handler", () =>

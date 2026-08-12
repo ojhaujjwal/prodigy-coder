@@ -28,7 +28,8 @@ export type InteractionErrorReason = "timeout" | "channel-closed" | "invalid-res
 /**
  * A typed one-shot request/response channel for human interaction, selected at
  * composition time. It is a required dependency whenever the selected toolkit's
- * `ToolkitAuthorities` includes it — never an optional context read.
+ * the selected toolkit's handler requirements include it — never an optional
+ * context read.
  */
 export class HumanInteraction extends Context.Service<
   HumanInteraction,

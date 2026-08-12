@@ -2,7 +2,7 @@ import { expect, layer } from "@effect/vitest";
 import { Effect, Layer, Stream } from "effect";
 import * as BunCrypto from "@effect/platform-bun/BunCrypto";
 import { layerNoDeps as memoryStoreLayer } from "../../capabilities/memory-session-store.ts";
-import { ProdigyAgent, makeLayer } from "../prodigy-agent.ts";
+import { ProdigyAgent, makeProdigyAgentLayer } from "../prodigy-agent.ts";
 import {
   ApprovalToolkit,
   approvalProfile,
@@ -27,7 +27,7 @@ const storeLayer = Layer.provideMerge(memoryStoreLayer, BunCrypto.layer);
 
 layer(
   Layer.provideMerge(
-    Layer.provideMerge(makeLayer(textProfile()), storeLayer),
+    Layer.provideMerge(makeProdigyAgentLayer(textProfile()), storeLayer),
     scriptedToolModelLayer([[{ type: "text-delta", id: "t1", delta: "hi" }, finish("stop")]])
   )
 )("AgentProfile with no authorities", (it) => {
@@ -44,14 +44,11 @@ const echoToolkit = scriptedEchoToolkit();
 
 layer(
   Layer.provideMerge(
-    Layer.provideMerge(
-      Layer.provideMerge(makeLayer(echoProfile(echoToolkit.layer)), storeLayer),
-      scriptedToolModelLayer([
-        [{ type: "tool-call", id: "c1", name: "echo", params: { value: "x" } }, finish("tool-calls")],
-        [{ type: "text-delta", id: "t2", delta: "done" }, finish("stop")]
-      ])
-    ),
-    echoToolkit.layer
+    Layer.provideMerge(makeProdigyAgentLayer(echoProfile(echoToolkit.layer)), storeLayer),
+    scriptedToolModelLayer([
+      [{ type: "tool-call", id: "c1", name: "echo", params: { value: "x" } }, finish("tool-calls")],
+      [{ type: "text-delta", id: "t2", delta: "done" }, finish("stop")]
+    ])
   )
 )("AgentProfile with a tool handler Layer", (it) => {
   it.effect("executes the tool through the profile's handler Layer", () =>
@@ -71,17 +68,14 @@ const interaction = scriptedInteractionLayer([{ _tag: "Approved" }]);
 
 layer(
   Layer.provideMerge(
+    Layer.provideMerge(makeProdigyAgentLayer(approvalProfile(approvedToolkitLayer)), storeLayer),
     Layer.provideMerge(
-      Layer.provideMerge(
-        Layer.provideMerge(makeLayer(approvalProfile(approvedToolkitLayer)), storeLayer),
-        scriptedToolModelLayer([
-          [{ type: "tool-call", id: "c1", name: "approval-gated", params: { value: "y" } }, finish("tool-calls")],
-          [{ type: "text-delta", id: "t3", delta: "done" }, finish("stop")]
-        ])
-      ),
-      approvedToolkitLayer
-    ),
-    interaction.layer
+      scriptedToolModelLayer([
+        [{ type: "tool-call", id: "c1", name: "approval-gated", params: { value: "y" } }, finish("tool-calls")],
+        [{ type: "text-delta", id: "t3", delta: "done" }, finish("stop")]
+      ]),
+      interaction.layer
+    )
   )
 )("AgentProfile with HumanInteraction authority", (it) => {
   it.effect("declares HumanInteraction and resolves approvals through it", () =>

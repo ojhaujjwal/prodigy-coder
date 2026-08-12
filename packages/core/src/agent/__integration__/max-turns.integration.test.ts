@@ -5,7 +5,7 @@ import { LanguageModel } from "effect/unstable/ai";
 import type { Response } from "effect/unstable/ai";
 import { layerNoDeps as memoryStoreLayer } from "../../capabilities/memory-session-store.ts";
 import { textProfile } from "./helpers.ts";
-import { ProdigyAgent, makeLayer as agentLayer } from "../prodigy-agent.ts";
+import { ProdigyAgent, makeProdigyAgentLayer as agentLayer } from "../prodigy-agent.ts";
 import type { AgentError } from "../agent-error.ts";
 import type { AgentEvent } from "../agent-event.ts";
 

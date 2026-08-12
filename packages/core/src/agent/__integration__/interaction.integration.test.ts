@@ -4,7 +4,7 @@ import * as BunCrypto from "@effect/platform-bun/BunCrypto";
 import { layerNoDeps as memoryStoreLayer } from "../../capabilities/memory-session-store.ts";
 import { SessionStore } from "../../capabilities/session-store.ts";
 import { HumanInteraction, HumanInteractionError } from "../../capabilities/human-interaction.ts";
-import { makeLayer as makeAgentLayer, ProdigyAgent } from "../prodigy-agent.ts";
+import { makeProdigyAgentLayer as makeAgentLayer, ProdigyAgent } from "../prodigy-agent.ts";
 import type { AgentError } from "../agent-error.ts";
 import type { AgentEvent } from "../agent-event.ts";
 import type { AgentProfile } from "../agent-profile.ts";
@@ -312,7 +312,7 @@ layer(
  * dependency is a toolkit misconfiguration. Effect AI emits the native
  * `tool-approval-request` part for any tool with `needsApproval` (approval is
  * gated by that option alone, independent of `dependencies`), so the type
- * system cannot see the hole. The composition guard in `makeLayer` closes it:
+ * system cannot see the hole. Profile resolution closes it:
  * the layer fails at build time with the typed
  * `ToolSystemError`/`toolkit-misconfiguration` — never an untyped runtime
  * exception.
@@ -327,9 +327,9 @@ const ApprovalWithoutChannelTool = Tool.make("approval-no-channel", {
 
 const ApprovalWithoutChannelToolkit = Toolkit.make(ApprovalWithoutChannelTool);
 
-const noChannelProfile: AgentProfile<typeof ApprovalWithoutChannelToolkit.tools, never> = {
+const noChannelProfile: AgentProfile<typeof ApprovalWithoutChannelToolkit.tools> = {
   toolkit: ApprovalWithoutChannelToolkit,
-  toolkitLayer: ApprovalWithoutChannelToolkit.toLayer({
+  toolkitHandlerLayer: ApprovalWithoutChannelToolkit.toLayer({
     "approval-no-channel": () => Effect.succeed({ value: "ran" })
   }),
   systemPrompt: "",
@@ -340,16 +340,13 @@ it.effect("fails at composition when an approval-gated tool lacks HumanInteracti
   Effect.gen(function* () {
     const failure = yield* Layer.build(
       Layer.provideMerge(
-        Layer.provideMerge(
-          Layer.provideMerge(makeAgentLayer(noChannelProfile), Layer.provideMerge(memoryStoreLayer, BunCrypto.layer)),
-          scriptedToolModelLayer([
-            [
-              { type: "tool-call", id: "call-nc", name: "approval-no-channel", params: { value: "x" } },
-              finish("tool-calls")
-            ]
-          ])
-        ),
-        noChannelProfile.toolkitLayer
+        Layer.provideMerge(makeAgentLayer(noChannelProfile), Layer.provideMerge(memoryStoreLayer, BunCrypto.layer)),
+        scriptedToolModelLayer([
+          [
+            { type: "tool-call", id: "call-nc", name: "approval-no-channel", params: { value: "x" } },
+            finish("tool-calls")
+          ]
+        ])
       )
     ).pipe(Effect.flip);
 

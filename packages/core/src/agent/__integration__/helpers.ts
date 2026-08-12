@@ -125,9 +125,9 @@ export const EchoTool = Tool.make("echo", {
 export const EchoToolkit = Toolkit.make(EchoTool);
 
 /** A text-only profile: an empty toolkit with no handler Layer and no authorities. */
-export const textProfile = (maxTurns = 50, systemPrompt = ""): AgentProfile<{}, never> => ({
+export const textProfile = (maxTurns = 50, systemPrompt = ""): AgentProfile<{}> => ({
   toolkit: Toolkit.empty,
-  toolkitLayer: Layer.empty,
+  toolkitHandlerLayer: Layer.empty,
 
   systemPrompt,
   maxTurns
@@ -135,11 +135,11 @@ export const textProfile = (maxTurns = 50, systemPrompt = ""): AgentProfile<{}, 
 
 /** Build a profile for the echo toolkit with the given handler Layer. */
 export const echoProfile = (
-  toolkitLayer: Layer.Layer<Tool.HandlersFor<typeof EchoToolkit.tools>>,
+  toolkitHandlerLayer: Layer.Layer<Tool.HandlersFor<typeof EchoToolkit.tools>>,
   maxTurns = 50
-): AgentProfile<typeof EchoToolkit.tools, never> => ({
+): AgentProfile<typeof EchoToolkit.tools> => ({
   toolkit: EchoToolkit,
-  toolkitLayer,
+  toolkitHandlerLayer,
 
   systemPrompt: "",
   maxTurns
@@ -160,12 +160,11 @@ export const ApprovalToolkit = Toolkit.make(ApprovalTool);
 
 /** Build a profile for the approval-gated toolkit (requires `HumanInteraction`). */
 export const approvalProfile = (
-  toolkitLayer: Layer.Layer<Tool.HandlersFor<typeof ApprovalToolkit.tools>>,
+  toolkitHandlerLayer: Layer.Layer<Tool.HandlersFor<typeof ApprovalToolkit.tools>>,
   maxTurns = 50
-): AgentProfile<typeof ApprovalToolkit.tools, HumanInteraction> => ({
+): AgentProfile<typeof ApprovalToolkit.tools> => ({
   toolkit: ApprovalToolkit,
-  toolkitLayer,
-  authorities: HumanInteraction,
+  toolkitHandlerLayer,
   systemPrompt: "",
   maxTurns
 });

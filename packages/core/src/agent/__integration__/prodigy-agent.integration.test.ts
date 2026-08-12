@@ -6,7 +6,7 @@ import { SessionStore } from "../../capabilities/session-store.ts";
 import { createTestSession } from "../../__integration__/helpers.ts";
 import { recordingLanguageModelLayer, testLanguageModelLayer } from "../test-helpers.ts";
 import { textProfile } from "./helpers.ts";
-import { ProdigyAgent, makeLayer as agentLayer } from "../prodigy-agent.ts";
+import { ProdigyAgent, makeProdigyAgentLayer as agentLayer } from "../prodigy-agent.ts";
 import type { AgentError } from "../agent-error.ts";
 import type { AgentEvent } from "../agent-event.ts";
 

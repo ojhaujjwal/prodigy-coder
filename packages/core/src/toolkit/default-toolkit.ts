@@ -14,7 +14,7 @@ import {
   type GrepRequest,
   type GrepMatch
 } from "../capabilities/workspace.ts";
-import type { AgentProfile, ToolkitAuthorities } from "../agent/agent-profile.ts";
+import type { AgentProfile } from "../agent/agent-profile.ts";
 
 // ---------------------------------------------------------------------------
 // Shared error projection: capability failures become model-visible AiErrors.
@@ -398,11 +398,9 @@ export const defaultAgenticToolkitLayer = DefaultAgenticToolkit.toLayer(
  * `SkillRepository`). The composition root provides concrete Layers for the
  * authorities (and `HttpClient` for `webfetch`).
  */
-export const defaultAgenticProfile = (
-  maxTurns = 50
-): AgentProfile<typeof DefaultAgenticToolkit.tools, ToolkitAuthorities> => ({
+export const defaultAgenticProfile = (maxTurns = 50): AgentProfile<typeof DefaultAgenticToolkit.tools> => ({
   toolkit: DefaultAgenticToolkit,
-  toolkitLayer: defaultAgenticToolkitLayer,
+  toolkitHandlerLayer: defaultAgenticToolkitLayer,
   systemPrompt: "",
   maxTurns
 });

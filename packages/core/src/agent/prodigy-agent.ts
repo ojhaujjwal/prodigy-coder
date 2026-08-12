@@ -25,7 +25,8 @@ import {
 } from "./agent-error.ts";
 import { mapAgentFinishReason, type AgentEvent, type AgentFinishReason, type JsonValue } from "./agent-event.ts";
 import { decodeRunRequest, generateRunId, validateMaxTurnsOverride, type RunRequest } from "./run-request.ts";
-import type { AgentProfile, ProfileAuthorities, ToolkitAuthorities, ToolkitServices } from "./agent-profile.ts";
+import type { AgentProfile } from "./agent-profile.ts";
+import { resolveAgentProfile, type ResolvedAgentProfile } from "./profile-resolution.ts";
 
 export class ProdigyAgent extends Context.Service<
   ProdigyAgent,
@@ -197,7 +198,7 @@ const runTurn = <TTools extends Record<string, Tool.Any>>(
   store: SessionStore["Service"],
   model: LanguageModel.LanguageModel["Service"],
   toolkit: Toolkit.WithHandler<TTools>,
-  toolkitContext: Context.Context<ToolkitServices<TTools>>,
+  toolkitContext: ResolvedAgentProfile<TTools>["toolkitContext"],
   snapshot: SessionSnapshot,
   onSnapshot: (snapshot: SessionSnapshot) => void,
   turn: number
@@ -346,11 +347,8 @@ const makeRun =
   <TTools extends Record<string, Tool.Any>>(
     store: SessionStore["Service"],
     model: LanguageModel.LanguageModel["Service"],
-    toolkit: Toolkit.WithHandler<TTools>,
-    toolkitContext: Context.Context<ToolkitServices<TTools>>,
-    crypto: Crypto.Crypto,
-    profileMaxTurns: number,
-    profileSystemPrompt: string
+    profile: ResolvedAgentProfile<TTools>,
+    crypto: Crypto.Crypto
   ): ((request: RunRequest) => Stream.Stream<AgentEvent, AgentError>) =>
   (request) =>
     Stream.suspend(() =>
@@ -359,9 +357,9 @@ const makeRun =
           const validatedRequest = yield* decodeRunRequest(request);
           const effectiveMaxTurns =
             validatedRequest.maxTurns === undefined
-              ? profileMaxTurns
-              : yield* validateMaxTurnsOverride(validatedRequest.maxTurns, profileMaxTurns);
-          let snapshot = yield* resolveSession(validatedRequest.sessionId, store, profileSystemPrompt);
+              ? profile.maxTurns
+              : yield* validateMaxTurnsOverride(validatedRequest.maxTurns, profile.maxTurns);
+          let snapshot = yield* resolveSession(validatedRequest.sessionId, store, profile.systemPrompt);
           const runId = yield* generateRunId.pipe(Effect.provideService(Crypto.Crypto, crypto));
           const sessionId = snapshot.session.id;
           snapshot = yield* appendAndSave(store, snapshot, { role: "user", content: validatedRequest.prompt });
@@ -384,8 +382,8 @@ const makeRun =
                 const plan = runTurn(
                   store,
                   model,
-                  toolkit,
-                  toolkitContext,
+                  profile.toolkit,
+                  profile.toolkitContext,
                   snapshot,
                   (next) => {
                     snapshot = next;
@@ -452,12 +450,16 @@ const makeRun =
  * case is type-enforced, but `needsApproval` is not part of the toolkit's
  * service types, so the guard closes the remaining hole at startup.
  */
-export const makeLayer = <TTools extends Record<string, Tool.Any>, TAuthorities extends ToolkitAuthorities = never>(
-  profile: AgentProfile<TTools, TAuthorities>
+export const makeProdigyAgentLayer = <TTools extends Record<string, Tool.Any>>(
+  profile: AgentProfile<TTools>
 ): Layer.Layer<
   ProdigyAgent,
   ToolSystemError,
-  ProfileAuthorities<TTools, TAuthorities> | SessionStore | LanguageModel.LanguageModel | Crypto.Crypto
+  | Tool.HandlerServices<TTools[keyof TTools]>
+  | Tool.ResultDecodingServices<TTools[keyof TTools]>
+  | SessionStore
+  | LanguageModel.LanguageModel
+  | Crypto.Crypto
 > =>
   Layer.effect(
     ProdigyAgent,
@@ -465,28 +467,9 @@ export const makeLayer = <TTools extends Record<string, Tool.Any>, TAuthorities 
       const store = yield* SessionStore;
       const model = yield* LanguageModel.LanguageModel;
       const crypto = yield* Crypto.Crypto;
-      // Read the toolkit handler context from the composition root's provided
-      // services (the profile's handler Layer + authorities are part of this
-      // layer's R channel). The toolkit Effect is resolved against the same
-      // context, then the resolved value is closed over for every run.
-      const toolkitContext = yield* Effect.context<ToolkitServices<TTools>>();
-      const withHandlers = yield* profile.toolkit.pipe(Effect.provideContext(toolkitContext));
-      const approvalGatedTools = Object.values(withHandlers.tools).filter((tool) => tool.needsApproval !== undefined);
-      if (approvalGatedTools.length > 0 && Option.isNone(Context.getOption(toolkitContext, HumanInteraction))) {
-        return yield* new ToolSystemError({
-          reason: "toolkit-misconfiguration",
-          cause: new Error(
-            `Tools [${approvalGatedTools.map((tool) => tool.name).join(", ")}] require approval, ` +
-              "but no HumanInteraction service is provided in the toolkit context"
-          )
-        });
-      }
+      const resolvedProfile = yield* resolveAgentProfile(profile);
       return ProdigyAgent.of({
-        run: makeRun(store, model, withHandlers, toolkitContext, crypto, profile.maxTurns, profile.systemPrompt)
+        run: makeRun(store, model, resolvedProfile, crypto)
       });
     })
   );
-
-/** The default-composition alias: selects a profile, so it is the same factory. */
-export const layerNoDeps = makeLayer;
-export const layer = makeLayer;

@@ -2,7 +2,7 @@
  * The runtime-neutral public entrypoint for the Prodigy SDK.
  *
  * This surface is the v1 run-contract: the `ProdigyAgent` service, its
- * composition factory (`makeLayer`) and profile vocabulary, the run request
+ * composition factory (`makeProdigyAgentLayer`) and profile vocabulary, the run request
  * and event/result/error vocabulary, the default toolkit with its handler
  * layer and profile, and the capability services (`SessionStore`, `Workspace`,
  * `CommandExecutor`, `HumanInteraction`, `SkillRepository`) with the usable
@@ -14,11 +14,11 @@
  * happens inside the owning authorities.
  */
 export { ProdigyAgent } from "./agent/prodigy-agent.ts";
-export { makeLayer } from "./agent/prodigy-agent.ts";
+export { makeProdigyAgentLayer } from "./agent/prodigy-agent.ts";
 export type { RunRequest, RunId } from "./agent/run-request.ts";
 export type { AgentEvent, AgentResult, AgentFinishReason } from "./agent/agent-event.ts";
 export type { AgentError } from "./agent/agent-error.ts";
-export type { AgentProfile, ProfileAuthorities, ToolkitAuthorities, ToolkitServices } from "./agent/agent-profile.ts";
+export type { AgentProfile } from "./agent/agent-profile.ts";
 export { SessionStore } from "./capabilities/session-store.ts";
 export type { SessionError } from "./capabilities/session-store.ts";
 export { layer as memorySessionStoreLayer } from "./capabilities/memory-session-store.ts";

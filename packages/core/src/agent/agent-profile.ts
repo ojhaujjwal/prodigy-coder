@@ -1,16 +1,5 @@
 import { Layer, Schema } from "effect";
 import { Tool, Toolkit } from "effect/unstable/ai";
-import { HumanInteraction } from "../capabilities/human-interaction.ts";
-import { Workspace } from "../capabilities/workspace.ts";
-import { CommandExecutor } from "../capabilities/command-executor.ts";
-import { SkillRepository } from "../capabilities/skill-repository.ts";
-
-/**
- * The authority requirements of a profile's handler Layers. A profile whose
- * tools need `Workspace`/`CommandExecutor`/`HumanInteraction`/`SkillRepository`
- * declares them here; the composition root provides the concrete Layers.
- */
-export type ToolkitAuthorities = Workspace | CommandExecutor | HumanInteraction | SkillRepository;
 
 /**
  * A positive integer: the profile's default turn bound, and the ceiling for
@@ -26,37 +15,16 @@ export type PositiveInt = Schema.Schema.Type<typeof PositiveInt>;
  * within the profile's bound, but it can never replace the toolkit.
  *
  * The toolkit is a typed Effect AI `Toolkit` value (whose tools record stays
- * precise), the handler Layer's pairing is checked by the compiler, and
- * `authorities` declares the capability services the handler Layer requires
- * (`Workspace`, `CommandExecutor`, `HumanInteraction`); the composition root
- * must provide them.
+ * precise), and the handler Layer's pairing and requirements are checked by the
+ * compiler; the composition root provides its required services.
  */
-export type AgentProfile<TTools extends Record<string, Tool.Any>, TAuthorities extends ToolkitAuthorities = never> = {
+export type AgentProfile<TTools extends Record<string, Tool.Any>> = {
   readonly toolkit: Toolkit.Toolkit<TTools>;
-  readonly toolkitLayer: Layer.Layer<
+  readonly toolkitHandlerLayer: Layer.Layer<
     Tool.HandlersFor<TTools>,
     never,
-    TAuthorities | Tool.HandlerServices<TTools[keyof TTools]>
+    Tool.HandlerServices<TTools[keyof TTools]>
   >;
-  readonly authorities?: TAuthorities;
   readonly systemPrompt: string;
   readonly maxTurns: PositiveInt;
 };
-
-/**
- * The toolkit's full handler-service requirements: what `streamText` needs
- * when resolving and executing the toolkit's handlers.
- */
-export type ToolkitServices<TTools extends Record<string, Tool.Any>> =
-  | Tool.HandlerServices<TTools[keyof TTools]>
-  | Tool.ResultDecodingServices<TTools[keyof TTools]>;
-
-/**
- * The requirement channel a profile propagates: its authorities, the toolkit's
- * handler services, and the toolkit's handler-tag requirements (what the
- * toolkit Effect and `streamText` need).
- */
-export type ProfileAuthorities<
-  TTools extends Record<string, Tool.Any>,
-  TAuthorities extends ToolkitAuthorities = never
-> = TAuthorities | ToolkitServices<TTools> | Tool.HandlersFor<TTools>;
