@@ -8,8 +8,11 @@ export type Skill = {
   readonly disableModelInvocation: boolean;
 };
 
-/** A skill name brand: non-empty, kebab-case-ish single token. */
-export const SkillName = Schema.NonEmptyString.pipe(Schema.brand("SkillName"));
+/** A skill name brand: a non-empty single directory segment. */
+export const SkillName = Schema.NonEmptyString.pipe(
+  Schema.check(Schema.isPattern(/^(?!\.{1,2}$)[^\\/]+$/)),
+  Schema.brand("SkillName")
+);
 export type SkillName = Schema.Schema.Type<typeof SkillName>;
 
 /**

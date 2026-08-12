@@ -9,9 +9,9 @@
  * in-memory and file-backed session adapters. Importing this module performs
  * no effects and starts no runtime — consumers compose the Layers themselves.
  *
- * Implementation helpers (brand schemas, id generators, error projections)
- * stay unexported; branded values are surfaced as types only, so construction
- * happens inside the owning authorities.
+ * Identity schemas and implementation helpers stay unexported. Public value
+ * schemas (`PositiveInt`, `WorkspacePath`, and `SkillName`) are exported so
+ * callers can parse values before they cross a core interface.
  */
 export { ProdigyAgent } from "./agent/prodigy-agent.ts";
 export { makeProdigyAgentLayer } from "./agent/prodigy-agent.ts";

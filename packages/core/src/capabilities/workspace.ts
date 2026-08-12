@@ -3,11 +3,13 @@ import { Context, Effect, Schema } from "effect";
 /**
  * The `WorkspacePath` brand schema: a non-empty, root-relative workspace path.
  *
- * Absolute paths, empty paths, and parent traversal are rejected by the
- * parsing boundary (adapter-owned); the brand is applied here so every
- * adapter-returned path is already workspace-relative.
+ * Absolute paths and parent traversal are rejected here. Path normalization,
+ * workspace roots, permissions, and output limits remain adapter policy.
  */
-export const WorkspacePath = Schema.NonEmptyString.pipe(Schema.brand("WorkspacePath"));
+export const WorkspacePath = Schema.NonEmptyString.pipe(
+  Schema.check(Schema.isPattern(/^(?![\\/])(?!(?:[A-Za-z]:))(?!.*(?:^|[\\/])\.\.(?:[\\/]|$)).+$/)),
+  Schema.brand("WorkspacePath")
+);
 export type WorkspacePath = Schema.Schema.Type<typeof WorkspacePath>;
 
 /** A lookup failure: the path is missing or could not be read. */
