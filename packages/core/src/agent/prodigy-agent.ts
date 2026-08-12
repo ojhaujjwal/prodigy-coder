@@ -1,4 +1,4 @@
-import { Context, Crypto, Effect, Layer, Result, Schema, Stream } from "effect";
+import { Context, Crypto, Effect, Layer, Option, Result, Schema, Stream } from "effect";
 import { LanguageModel, Prompt, Tool, Toolkit } from "effect/unstable/ai";
 import type {
   Message,
@@ -25,6 +25,7 @@ import {
 } from "./agent-error.ts";
 import { mapAgentFinishReason, type AgentEvent, type AgentFinishReason, type JsonValue } from "./agent-event.ts";
 import { decodeRunRequest, generateRunId, validateMaxTurnsOverride, type RunRequest } from "./run-request.ts";
+import type { AgentProfile, ProfileAuthorities, ToolkitAuthorities, ToolkitServices } from "./agent-profile.ts";
 
 export class ProdigyAgent extends Context.Service<
   ProdigyAgent,
@@ -32,11 +33,6 @@ export class ProdigyAgent extends Context.Service<
     readonly run: (request: RunRequest) => Stream.Stream<AgentEvent, AgentError>;
   }
 >()("@prodigy/core/agent/prodigy-agent/ProdigyAgent") {}
-
-type ResolvedSession = {
-  snapshot: SessionSnapshot;
-  messages: Message[];
-};
 
 type AssistantPart = { readonly type: "text"; readonly text: string } | ToolCallPart | ToolApprovalRequestPart;
 
@@ -58,22 +54,10 @@ type TurnState = {
   finishReason: AgentFinishReason;
 };
 
-type ToolkitServices<TTools extends Record<string, Tool.Any>> =
-  | Tool.HandlerServices<TTools[keyof TTools]>
-  | Tool.ResultDecodingServices<TTools[keyof TTools]>;
-
 type TurnPlan = {
   readonly stream: Stream.Stream<AgentEvent, AgentError>;
   readonly state: TurnState;
 };
-
-/**
- * The profile's default turn limit. The typed `AgentProfile.maxTurns` value
- * (ticket 03 / slice 21) will supply this; until then a minimal in-memory
- * default (mirroring the CLI's default of 50) keeps the profile seam testable
- * (ticket 17).
- */
-const profileMaxTurns = 50;
 
 const emptyTurnState = (): TurnState => ({
   assistantText: "",
@@ -88,31 +72,38 @@ const emptyTurnState = (): TurnState => ({
 
 const resolveSession = (
   sessionId: RunRequest["sessionId"],
-  store: SessionStore["Service"]
-): Effect.Effect<ResolvedSession, AgentError> =>
+  store: SessionStore["Service"],
+  systemPrompt: string
+): Effect.Effect<SessionSnapshot, AgentError> =>
   Effect.gen(function* () {
     if (sessionId === undefined) {
-      const snapshot = yield* store.create({}).pipe(Effect.mapError(agentErrorFromSessionError));
-      return { snapshot, messages: [...snapshot.session.messages] };
+      const snapshot = yield* store
+        .create(systemPrompt === "" ? {} : { systemPrompt })
+        .pipe(Effect.mapError(agentErrorFromSessionError));
+      return {
+        ...snapshot,
+        session: { ...snapshot.session, messages: [...snapshot.session.messages] }
+      };
     }
     const snapshot = yield* store.load(sessionId).pipe(Effect.mapError(agentErrorFromSessionError));
-    return { snapshot, messages: [...snapshot.session.messages] };
+    return {
+      ...snapshot,
+      session: { ...snapshot.session, messages: [...snapshot.session.messages] }
+    };
   });
 
 const appendAndSave = (
   store: SessionStore["Service"],
-  resolved: ResolvedSession,
+  snapshot: SessionSnapshot,
   message: Message
 ): Effect.Effect<SessionSnapshot, AgentError> =>
   Effect.gen(function* () {
-    const messages = [...resolved.messages, message];
+    const messages = [...snapshot.session.messages, message];
     const checkpoint: SessionCheckpoint = {
-      session: { ...resolved.snapshot.session, messages },
-      expectedRevision: resolved.snapshot.revision
+      session: { ...snapshot.session, messages },
+      expectedRevision: snapshot.revision
     };
     const saved = yield* store.save(checkpoint).pipe(Effect.mapError(agentErrorFromSessionError));
-    resolved.messages = saved.session.messages;
-    resolved.snapshot = saved;
     return saved;
   });
 
@@ -124,15 +115,16 @@ const decodeJson = (value: unknown): Effect.Effect<JsonValue, ToolSystemError> =
 /**
  * Read the `HumanInteraction` service from the toolkit handler context.
  *
- * The toolkit context is `Context<ToolkitServices<TTools>>`, and
- * `ToolkitServices` includes `HumanInteraction` exactly when a selected tool's
- * handler declares it as a dependency. The layer R channel enforces that
- * composition-time requirement, so this lookup is never an optional read: a
- * toolkit that can produce `tool-approval-request` parts necessarily provides
- * `HumanInteraction`, and one that cannot never reaches this code path.
+ * Effect AI emits `tool-approval-request` parts for any tool whose
+ * `needsApproval` option is set, and a provider stream can carry them
+ * directly; the type system only requires `HumanInteraction` when a tool's
+ * `dependencies` include it. A toolkit that produces approval requests
+ * without declaring that dependency is misconfigured, so this read returns
+ * `Option.none` and the caller fails the run with a typed `ToolSystemError`
+ * rather than throwing at runtime.
  */
-const readHumanInteraction = (context: Context.Context<never>): HumanInteraction["Service"] =>
-  Context.getUnsafe(context, HumanInteraction);
+const readHumanInteraction = (context: Context.Context<never>): Option.Option<HumanInteraction["Service"]> =>
+  Context.getOption(context, HumanInteraction);
 
 /**
  * Resolve a native approval request through the `HumanInteraction` channel.
@@ -174,10 +166,11 @@ const resolveApproval = (
 
 const appendTurnCheckpoint = (
   store: SessionStore["Service"],
-  resolved: ResolvedSession,
+  snapshot: SessionSnapshot,
   state: TurnState
-): Effect.Effect<void, AgentError> =>
+): Effect.Effect<SessionSnapshot, AgentError> =>
   Effect.gen(function* () {
+    let current = snapshot;
     if (state.assistantParts.length > 0 || state.assistantText.length > 0) {
       const content: string | ReadonlyArray<AssistantPart> =
         state.assistantParts.length > 0
@@ -188,15 +181,16 @@ const appendTurnCheckpoint = (
               ...state.assistantParts
             ]
           : state.assistantText;
-      yield* appendAndSave(store, resolved, { role: "assistant", content });
+      current = yield* appendAndSave(store, current, { role: "assistant", content });
     }
     if (state.toolParts.length > 0 || state.approvalParts.length > 0) {
       const content: ReadonlyArray<ToolResultPart | ToolApprovalResponsePart> = [
         ...state.toolParts,
         ...state.approvalParts
       ];
-      yield* appendAndSave(store, resolved, { role: "tool", content });
+      current = yield* appendAndSave(store, current, { role: "tool", content });
     }
+    return current;
   });
 
 const runTurn = <TTools extends Record<string, Tool.Any>>(
@@ -204,13 +198,14 @@ const runTurn = <TTools extends Record<string, Tool.Any>>(
   model: LanguageModel.LanguageModel["Service"],
   toolkit: Toolkit.WithHandler<TTools>,
   toolkitContext: Context.Context<ToolkitServices<TTools>>,
-  resolved: ResolvedSession,
-  turn: number,
-  prompt: string
+  snapshot: SessionSnapshot,
+  onSnapshot: (snapshot: SessionSnapshot) => void,
+  turn: number
 ): TurnPlan => {
   const state = emptyTurnState();
-  const modelPrompt: Prompt.RawInput =
-    turn === 1 ? [...resolved.messages, { role: "user", content: prompt }] : resolved.messages;
+  // The user prompt was persisted before the
+  // first turn starts, so the model request is always the session transcript.
+  const modelPrompt: Prompt.RawInput = snapshot.session.messages;
 
   const parts = model.streamText({ prompt: modelPrompt, toolkit }).pipe(
     Stream.provideContext(toolkitContext),
@@ -323,13 +318,22 @@ const runTurn = <TTools extends Record<string, Tool.Any>>(
           Effect.gen(function* () {
             if (state.pendingApprovals.length > 0) {
               const interaction = readHumanInteraction(toolkitContext);
+              if (Option.isNone(interaction)) {
+                return yield* new ToolSystemError({
+                  reason: "toolkit-misconfiguration",
+                  cause: new Error(
+                    "Toolkit produced tool-approval-request parts, but no HumanInteraction service is provided in the toolkit context"
+                  )
+                });
+              }
               const responses: Array<ToolApprovalResponsePart> = [];
               for (const pending of state.pendingApprovals) {
-                responses.push(yield* resolveApproval(interaction, pending.request, pending.approvalId));
+                responses.push(yield* resolveApproval(interaction.value, pending.request, pending.approvalId));
               }
               state.approvalParts.push(...responses);
             }
-            yield* appendTurnCheckpoint(store, resolved, state);
+            const saved = yield* appendTurnCheckpoint(store, snapshot, state);
+            yield* Effect.sync(() => onSnapshot(saved));
             return Stream.empty;
           })
         )
@@ -344,7 +348,9 @@ const makeRun =
     model: LanguageModel.LanguageModel["Service"],
     toolkit: Toolkit.WithHandler<TTools>,
     toolkitContext: Context.Context<ToolkitServices<TTools>>,
-    crypto: Crypto.Crypto
+    crypto: Crypto.Crypto,
+    profileMaxTurns: number,
+    profileSystemPrompt: string
   ): ((request: RunRequest) => Stream.Stream<AgentEvent, AgentError>) =>
   (request) =>
     Stream.suspend(() =>
@@ -355,10 +361,10 @@ const makeRun =
             validatedRequest.maxTurns === undefined
               ? profileMaxTurns
               : yield* validateMaxTurnsOverride(validatedRequest.maxTurns, profileMaxTurns);
-          const resolved = yield* resolveSession(validatedRequest.sessionId, store);
+          let snapshot = yield* resolveSession(validatedRequest.sessionId, store, profileSystemPrompt);
           const runId = yield* generateRunId.pipe(Effect.provideService(Crypto.Crypto, crypto));
-          const sessionId = resolved.snapshot.session.id;
-          yield* appendAndSave(store, resolved, { role: "user", content: validatedRequest.prompt });
+          const sessionId = snapshot.session.id;
+          snapshot = yield* appendAndSave(store, snapshot, { role: "user", content: validatedRequest.prompt });
 
           const runTurns = (turn: number): Stream.Stream<AgentEvent, AgentError> => {
             if (turn > effectiveMaxTurns) {
@@ -375,7 +381,17 @@ const makeRun =
             }
             return Stream.unwrap(
               Effect.sync(() => {
-                const plan = runTurn(store, model, toolkit, toolkitContext, resolved, turn, validatedRequest.prompt);
+                const plan = runTurn(
+                  store,
+                  model,
+                  toolkit,
+                  toolkitContext,
+                  snapshot,
+                  (next) => {
+                    snapshot = next;
+                  },
+                  turn
+                );
                 const exhausted = turn >= effectiveMaxTurns;
                 return Stream.concat(
                   plan.stream,
@@ -420,37 +436,57 @@ const makeRun =
       )
     );
 
-const makeAgentLayer = <TTools extends Record<string, Tool.Any>>(
-  toolkit: Toolkit.WithHandler<TTools>,
-  toolkitContext: Context.Context<ToolkitServices<TTools>>
-) =>
+/**
+ * The generic composition factory: binds a caller-selected, compile-time
+ * checked toolkit and its handler Layer into a stable `ProdigyAgent` service.
+ *
+ * The profile's toolkit/handler pairing is checked by the compiler (the
+ * handler Layer's services must match the toolkit's tools), and the profile's
+ * authority requirements propagate through the returned Layer's `R` channel.
+ * The toolkit is closed over at construction and can never be replaced through
+ * a run request.
+ *
+ * The layer fails at composition with `ToolSystemError`/`toolkit-misconfiguration`
+ * when the toolkit declares approval-gated tools (`needsApproval`) but no
+ * `HumanInteraction` service is provided in the toolkit context — the declared
+ * case is type-enforced, but `needsApproval` is not part of the toolkit's
+ * service types, so the guard closes the remaining hole at startup.
+ */
+export const makeLayer = <TTools extends Record<string, Tool.Any>, TAuthorities extends ToolkitAuthorities = never>(
+  profile: AgentProfile<TTools, TAuthorities>
+): Layer.Layer<
+  ProdigyAgent,
+  ToolSystemError,
+  ProfileAuthorities<TTools, TAuthorities> | SessionStore | LanguageModel.LanguageModel | Crypto.Crypto
+> =>
   Layer.effect(
     ProdigyAgent,
     Effect.gen(function* () {
       const store = yield* SessionStore;
       const model = yield* LanguageModel.LanguageModel;
       const crypto = yield* Crypto.Crypto;
-      return ProdigyAgent.of({ run: makeRun(store, model, toolkit, toolkitContext, crypto) });
+      // Read the toolkit handler context from the composition root's provided
+      // services (the profile's handler Layer + authorities are part of this
+      // layer's R channel). The toolkit Effect is resolved against the same
+      // context, then the resolved value is closed over for every run.
+      const toolkitContext = yield* Effect.context<ToolkitServices<TTools>>();
+      const withHandlers = yield* profile.toolkit.pipe(Effect.provideContext(toolkitContext));
+      const approvalGatedTools = Object.values(withHandlers.tools).filter((tool) => tool.needsApproval !== undefined);
+      if (approvalGatedTools.length > 0 && Option.isNone(Context.getOption(toolkitContext, HumanInteraction))) {
+        return yield* new ToolSystemError({
+          reason: "toolkit-misconfiguration",
+          cause: new Error(
+            `Tools [${approvalGatedTools.map((tool) => tool.name).join(", ")}] require approval, ` +
+              "but no HumanInteraction service is provided in the toolkit context"
+          )
+        });
+      }
+      return ProdigyAgent.of({
+        run: makeRun(store, model, withHandlers, toolkitContext, crypto, profile.maxTurns, profile.systemPrompt)
+      });
     })
   );
 
-export const layerNoDeps = Layer.unwrap(
-  Effect.map(Toolkit.empty, (toolkit) => makeAgentLayer(toolkit, Context.empty()))
-);
-export const layer = layerNoDeps;
-
-export const makeLayer = <TTools extends Record<string, Tool.Any>>(toolkit: Toolkit.Toolkit<TTools>) =>
-  Layer.unwrap(
-    Effect.map(toolkit, (withHandlers) =>
-      Layer.effect(
-        ProdigyAgent,
-        Effect.gen(function* () {
-          const store = yield* SessionStore;
-          const model = yield* LanguageModel.LanguageModel;
-          const crypto = yield* Crypto.Crypto;
-          const toolkitContext = yield* Effect.context<ToolkitServices<TTools>>();
-          return ProdigyAgent.of({ run: makeRun(store, model, withHandlers, toolkitContext, crypto) });
-        })
-      )
-    )
-  );
+/** The default-composition alias: selects a profile, so it is the same factory. */
+export const layerNoDeps = makeLayer;
+export const layer = makeLayer;

@@ -4,7 +4,8 @@ import * as BunCrypto from "@effect/platform-bun/BunCrypto";
 import { LanguageModel, Response } from "effect/unstable/ai";
 import { layerNoDeps as memoryStoreLayer } from "../../capabilities/memory-session-store.ts";
 import { SessionStore } from "../../capabilities/session-store.ts";
-import { ProdigyAgent, layerNoDeps as agentLayer } from "../prodigy-agent.ts";
+import { textProfile } from "./helpers.ts";
+import { ProdigyAgent, makeLayer as agentLayer } from "../prodigy-agent.ts";
 import type { AgentEvent } from "../agent-event.ts";
 
 /**
@@ -61,7 +62,7 @@ const testLayer = Layer.provideMerge(
   Layer.provideMerge(
     // `agentLayer` requires `LanguageModel`; the model layer (which itself
     // consumes `StreamGate`) is provided as the dependency (`that`).
-    Layer.provideMerge(agentLayer, Layer.provideMerge(streamingModelLayer, gateLayer)),
+    Layer.provideMerge(agentLayer(textProfile()), Layer.provideMerge(streamingModelLayer, gateLayer)),
     memoryStoreLayer
   ),
   BunCrypto.layer

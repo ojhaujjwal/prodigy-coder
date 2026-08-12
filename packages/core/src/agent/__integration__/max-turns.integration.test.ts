@@ -4,7 +4,8 @@ import * as BunCrypto from "@effect/platform-bun/BunCrypto";
 import { LanguageModel } from "effect/unstable/ai";
 import type { Response } from "effect/unstable/ai";
 import { layerNoDeps as memoryStoreLayer } from "../../capabilities/memory-session-store.ts";
-import { ProdigyAgent, layerNoDeps as agentLayer } from "../prodigy-agent.ts";
+import { textProfile } from "./helpers.ts";
+import { ProdigyAgent, makeLayer as agentLayer } from "../prodigy-agent.ts";
 import type { AgentError } from "../agent-error.ts";
 import type { AgentEvent } from "../agent-event.ts";
 
@@ -38,7 +39,7 @@ const finishFirstTurnModelLayer = Layer.effect(
 
 const storeLayer = Layer.provideMerge(memoryStoreLayer, BunCrypto.layer);
 
-const runLayer = Layer.provideMerge(Layer.provideMerge(agentLayer, storeLayer), neverFinishModelLayer);
+const runLayer = Layer.provideMerge(Layer.provideMerge(agentLayer(textProfile()), storeLayer), neverFinishModelLayer);
 
 const runTypes = (events: ReadonlyArray<AgentEvent>) => events.map((e) => e.type);
 
@@ -154,7 +155,7 @@ layer(runLayer)("ProdigyAgent maxTurns", (it) => {
     );
   });
 
-  layer(Layer.provideMerge(Layer.provideMerge(agentLayer, storeLayer), finishFirstTurnModelLayer))(
+  layer(Layer.provideMerge(Layer.provideMerge(agentLayer(textProfile()), storeLayer), finishFirstTurnModelLayer))(
     "ProdigyAgent maxTurns finish-within-limit",
     (it) => {
       it.effect("a model that finishes on the last allowed turn emits Finished, not Stopped", () =>

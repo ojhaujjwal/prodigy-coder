@@ -4,7 +4,8 @@ import { SessionPersistenceError, SessionStore, SessionWriteFailure } from "../.
 import { AiError, LanguageModel } from "effect/unstable/ai";
 import * as BunCrypto from "@effect/platform-bun/BunCrypto";
 import { layerNoDeps as memoryStoreLayer } from "../../capabilities/memory-session-store.ts";
-import { ProdigyAgent, layerNoDeps as agentLayer } from "../prodigy-agent.ts";
+import { textProfile } from "./helpers.ts";
+import { ProdigyAgent, makeLayer as agentLayer } from "../prodigy-agent.ts";
 import type { AgentEvent } from "../agent-event.ts";
 
 const emptyModelLayer = Layer.effect(
@@ -47,10 +48,13 @@ const failingStoreLayer = Layer.effect(
     };
   })
 ).pipe(Layer.provide(baseLayers));
-const validRunLayer = Layer.provideMerge(Layer.provideMerge(agentLayer, baseLayers), emptyModelLayer);
-const failingModelRunLayer = Layer.provideMerge(Layer.provideMerge(agentLayer, baseLayers), failingModelLayer);
+const validRunLayer = Layer.provideMerge(Layer.provideMerge(agentLayer(textProfile()), baseLayers), emptyModelLayer);
+const failingModelRunLayer = Layer.provideMerge(
+  Layer.provideMerge(agentLayer(textProfile()), baseLayers),
+  failingModelLayer
+);
 const failingStoreRunLayer = Layer.provideMerge(
-  Layer.provideMerge(agentLayer, failingStoreLayer),
+  Layer.provideMerge(agentLayer(textProfile()), failingStoreLayer),
   Layer.provideMerge(BunCrypto.layer, emptyModelLayer)
 );
 

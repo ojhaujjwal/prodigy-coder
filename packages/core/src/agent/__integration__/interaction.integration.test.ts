@@ -1,5 +1,5 @@
-import { expect, layer } from "@effect/vitest";
-import { Effect, Layer, Stream } from "effect";
+import { expect, it, layer } from "@effect/vitest";
+import { Effect, Layer, Schema, Stream } from "effect";
 import * as BunCrypto from "@effect/platform-bun/BunCrypto";
 import { layerNoDeps as memoryStoreLayer } from "../../capabilities/memory-session-store.ts";
 import { SessionStore } from "../../capabilities/session-store.ts";
@@ -7,9 +7,12 @@ import { HumanInteraction, HumanInteractionError } from "../../capabilities/huma
 import { makeLayer as makeAgentLayer, ProdigyAgent } from "../prodigy-agent.ts";
 import type { AgentError } from "../agent-error.ts";
 import type { AgentEvent } from "../agent-event.ts";
+import type { AgentProfile } from "../agent-profile.ts";
+import { Tool, Toolkit } from "effect/unstable/ai";
 import {
   ApprovalToolkit,
-  EchoToolkit,
+  approvalProfile,
+  echoProfile,
   scriptedEchoToolkit,
   scriptedInteractionLayer,
   scriptedToolModelLayer
@@ -37,7 +40,10 @@ const makeApprovalRunLayer = (
   Layer.provideMerge(
     Layer.provideMerge(
       Layer.provideMerge(
-        Layer.provideMerge(makeAgentLayer(ApprovalToolkit), Layer.provideMerge(memoryStoreLayer, BunCrypto.layer)),
+        Layer.provideMerge(
+          makeAgentLayer(approvalProfile(approvedToolkitLayer)),
+          Layer.provideMerge(memoryStoreLayer, BunCrypto.layer)
+        ),
         scriptedToolModelLayer(turns)
       ),
       approvedToolkitLayer
@@ -176,7 +182,10 @@ const echoTurns: ReadonlyArray<ReadonlyArray<Response.StreamPartEncoded>> = [
 layer(
   Layer.provideMerge(
     Layer.provideMerge(
-      Layer.provideMerge(makeAgentLayer(EchoToolkit), Layer.provideMerge(memoryStoreLayer, BunCrypto.layer)),
+      Layer.provideMerge(
+        makeAgentLayer(echoProfile(scriptedEchoToolkit().layer)),
+        Layer.provideMerge(memoryStoreLayer, BunCrypto.layer)
+      ),
       scriptedToolModelLayer(echoTurns)
     ),
     scriptedEchoToolkit().layer
@@ -272,7 +281,10 @@ layer(
   Layer.provideMerge(
     Layer.provideMerge(
       Layer.provideMerge(
-        Layer.provideMerge(makeAgentLayer(ApprovalToolkit), Layer.provideMerge(memoryStoreLayer, BunCrypto.layer)),
+        Layer.provideMerge(
+          makeAgentLayer(approvalProfile(approvedToolkitLayer)),
+          Layer.provideMerge(memoryStoreLayer, BunCrypto.layer)
+        ),
         scriptedToolModelLayer([
           [{ type: "tool-call", id: "call-fail", name: "approval-gated", params: { value: "x" } }, finish("tool-calls")]
         ])
@@ -290,6 +302,98 @@ layer(
       expect(failure._tag).toBe("InteractionCapabilityError");
       if (failure._tag === "InteractionCapabilityError") {
         expect(failure.reason).toBe("channel-closed");
+      }
+    })
+  );
+});
+
+/**
+ * R6: an approval-gated tool that does NOT declare `HumanInteraction` as a
+ * dependency is a toolkit misconfiguration. Effect AI emits the native
+ * `tool-approval-request` part for any tool with `needsApproval` (approval is
+ * gated by that option alone, independent of `dependencies`), so the type
+ * system cannot see the hole. The composition guard in `makeLayer` closes it:
+ * the layer fails at build time with the typed
+ * `ToolSystemError`/`toolkit-misconfiguration` — never an untyped runtime
+ * exception.
+ */
+const ApprovalWithoutChannelTool = Tool.make("approval-no-channel", {
+  description: "A tool that requires approval but declares no HumanInteraction dependency",
+  parameters: Schema.Struct({ value: Schema.String }),
+  success: Schema.Struct({ value: Schema.String }),
+  failureMode: "return",
+  needsApproval: true
+});
+
+const ApprovalWithoutChannelToolkit = Toolkit.make(ApprovalWithoutChannelTool);
+
+const noChannelProfile: AgentProfile<typeof ApprovalWithoutChannelToolkit.tools, never> = {
+  toolkit: ApprovalWithoutChannelToolkit,
+  toolkitLayer: ApprovalWithoutChannelToolkit.toLayer({
+    "approval-no-channel": () => Effect.succeed({ value: "ran" })
+  }),
+  systemPrompt: "",
+  maxTurns: 50
+};
+
+it.effect("fails at composition when an approval-gated tool lacks HumanInteraction (R6a)", () =>
+  Effect.gen(function* () {
+    const failure = yield* Layer.build(
+      Layer.provideMerge(
+        Layer.provideMerge(
+          Layer.provideMerge(makeAgentLayer(noChannelProfile), Layer.provideMerge(memoryStoreLayer, BunCrypto.layer)),
+          scriptedToolModelLayer([
+            [
+              { type: "tool-call", id: "call-nc", name: "approval-no-channel", params: { value: "x" } },
+              finish("tool-calls")
+            ]
+          ])
+        ),
+        noChannelProfile.toolkitLayer
+      )
+    ).pipe(Effect.flip);
+
+    expect(failure._tag).toBe("ToolSystemError");
+    if (failure._tag === "ToolSystemError") {
+      expect(failure.reason).toBe("toolkit-misconfiguration");
+    }
+  })
+);
+
+/**
+ * R6b: the runtime fallback — a provider stream can emit a raw
+ * `tool-approval-request` part even when no tool declares `needsApproval`
+ * (the guard passes at composition, since the echo tool is not
+ * approval-gated). Without a `HumanInteraction` channel the run must fail
+ * with the typed `ToolSystemError`/`toolkit-misconfiguration`, never an
+ * untyped exception.
+ */
+layer(
+  Layer.provideMerge(
+    Layer.provideMerge(
+      Layer.provideMerge(
+        makeAgentLayer(echoProfile(scriptedEchoToolkit().layer)),
+        Layer.provideMerge(memoryStoreLayer, BunCrypto.layer)
+      ),
+      scriptedToolModelLayer([
+        [
+          { type: "tool-call", id: "call-x", name: "echo", params: { value: "hi" } },
+          { type: "tool-approval-request", approvalId: "a1", toolCallId: "call-x" },
+          finish("tool-calls")
+        ]
+      ])
+    ),
+    scriptedEchoToolkit().layer
+  )
+)("ProdigyAgent provider-emitted approval without a channel (R6b)", (it) => {
+  it.effect("fails typed at runtime with ToolSystemError/toolkit-misconfiguration", () =>
+    Effect.gen(function* () {
+      const agent = yield* ProdigyAgent;
+      const failure: AgentError = yield* agent.run({ prompt: "Run it" }).pipe(Stream.runCollect, Effect.flip);
+
+      expect(failure._tag).toBe("ToolSystemError");
+      if (failure._tag === "ToolSystemError") {
+        expect(failure.reason).toBe("toolkit-misconfiguration");
       }
     })
   );

@@ -3,7 +3,7 @@ import { Effect, Layer, Stream } from "effect";
 import * as BunCrypto from "@effect/platform-bun/BunCrypto";
 import { layerNoDeps as memoryStoreLayer } from "../../capabilities/memory-session-store.ts";
 import { SessionStore } from "../../capabilities/session-store.ts";
-import { EchoToolkit, scriptedEchoToolkit, scriptedToolModelLayer } from "./helpers.ts";
+import { echoProfile, scriptedEchoToolkit, scriptedToolModelLayer } from "./helpers.ts";
 import { makeLayer as makeAgentLayer, ProdigyAgent } from "../prodigy-agent.ts";
 import type { Response } from "effect/unstable/ai";
 import type { AgentError } from "../agent-error.ts";
@@ -25,7 +25,10 @@ const makeRunLayer = (
 ) =>
   Layer.provideMerge(
     Layer.provideMerge(
-      Layer.provideMerge(makeAgentLayer(EchoToolkit), Layer.provideMerge(memoryStoreLayer, BunCrypto.layer)),
+      Layer.provideMerge(
+        makeAgentLayer(echoProfile(toolkit.layer)),
+        Layer.provideMerge(memoryStoreLayer, BunCrypto.layer)
+      ),
       scriptedToolModelLayer(turns)
     ),
     toolkit.layer

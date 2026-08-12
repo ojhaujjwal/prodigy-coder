@@ -2,9 +2,11 @@ import { describe, expect, layer } from "@effect/vitest";
 import { Effect, Exit, Layer, Stream } from "effect";
 import * as BunCrypto from "@effect/platform-bun/BunCrypto";
 import { layerNoDeps as memoryStoreLayer } from "../../capabilities/memory-session-store.ts";
+import { SessionStore } from "../../capabilities/session-store.ts";
 import { createTestSession } from "../../__integration__/helpers.ts";
-import { testLanguageModelLayer } from "../test-helpers.ts";
-import { ProdigyAgent, layerNoDeps as agentLayer } from "../prodigy-agent.ts";
+import { recordingLanguageModelLayer, testLanguageModelLayer } from "../test-helpers.ts";
+import { textProfile } from "./helpers.ts";
+import { ProdigyAgent, makeLayer as agentLayer } from "../prodigy-agent.ts";
 import type { AgentError } from "../agent-error.ts";
 import type { AgentEvent } from "../agent-event.ts";
 
@@ -24,7 +26,7 @@ const textDoubleLayer = testLanguageModelLayer([
 
 const storeLayer = Layer.provideMerge(memoryStoreLayer, BunCrypto.layer);
 
-const runLayer = Layer.provideMerge(agentLayer, storeLayer).pipe(Layer.provideMerge(textDoubleLayer));
+const runLayer = Layer.provideMerge(agentLayer(textProfile()), storeLayer).pipe(Layer.provideMerge(textDoubleLayer));
 
 const runAndCollect = (request: { prompt: string; sessionId?: import("../../capabilities/session.ts").SessionId }) =>
   Effect.gen(function* () {
@@ -100,6 +102,89 @@ layer(runLayer)("ProdigyAgent", (it) => {
         expect(secondStarted.runId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
       })
     );
+  });
+
+  describe("provider prompt contract (R6)", () => {
+    const { layer: recordingLayer, prompts } = recordingLanguageModelLayer([
+      { type: "text-delta", id: "1", delta: "Hello" },
+      {
+        type: "finish",
+        reason: "stop",
+        usage: {
+          inputTokens: { uncached: 4, total: 4, cacheRead: undefined, cacheWrite: undefined },
+          outputTokens: { total: 1, text: 1, reasoning: undefined }
+        },
+        response: undefined
+      }
+    ]);
+
+    const recordingRunLayer = Layer.provideMerge(
+      Layer.provideMerge(agentLayer(textProfile()), storeLayer),
+      recordingLayer
+    );
+
+    layer(recordingRunLayer)("provider prompt", (it) => {
+      it.effect("the first model request contains exactly one user prompt — no duplication", () =>
+        Effect.gen(function* () {
+          const agent = yield* ProdigyAgent;
+          const events = yield* agent.run({ prompt: "Hello" }).pipe(Stream.runCollect);
+          expect(Array.from(events).some((e) => e.type === "run-ended")).toBe(true);
+
+          expect(prompts).toHaveLength(1);
+          const prompt = prompts[0];
+          const userMessages = prompt.content.filter((m) => m.role === "user");
+          expect(userMessages).toHaveLength(1);
+          const parts = userMessages[0]?.content ?? [];
+          expect(parts).toHaveLength(1);
+          const part = parts[0];
+          if (part?.type !== "text") throw new Error("expected text part");
+          expect(part.text).toBe("Hello");
+          expect(prompt.content.filter((m) => m.role === "system")).toHaveLength(0);
+        })
+      );
+    });
+
+    const { layer: promptRecordingLayer, prompts: promptPrompts } = recordingLanguageModelLayer([
+      { type: "text-delta", id: "1", delta: "Hello" },
+      {
+        type: "finish",
+        reason: "stop",
+        usage: {
+          inputTokens: { uncached: 4, total: 4, cacheRead: undefined, cacheWrite: undefined },
+          outputTokens: { total: 1, text: 1, reasoning: undefined }
+        },
+        response: undefined
+      }
+    ]);
+
+    const promptRunLayer = Layer.provideMerge(
+      Layer.provideMerge(agentLayer(textProfile(50, "You are a pirate")), storeLayer),
+      promptRecordingLayer
+    );
+
+    layer(promptRunLayer)("profile systemPrompt", (it) => {
+      it.effect("a profile systemPrompt seeds the transcript and reaches the model as a system message", () =>
+        Effect.gen(function* () {
+          const agent = yield* ProdigyAgent;
+          const store = yield* SessionStore;
+          const events = yield* agent.run({ prompt: "Ahoy" }).pipe(Stream.runCollect);
+          expect(Array.from(events).some((e) => e.type === "run-ended")).toBe(true);
+
+          // The first model request carries the system message before the user prompt.
+          expect(promptPrompts).toHaveLength(1);
+          const prompt = promptPrompts[0];
+          const systemMessages = prompt.content.filter((m) => m.role === "system");
+          expect(systemMessages).toHaveLength(1);
+          expect(systemMessages[0]?.content).toBe("You are a pirate");
+
+          // The seeded system message is persisted in the session transcript.
+          const started = events.find((e) => e.type === "run-started");
+          if (started?.type !== "run-started") throw new Error("expected run-started");
+          const snapshot = yield* store.load(started.sessionId);
+          expect(snapshot.session.messages[0]).toEqual({ role: "system", content: "You are a pirate" });
+        })
+      );
+    });
   });
 
   describe("SessionNotFound (R4)", () => {

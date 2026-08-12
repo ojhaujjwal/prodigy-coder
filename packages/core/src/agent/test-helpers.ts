@@ -1,5 +1,5 @@
 import { Effect, Layer, Stream } from "effect";
-import { LanguageModel, Response } from "effect/unstable/ai";
+import { LanguageModel, Prompt, Response } from "effect/unstable/ai";
 
 /**
  * Build a scripted `LanguageModel` test-double over provider-neutral
@@ -20,3 +20,30 @@ export const testLanguageModelLayer = (
       streamText: () => Stream.fromIterable(parts)
     })
   );
+
+/**
+ * A scripted `LanguageModel` that records every `streamText` prompt exactly as
+ * it reaches the model boundary, so tests can assert the provider-visible
+ * transcript (e.g. that a prompt is not duplicated on the first turn).
+ */
+export type RecordingLanguageModel = {
+  readonly layer: Layer.Layer<LanguageModel.LanguageModel>;
+  readonly prompts: Array<Prompt.Prompt>;
+};
+
+export const recordingLanguageModelLayer = (
+  parts: ReadonlyArray<Response.StreamPartEncoded>
+): RecordingLanguageModel => {
+  const prompts: Array<Prompt.Prompt> = [];
+  const layer = Layer.effect(
+    LanguageModel.LanguageModel,
+    LanguageModel.make({
+      generateText: () => Effect.succeed([]),
+      streamText: (input) => {
+        prompts.push(input.prompt);
+        return Stream.fromIterable(parts);
+      }
+    })
+  );
+  return { layer, prompts };
+};
