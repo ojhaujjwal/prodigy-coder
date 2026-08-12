@@ -7,7 +7,7 @@ import { HumanInteraction, HumanInteractionError } from "../../capabilities/huma
 import { makeProdigyAgentLayer as makeAgentLayer, ProdigyAgent } from "../prodigy-agent.ts";
 import type { AgentError } from "../agent-error.ts";
 import type { AgentEvent } from "../agent-event.ts";
-import type { AgentProfile } from "../agent-profile.ts";
+import { PositiveInt, type AgentProfile } from "../agent-profile.ts";
 import { Tool, Toolkit } from "effect/unstable/ai";
 import {
   ApprovalToolkit,
@@ -333,7 +333,7 @@ const noChannelProfile: AgentProfile<typeof ApprovalWithoutChannelToolkit.tools>
     "approval-no-channel": () => Effect.succeed({ value: "ran" })
   }),
   systemPrompt: "",
-  maxTurns: 50
+  maxTurns: PositiveInt.make(50)
 };
 
 it.effect("fails at composition when an approval-gated tool lacks HumanInteraction (R6a)", () =>

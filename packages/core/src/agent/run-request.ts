@@ -1,5 +1,6 @@
 import { Crypto, Effect, Schema } from "effect";
 import { SessionId } from "../capabilities/session.ts";
+import { PositiveInt, type PositiveInt as PositiveIntType } from "./agent-profile.ts";
 import type { SessionId as SessionIdType } from "../capabilities/session.ts";
 import { InvalidRunRequest } from "./agent-error.ts";
 
@@ -7,18 +8,11 @@ import { InvalidRunRequest } from "./agent-error.ts";
 const RunId = Schema.String.pipe(Schema.check(Schema.isUUID(7)), Schema.brand("RunId"));
 export type RunId = Schema.Schema.Type<typeof RunId>;
 
-/**
- * A positive integer. The `maxTurns` override is `PositiveInt`-shaped
- * (ticket 01); the schema is module-private per the branded-types guide.
- */
-const PositiveInt = Schema.Int.check(Schema.isGreaterThan(0));
-type PositiveInt = Schema.Schema.Type<typeof PositiveInt>;
-
 /** The smallest request contract: one logical prompt plus explicit session identity. */
 export type RunRequest = {
   readonly prompt: string;
   readonly sessionId?: SessionIdType;
-  readonly maxTurns?: PositiveInt;
+  readonly maxTurns?: number;
 };
 
 const RunRequestShape = Schema.Struct({
@@ -40,8 +34,8 @@ type DecodedRunRequest = Schema.Schema.Type<typeof RunRequestShape>;
  */
 export const validateMaxTurnsOverride = (
   override: unknown,
-  profileMaxTurns: PositiveInt
-): Effect.Effect<PositiveInt, InvalidRunRequest> =>
+  profileMaxTurns: PositiveIntType
+): Effect.Effect<PositiveIntType, InvalidRunRequest> =>
   Schema.decodeUnknownEffect(PositiveInt)(override).pipe(
     Effect.mapError(() => new InvalidRunRequest({ reason: "invalid-max-turns" })),
     Effect.flatMap((value) =>

@@ -15,7 +15,7 @@ import {
   type GrepRequest
 } from "../../capabilities/workspace.ts";
 import { SkillRepository, type Skill } from "../../capabilities/skill-repository.ts";
-import type { AgentProfile } from "../agent-profile.ts";
+import { PositiveInt, type AgentProfile } from "../agent-profile.ts";
 
 /** A scripted `Workspace` over an in-memory map, honoring read/write/replace/grep/glob. */
 export type ScriptedWorkspace = {
@@ -125,7 +125,7 @@ export const EchoTool = Tool.make("echo", {
 export const EchoToolkit = Toolkit.make(EchoTool);
 
 /** A text-only profile: an empty toolkit with no handler Layer and no authorities. */
-export const textProfile = (maxTurns = 50, systemPrompt = ""): AgentProfile<{}> => ({
+export const textProfile = (maxTurns: PositiveInt = PositiveInt.make(50), systemPrompt = ""): AgentProfile<{}> => ({
   toolkit: Toolkit.empty,
   toolkitHandlerLayer: Layer.empty,
 
@@ -136,7 +136,7 @@ export const textProfile = (maxTurns = 50, systemPrompt = ""): AgentProfile<{}> 
 /** Build a profile for the echo toolkit with the given handler Layer. */
 export const echoProfile = (
   toolkitHandlerLayer: Layer.Layer<Tool.HandlersFor<typeof EchoToolkit.tools>>,
-  maxTurns = 50
+  maxTurns: PositiveInt = PositiveInt.make(50)
 ): AgentProfile<typeof EchoToolkit.tools> => ({
   toolkit: EchoToolkit,
   toolkitHandlerLayer,
@@ -161,7 +161,7 @@ export const ApprovalToolkit = Toolkit.make(ApprovalTool);
 /** Build a profile for the approval-gated toolkit (requires `HumanInteraction`). */
 export const approvalProfile = (
   toolkitHandlerLayer: Layer.Layer<Tool.HandlersFor<typeof ApprovalToolkit.tools>>,
-  maxTurns = 50
+  maxTurns: PositiveInt = PositiveInt.make(50)
 ): AgentProfile<typeof ApprovalToolkit.tools> => ({
   toolkit: ApprovalToolkit,
   toolkitHandlerLayer,

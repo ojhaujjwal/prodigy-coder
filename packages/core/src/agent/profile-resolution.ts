@@ -1,8 +1,9 @@
-import { Context, Effect, Layer, Option, Scope } from "effect";
+import { Context, Effect, Layer, Option, Schema, Scope } from "effect";
 import { Tool, Toolkit } from "effect/unstable/ai";
 import { HumanInteraction } from "../capabilities/human-interaction.ts";
-import { ToolSystemError } from "./agent-error.ts";
+import { AgentProfileError, ToolSystemError } from "./agent-error.ts";
 import type { AgentProfile, PositiveInt } from "./agent-profile.ts";
+import { PositiveInt as PositiveIntSchema } from "./agent-profile.ts";
 
 /** The services required while executing a resolved toolkit. */
 type ToolkitServices<TTools extends Record<string, Tool.Any>> =
@@ -27,7 +28,14 @@ export type ResolvedAgentProfile<TTools extends Record<string, Tool.Any>> = {
  */
 export const resolveAgentProfile = Effect.fn("resolveAgentProfile")(function* <TTools extends Record<string, Tool.Any>>(
   profile: AgentProfile<TTools>
-): Effect.fn.Return<ResolvedAgentProfile<TTools>, ToolSystemError, ToolkitServices<TTools> | Scope.Scope> {
+): Effect.fn.Return<
+  ResolvedAgentProfile<TTools>,
+  AgentProfileError | ToolSystemError,
+  ToolkitServices<TTools> | Scope.Scope
+> {
+  const maxTurns = yield* Schema.decodeUnknownEffect(PositiveIntSchema)(profile.maxTurns).pipe(
+    Effect.mapError((cause) => new AgentProfileError({ reason: "invalid-max-turns", cause }))
+  );
   const toolkitContext = yield* Effect.context<ToolkitServices<TTools>>();
   const handlerContext = yield* Layer.build(profile.toolkitHandlerLayer).pipe(Effect.provideContext(toolkitContext));
   const toolkit = yield* profile.toolkit.pipe(Effect.provideContext(handlerContext));
@@ -47,6 +55,6 @@ export const resolveAgentProfile = Effect.fn("resolveAgentProfile")(function* <T
     toolkit,
     toolkitContext,
     systemPrompt: profile.systemPrompt,
-    maxTurns: profile.maxTurns
+    maxTurns
   };
 });

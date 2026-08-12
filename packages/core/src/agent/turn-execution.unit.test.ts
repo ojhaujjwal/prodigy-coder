@@ -4,7 +4,7 @@ import { LanguageModel, Toolkit } from "effect/unstable/ai";
 import type { SessionCheckpoint, SessionSnapshot } from "../capabilities/session.ts";
 import { Session, SessionRevision } from "../capabilities/session.ts";
 import { SessionStore as SessionStoreService } from "../capabilities/session-store.ts";
-import type { AgentProfile } from "./agent-profile.ts";
+import { PositiveInt, type AgentProfile } from "./agent-profile.ts";
 import { resolveAgentProfile } from "./profile-resolution.ts";
 import { executeTurn } from "./turn-execution.ts";
 
@@ -48,7 +48,7 @@ it.effect("streams one turn and commits one completed checkpoint", () =>
       toolkit: Toolkit.empty,
       toolkitHandlerLayer: Layer.empty,
       systemPrompt: "",
-      maxTurns: 2
+      maxTurns: PositiveInt.make(2)
     };
     const profile = yield* resolveAgentProfile(profileInput);
 

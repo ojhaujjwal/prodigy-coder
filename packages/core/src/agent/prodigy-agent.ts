@@ -1,7 +1,7 @@
 import { Context, Crypto, Effect, Layer, Stream } from "effect";
 import { LanguageModel, Tool } from "effect/unstable/ai";
 import { SessionStore } from "../capabilities/session-store.ts";
-import { ToolSystemError } from "./agent-error.ts";
+import { AgentProfileError, ToolSystemError } from "./agent-error.ts";
 import type { AgentError } from "./agent-error.ts";
 import type { AgentEvent } from "./agent-event.ts";
 import type { AgentProfile } from "./agent-profile.ts";
@@ -29,7 +29,7 @@ export const makeProdigyAgentLayer = <TTools extends Record<string, Tool.Any>>(
   profile: AgentProfile<TTools>
 ): Layer.Layer<
   ProdigyAgent,
-  ToolSystemError,
+  AgentProfileError | ToolSystemError,
   | Tool.HandlerServices<TTools[keyof TTools]>
   | Tool.ResultDecodingServices<TTools[keyof TTools]>
   | SessionStore

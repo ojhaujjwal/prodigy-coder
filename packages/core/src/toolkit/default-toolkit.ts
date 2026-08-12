@@ -14,7 +14,7 @@ import {
   type GrepRequest,
   type GrepMatch
 } from "../capabilities/workspace.ts";
-import type { AgentProfile } from "../agent/agent-profile.ts";
+import { PositiveInt, type AgentProfile } from "../agent/agent-profile.ts";
 
 // ---------------------------------------------------------------------------
 // Shared error projection: capability failures become model-visible AiErrors.
@@ -47,7 +47,10 @@ export const ShellTool = Tool.make("shell", {
 
 export type ShellTool = typeof ShellTool;
 
-export const shellHandler = ({ command }: { command: string }, _context: Toolkit.HandlerContext<typeof ShellTool>) =>
+export const shellHandler = (
+  { command }: Tool.Parameters<typeof ShellTool>,
+  _context: Toolkit.HandlerContext<typeof ShellTool>
+) =>
   Effect.gen(function* () {
     const executor = yield* CommandExecutor;
     const result: CommandResult = yield* executor.execute({ argv: ["bash", "-c", command] });
@@ -76,7 +79,10 @@ export const ReadTool = Tool.make("read", {
 
 export type ReadTool = typeof ReadTool;
 
-export const readHandler = ({ filePath }: { filePath: string }, _context: Toolkit.HandlerContext<typeof ReadTool>) =>
+export const readHandler = (
+  { filePath }: Tool.Parameters<typeof ReadTool>,
+  _context: Toolkit.HandlerContext<typeof ReadTool>
+) =>
   Effect.gen(function* () {
     const workspace = yield* Workspace;
     const path = yield* parseWorkspacePath(filePath);
@@ -103,7 +109,7 @@ export const WriteTool = Tool.make("write", {
 export type WriteTool = typeof WriteTool;
 
 export const writeHandler = (
-  { filePath, content }: { filePath: string; content: string },
+  { filePath, content }: Tool.Parameters<typeof WriteTool>,
   _context: Toolkit.HandlerContext<typeof WriteTool>
 ) =>
   Effect.gen(function* () {
@@ -136,7 +142,7 @@ export const EditTool = Tool.make("edit", {
 export type EditTool = typeof EditTool;
 
 export const editHandler = (
-  { filePath, oldString, newString }: { filePath: string; oldString: string; newString: string },
+  { filePath, oldString, newString }: Tool.Parameters<typeof EditTool>,
   _context: Toolkit.HandlerContext<typeof EditTool>
 ) =>
   Effect.gen(function* () {
@@ -168,7 +174,7 @@ export const GrepTool = Tool.make("grep", {
 export type GrepTool = typeof GrepTool;
 
 export const grepHandler = (
-  { pattern, path }: { pattern: string; path: string },
+  { pattern, path }: Tool.Parameters<typeof GrepTool>,
   _context: Toolkit.HandlerContext<typeof GrepTool>
 ) =>
   Effect.gen(function* () {
@@ -201,7 +207,7 @@ export const GlobTool = Tool.make("glob", {
 export type GlobTool = typeof GlobTool;
 
 export const globHandler = (
-  { pattern, path }: { pattern: string; path: string },
+  { pattern, path }: Tool.Parameters<typeof GlobTool>,
   _context: Toolkit.HandlerContext<typeof GlobTool>
 ) =>
   Effect.gen(function* () {
@@ -231,7 +237,10 @@ export const WebFetchTool = Tool.make("webfetch", {
 
 export type WebFetchTool = typeof WebFetchTool;
 
-export const webfetchHandler = ({ url }: { url: string }, _context: Toolkit.HandlerContext<typeof WebFetchTool>) =>
+export const webfetchHandler = (
+  { url }: Tool.Parameters<typeof WebFetchTool>,
+  _context: Toolkit.HandlerContext<typeof WebFetchTool>
+) =>
   Effect.gen(function* () {
     const client = yield* HttpClient.HttpClient;
     const response = yield* client.get(url);
@@ -258,7 +267,7 @@ export const AskUserTool = Tool.make("ask_user", {
 export type AskUserTool = typeof AskUserTool;
 
 export const askUserHandler = (
-  { question }: { question: string },
+  { question }: Tool.Parameters<typeof AskUserTool>,
   _context: Toolkit.HandlerContext<typeof AskUserTool>
 ) =>
   Effect.gen(function* () {
@@ -297,7 +306,7 @@ export const LoadSkillTool = Tool.make("load_skill", {
 
 export type LoadSkillTool = typeof LoadSkillTool;
 
-export const loadSkillHandler = ({ name }: { name: string }, _context: unknown) =>
+export const loadSkillHandler = ({ name }: Tool.Parameters<typeof LoadSkillTool>, _context: unknown) =>
   Effect.gen(function* () {
     const repo = yield* SkillRepository;
     const skillName = yield* parseSkillName(name);
@@ -398,7 +407,9 @@ export const defaultAgenticToolkitLayer = DefaultAgenticToolkit.toLayer(
  * `SkillRepository`). The composition root provides concrete Layers for the
  * authorities (and `HttpClient` for `webfetch`).
  */
-export const defaultAgenticProfile = (maxTurns = 50): AgentProfile<typeof DefaultAgenticToolkit.tools> => ({
+export const defaultAgenticProfile = (
+  maxTurns: PositiveInt = PositiveInt.make(50)
+): AgentProfile<typeof DefaultAgenticToolkit.tools> => ({
   toolkit: DefaultAgenticToolkit,
   toolkitHandlerLayer: defaultAgenticToolkitLayer,
   systemPrompt: "",

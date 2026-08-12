@@ -12,6 +12,15 @@ export class InvalidRunRequest extends Schema.TaggedErrorClass<InvalidRunRequest
   cause: Schema.optional(Schema.Defect())
 }) {}
 
+/** Reasons an Agent profile can fail eager binding. */
+export type AgentProfileReason = "invalid-max-turns";
+
+/** An Agent profile contains invalid configuration. */
+export class AgentProfileError extends Schema.TaggedErrorClass<AgentProfileError>()("AgentProfileError", {
+  reason: Schema.Literals(["invalid-max-turns"]),
+  cause: Schema.optional(Schema.Defect())
+}) {}
+
 /** The requested session could not be found. */
 export class SessionNotFound extends Schema.TaggedErrorClass<SessionNotFound>()("SessionNotFound", {
   sessionId: Schema.String,

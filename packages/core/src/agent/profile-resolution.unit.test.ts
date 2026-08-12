@@ -1,7 +1,7 @@
 import { expect, it } from "@effect/vitest";
 import { Effect, Schema, Stream } from "effect";
 import { Tool, Toolkit } from "effect/unstable/ai";
-import type { AgentProfile } from "./agent-profile.ts";
+import { PositiveInt, type AgentProfile } from "./agent-profile.ts";
 import { resolveAgentProfile } from "./profile-resolution.ts";
 
 const EchoTool = Tool.make("echo", {
@@ -25,7 +25,7 @@ it.effect("resolves and closes over the profile handler Layer", () => {
         })
     }),
     systemPrompt: "system",
-    maxTurns: 2
+    maxTurns: PositiveInt.make(2)
   };
 
   return Effect.scoped(

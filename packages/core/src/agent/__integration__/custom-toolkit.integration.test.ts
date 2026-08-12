@@ -6,7 +6,7 @@ import { layerNoDeps as memoryStoreLayer } from "../../capabilities/memory-sessi
 import { ProdigyAgent, makeProdigyAgentLayer } from "../prodigy-agent.ts";
 import { EchoToolkit, scriptedEchoToolkit, scriptedToolModelLayer } from "./helpers.ts";
 import type { AgentEvent } from "../agent-event.ts";
-import type { AgentProfile } from "../agent-profile.ts";
+import { PositiveInt, type AgentProfile } from "../agent-profile.ts";
 
 const finish = (reason: "stop" | "tool-calls") => ({
   type: "finish" as const,
@@ -64,7 +64,7 @@ const mergedProfile: AgentProfile<typeof mergedToolkit.tools> = {
   toolkit: mergedToolkit,
   toolkitHandlerLayer: Layer.merge(echoToolkit.layer, replacedToolkitLayer),
   systemPrompt: "",
-  maxTurns: 50
+  maxTurns: PositiveInt.make(50)
 };
 
 const storeLayer = Layer.provideMerge(memoryStoreLayer, BunCrypto.layer);

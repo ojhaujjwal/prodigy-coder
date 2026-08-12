@@ -1,11 +1,8 @@
 import { Layer, Schema } from "effect";
 import { Tool, Toolkit } from "effect/unstable/ai";
 
-/**
- * A positive integer: the profile's default turn bound, and the ceiling for
- * per-run `maxTurns` overrides (validated in `run-request.ts`).
- */
-const PositiveInt = Schema.Int.pipe(Schema.check(Schema.isGreaterThan(0)));
+/** A positive integer used as an Agent profile's turn bound. */
+export const PositiveInt = Schema.Int.pipe(Schema.check(Schema.isGreaterThan(0)), Schema.brand("PositiveInt"));
 export type PositiveInt = Schema.Schema.Type<typeof PositiveInt>;
 
 /**
