@@ -2,15 +2,14 @@ import { Effect, Option, Schema } from "effect";
 import { Tool, Toolkit } from "effect/unstable/ai";
 import * as AiError from "effect/unstable/ai/AiError";
 import * as HttpClient from "effect/unstable/http/HttpClient";
-import { CommandExecutor, type CommandResult } from "../capabilities/command-executor.ts";
-import { HumanInteraction, HumanInteractionError } from "../capabilities/human-interaction.ts";
+import * as HttpClientError from "effect/unstable/http/HttpClientError";
+import { CommandExecutor, type CommandExecuteError, type CommandResult } from "../capabilities/command-executor.ts";
+import { HumanInteraction, type HumanInteractionError } from "../capabilities/human-interaction.ts";
 import { SkillRepository, SkillName } from "../capabilities/skill-repository.ts";
 import {
   Workspace,
   WorkspacePath,
-  type WorkspaceLookupError,
-  type WorkspacePersistenceError,
-  type WorkspaceSearchError,
+  type WorkspaceError,
   type GrepRequest,
   type GrepMatch
 } from "../capabilities/workspace.ts";
@@ -20,14 +19,71 @@ import { PositiveInt, type AgentProfile } from "../agent/agent-profile.ts";
 // Shared error projection: capability failures become model-visible AiErrors.
 // ---------------------------------------------------------------------------
 
-const toToolError =
+/**
+ * The failure vocabulary a toolkit handler can raise: the execution-authority
+ * errors (workspace, command, interaction), model-input parse failures, and
+ * webfetch transport failures. Projected onto the Effect AI SDK's `AiError` in
+ * one place, so handlers name Prodigy's errors, never the SDK's.
+ */
+type ToolkitCapabilityError =
+  | WorkspaceError
+  | CommandExecuteError
+  | HumanInteractionError
+  | Schema.SchemaError
+  | HttpClientError.HttpClientError;
+
+export const toToolError =
   (module: string, method: string) =>
-  (error: unknown): AiError.AiError =>
+  (error: ToolkitCapabilityError): AiError.AiError =>
     AiError.make({
       module,
       method,
-      reason: new AiError.UnknownError({ description: String(error) })
+      reason: new AiError.UnknownError({ description: describeCapabilityError(error) })
     });
+
+const describeCapabilityError = (error: ToolkitCapabilityError): string => {
+  switch (error._tag) {
+    case "WorkspaceLookupError":
+      return error.reason === "NotFound" ? `file not found: ${error.path}` : `could not read: ${error.path}`;
+    case "WorkspacePersistenceError":
+      switch (error.reason) {
+        case "WriteFailure":
+          return `write failed: ${error.path}`;
+        case "NoMatch":
+          return `edit target not found: ${error.path}`;
+        case "Conflict":
+          return `concurrent modification: ${error.path}`;
+      }
+    case "WorkspaceSearchError":
+      return `search failed: ${error.path}`;
+    case "CommandExecuteError":
+      switch (error.reason) {
+        case "Spawn":
+          return "command could not be started";
+        case "Timeout":
+          return "command timed out";
+        case "Interrupted":
+          return "command interrupted";
+        case "OutputLimit":
+          return "command output exceeded the limit";
+        case "Transport":
+          return "command transport failed";
+      }
+    case "HumanInteractionError":
+      switch (error.reason) {
+        case "timeout":
+          return "human interaction timed out";
+        case "channel-closed":
+          return "human interaction channel closed";
+        case "invalid-response":
+          return "invalid response from human interaction";
+      }
+    case "SchemaError":
+      return error.message;
+    case "HttpClientError":
+      return error.message;
+  }
+};
 
 // ---------------------------------------------------------------------------
 // shell
@@ -86,7 +142,7 @@ export const readHandler = (
   Effect.gen(function* () {
     const workspace = yield* Workspace;
     const path = yield* parseWorkspacePath(filePath);
-    return yield* workspace.read(path).pipe(Effect.mapError(workspaceLookupToToolError("ReadTool", "readHandler")));
+    return yield* workspace.read(path).pipe(Effect.mapError(toToolError("ReadTool", "readHandler")));
   });
 
 // ---------------------------------------------------------------------------
@@ -115,9 +171,7 @@ export const writeHandler = (
   Effect.gen(function* () {
     const workspace = yield* Workspace;
     const path = yield* parseWorkspacePath(filePath);
-    yield* workspace
-      .write(path, content)
-      .pipe(Effect.mapError(workspacePersistenceToToolError("WriteTool", "writeHandler")));
+    yield* workspace.write(path, content).pipe(Effect.mapError(toToolError("WriteTool", "writeHandler")));
     return `Written to ${filePath}`;
   });
 
@@ -150,7 +204,7 @@ export const editHandler = (
     const path = yield* parseWorkspacePath(filePath);
     yield* workspace
       .replaceText(path, oldString, newString)
-      .pipe(Effect.mapError(workspacePersistenceToToolError("EditTool", "editHandler")));
+      .pipe(Effect.mapError(toToolError("EditTool", "editHandler")));
     return `Edited ${filePath}`;
   });
 
@@ -183,7 +237,7 @@ export const grepHandler = (
     const request: GrepRequest = { pattern, path: workspacePath };
     const matches: ReadonlyArray<GrepMatch> = yield* workspace
       .grep(request)
-      .pipe(Effect.mapError(workspaceSearchToToolError("GrepTool", "grepHandler")));
+      .pipe(Effect.mapError(toToolError("GrepTool", "grepHandler")));
     return matches.map((m) => `${m.path}:${m.line}`);
   });
 
@@ -215,7 +269,7 @@ export const globHandler = (
     const workspacePath = yield* parseWorkspacePath(path);
     const files: ReadonlyArray<WorkspacePath> = yield* workspace
       .glob({ pattern, path: workspacePath })
-      .pipe(Effect.mapError(workspaceSearchToToolError("GlobTool", "globHandler")));
+      .pipe(Effect.mapError(toToolError("GlobTool", "globHandler")));
     return Array.from(files);
   });
 
@@ -274,7 +328,7 @@ export const askUserHandler = (
     const interaction = yield* HumanInteraction;
     const response = yield* interaction
       .request({ question })
-      .pipe(Effect.mapError((error: HumanInteractionError) => toToolError("AskUserTool", "askUserHandler")(error)));
+      .pipe(Effect.mapError(toToolError("AskUserTool", "askUserHandler")));
     if (response._tag === "Answered") {
       return typeof response.answer === "string" ? response.answer : JSON.stringify(response.answer);
     }
@@ -340,25 +394,6 @@ const parseWorkspacePath = (path: string): Effect.Effect<WorkspacePath, AiError.
 /** Parse a model-supplied skill name into a branded `SkillName`. */
 const parseSkillName = (name: string): Effect.Effect<SkillName, AiError.AiError> =>
   Schema.decodeUnknownEffect(SkillName)(name).pipe(Effect.mapError(toToolError("SkillName", "parseSkillName")));
-
-// ---------------------------------------------------------------------------
-// Capability error → AiError projections
-// ---------------------------------------------------------------------------
-
-const workspaceLookupToToolError =
-  (module: string, method: string) =>
-  (error: WorkspaceLookupError): AiError.AiError =>
-    toToolError(module, method)(error);
-
-const workspacePersistenceToToolError =
-  (module: string, method: string) =>
-  (error: WorkspacePersistenceError): AiError.AiError =>
-    toToolError(module, method)(error);
-
-const workspaceSearchToToolError =
-  (module: string, method: string) =>
-  (error: WorkspaceSearchError): AiError.AiError =>
-    toToolError(module, method)(error);
 
 // ---------------------------------------------------------------------------
 // The default agentic toolkit and its handler layer
