@@ -8,7 +8,16 @@ This context defines the language for Prodigy's runtime-neutral agent core. It o
 The core agent capability that executes a single run using a selected profile, conversation state, model, tools, and supplied execution authorities.
 
 **Run**:
-A bounded attempt to apply one logical prompt to a session. A run has its own invocation identity and may update durable conversation state, but it is not a durable process, replay log, or handle that can be resumed.
+A bounded attempt to apply one logical prompt to a session. A run has its own invocation identity and may update durable conversation state, but it is not a durable process, replay log, or handle that can be resumed; execution begins only when the run is consumed.
+
+**Turn execution**:
+One model and tool exchange within a Run. It produces ordered progress, interaction requests, and a completed assistant/tool exchange that can be committed before the Run decides whether another turn is needed.
+
+**Turn outcome**:
+The completed state of a Turn execution, including its committed session state and the reason the Run should finish or consider another turn.
+
+**Run coordination**:
+The sequencing of session resolution, prompt checkpointing, Turn executions, and the terminal outcome for one Run. Run coordination does not define model-part meaning or tool-handler behavior.
 
 **RunId**:
 The identity of one invocation of a run. It correlates progress from that invocation and is distinct from the `SessionId` that names durable conversation state.

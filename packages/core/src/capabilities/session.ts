@@ -107,6 +107,21 @@ export type SessionCheckpoint = {
 };
 
 /**
+ * Construct a checkpoint that appends messages to a session snapshot.
+ * Persistence remains the responsibility of `SessionStore` callers.
+ */
+export const checkpointWithMessages = (
+  snapshot: SessionSnapshot,
+  messages: ReadonlyArray<Message>
+): SessionCheckpoint => ({
+  session: {
+    ...snapshot.session,
+    messages: [...snapshot.session.messages, ...messages]
+  },
+  expectedRevision: snapshot.revision
+});
+
+/**
  * The canonical session type: a session id, its messages, and timestamps.
  *
  * Persisted via `DateFromString` timestamps and the validating message
