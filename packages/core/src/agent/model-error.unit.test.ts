@@ -5,14 +5,14 @@ import { agentErrorFromModelError, isRetryableModelReason } from "./agent-error.
 
 describe("isRetryableModelReason", () => {
   it("derives retryability from the neutral reason", () => {
-    expect(isRetryableModelReason("transport")).toBe(true);
-    expect(isRetryableModelReason("rate-limit")).toBe(true);
-    expect(isRetryableModelReason("quota")).toBe(true);
-    expect(isRetryableModelReason("provider")).toBe(true);
-    expect(isRetryableModelReason("authentication")).toBe(false);
-    expect(isRetryableModelReason("invalid-request")).toBe(false);
-    expect(isRetryableModelReason("content-policy")).toBe(false);
-    expect(isRetryableModelReason("invalid-output")).toBe(false);
+    expect(isRetryableModelReason("Transport")).toBe(true);
+    expect(isRetryableModelReason("RateLimit")).toBe(true);
+    expect(isRetryableModelReason("Quota")).toBe(true);
+    expect(isRetryableModelReason("Provider")).toBe(true);
+    expect(isRetryableModelReason("Authentication")).toBe(false);
+    expect(isRetryableModelReason("InvalidRequest")).toBe(false);
+    expect(isRetryableModelReason("ContentPolicy")).toBe(false);
+    expect(isRetryableModelReason("InvalidOutput")).toBe(false);
   });
 });
 
@@ -24,15 +24,15 @@ describe("agentErrorFromModelError", () => {
           reason: "TransportError",
           request: { method: "GET", url: "https://example.com", urlParams: [], hash: undefined, headers: {} }
         }),
-        "transport"
+        "Transport"
       ],
-      [new AiError.AuthenticationError({ kind: "InvalidKey" }), "authentication"],
-      [new AiError.RateLimitError({}), "rate-limit"],
-      [new AiError.QuotaExhaustedError({}), "quota"],
-      [new AiError.InvalidRequestError({ description: "bad request" }), "invalid-request"],
-      [new AiError.ContentPolicyError({ description: "blocked" }), "content-policy"],
-      [new AiError.InvalidOutputError({ description: "malformed" }), "invalid-output"],
-      [new AiError.InternalProviderError({ description: "backend failure" }), "provider"]
+      [new AiError.AuthenticationError({ kind: "InvalidKey" }), "Authentication"],
+      [new AiError.RateLimitError({}), "RateLimit"],
+      [new AiError.QuotaExhaustedError({}), "Quota"],
+      [new AiError.InvalidRequestError({ description: "bad request" }), "InvalidRequest"],
+      [new AiError.ContentPolicyError({ description: "blocked" }), "ContentPolicy"],
+      [new AiError.InvalidOutputError({ description: "malformed" }), "InvalidOutput"],
+      [new AiError.InternalProviderError({ description: "backend failure" }), "Provider"]
     ] as const;
 
     for (const [reason, expected] of cases) {
@@ -50,6 +50,6 @@ describe("agentErrorFromModelError", () => {
         request: { method: "GET", url: "https://example.com", urlParams: [], hash: undefined, headers: {} }
       })
     });
-    expect(agentErrorFromModelError(encodedNetworkError)).toMatchObject({ _tag: "ModelError", reason: "provider" });
+    expect(agentErrorFromModelError(encodedNetworkError)).toMatchObject({ _tag: "ModelError", reason: "Provider" });
   });
 });

@@ -18,9 +18,9 @@ describe("toToolError", () => {
       [new CommandExecuteError({ reason: "Interrupted" }), "command interrupted"],
       [new CommandExecuteError({ reason: "OutputLimit" }), "command output exceeded the limit"],
       [new CommandExecuteError({ reason: "Transport" }), "command transport failed"],
-      [new HumanInteractionError({ reason: "timeout" }), "human interaction timed out"],
-      [new HumanInteractionError({ reason: "channel-closed" }), "human interaction channel closed"],
-      [new HumanInteractionError({ reason: "invalid-response" }), "invalid response from human interaction"]
+      [new HumanInteractionError({ reason: "Timeout" }), "human interaction timed out"],
+      [new HumanInteractionError({ reason: "ChannelClosed" }), "human interaction channel closed"],
+      [new HumanInteractionError({ reason: "InvalidResponse" }), "invalid response from human interaction"]
     ] as const;
 
     for (const [cause, description] of cases) {

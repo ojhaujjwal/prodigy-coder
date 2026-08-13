@@ -146,7 +146,7 @@ layer(
 
       expect(failure._tag).toBe("ToolSystemError");
       if (failure._tag === "ToolSystemError") {
-        expect(failure.reason).toBe("serialization");
+        expect(failure.reason).toBe("Serialization");
       }
     })
   );

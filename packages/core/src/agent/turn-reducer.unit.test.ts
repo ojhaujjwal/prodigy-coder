@@ -41,7 +41,7 @@ describe("reducePart", () => {
     });
   });
 
-  it("fails with unknown-tool for an unregistered tool name", () => {
+  it("fails with UnknownTool for an unregistered tool name", () => {
     const result = reducePart(
       tools,
       emptyTurnState(),
@@ -49,7 +49,7 @@ describe("reducePart", () => {
     );
     expect(Result.isFailure(result)).toBe(true);
     if (Result.isFailure(result)) {
-      expect(result.failure.reason).toBe("unknown-tool");
+      expect(result.failure.reason).toBe("UnknownTool");
     }
   });
 
@@ -78,7 +78,7 @@ describe("reducePart", () => {
     });
   });
 
-  it("fails with serialization when an approval request has no matching tool call", () => {
+  it("fails with Serialization when an approval request has no matching tool call", () => {
     const result = reducePart(
       tools,
       emptyTurnState(),
@@ -86,7 +86,7 @@ describe("reducePart", () => {
     );
     expect(Result.isFailure(result)).toBe(true);
     if (Result.isFailure(result)) {
-      expect(result.failure.reason).toBe("serialization");
+      expect(result.failure.reason).toBe("Serialization");
     }
   });
 

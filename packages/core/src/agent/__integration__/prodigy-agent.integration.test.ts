@@ -200,7 +200,7 @@ layer(runLayer)("ProdigyAgent", (it) => {
 
         expect(failure._tag).toBe("SessionNotFound");
         if (failure._tag !== "SessionNotFound") throw new Error("expected SessionNotFound");
-        expect(failure.sessionId).toBe(unknown.id);
+        expect(failure.id).toBe(unknown.id);
       })
     );
   });

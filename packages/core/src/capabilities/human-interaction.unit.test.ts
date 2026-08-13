@@ -17,9 +17,9 @@ describe("approvalDecisionFromInteraction", () => {
     expect(approvalDecisionFromInteraction({ _tag: "Denied" })).toEqual({ _tag: "Denied" });
   });
 
-  it("projects Answered as invalid-response, never a silent approval", () => {
+  it("projects Answered as InvalidResponse, never a silent approval", () => {
     expect(approvalDecisionFromInteraction({ _tag: "Answered", answer: { yes: true } })).toEqual({
-      _tag: "invalid-response"
+      _tag: "InvalidResponse"
     });
   });
 });

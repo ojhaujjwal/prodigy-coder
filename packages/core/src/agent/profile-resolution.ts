@@ -34,7 +34,7 @@ export const resolveAgentProfile = Effect.fn("resolveAgentProfile")(function* <T
   ToolkitServices<TTools> | Scope.Scope
 > {
   const maxTurns = yield* Schema.decodeUnknownEffect(PositiveIntSchema)(profile.maxTurns).pipe(
-    Effect.mapError((cause) => new AgentProfileError({ reason: "invalid-max-turns", cause }))
+    Effect.mapError((cause) => new AgentProfileError({ reason: "InvalidMaxTurns", cause }))
   );
   const toolkitContext = yield* Effect.context<ToolkitServices<TTools>>();
   const handlerContext = yield* Layer.build(profile.toolkitHandlerLayer).pipe(Effect.provideContext(toolkitContext));
@@ -43,7 +43,7 @@ export const resolveAgentProfile = Effect.fn("resolveAgentProfile")(function* <T
 
   if (approvalGatedTools.length > 0 && Option.isNone(Context.getOption(toolkitContext, HumanInteraction))) {
     return yield* new ToolSystemError({
-      reason: "toolkit-misconfiguration",
+      reason: "ToolkitMisconfiguration",
       cause: new Error(
         `Tools [${approvalGatedTools.map((tool) => tool.name).join(", ")}] require approval, ` +
           "but no HumanInteraction service is provided in the toolkit context"

@@ -1,63 +1,58 @@
 import { Schema } from "effect";
 import type { AiError } from "effect/unstable/ai";
 import type { HumanInteractionError as HumanInteractionErrorType } from "../capabilities/human-interaction.ts";
+import { SessionNotFound } from "../capabilities/session-store.ts";
 import type { SessionError } from "../capabilities/session-store.ts";
 
 /** Reasons for rejecting a run request before execution starts. */
-export type InvalidRunReason = "empty-prompt" | "invalid-max-turns" | "out-of-bounds-override";
+export type InvalidRunReason = "EmptyPrompt" | "InvalidMaxTurns" | "OutOfBoundsOverride";
 
 /** A run request that fails validation at the agent boundary. */
 export class InvalidRunRequest extends Schema.TaggedErrorClass<InvalidRunRequest>()("InvalidRunRequest", {
-  reason: Schema.Literals(["empty-prompt", "invalid-max-turns", "out-of-bounds-override"]),
+  reason: Schema.Literals(["EmptyPrompt", "InvalidMaxTurns", "OutOfBoundsOverride"]),
   cause: Schema.optional(Schema.Defect())
 }) {}
 
 /** Reasons an Agent profile can fail eager binding. */
-export type AgentProfileReason = "invalid-max-turns";
+export type AgentProfileReason = "InvalidMaxTurns";
 
 /** An Agent profile contains invalid configuration. */
 export class AgentProfileError extends Schema.TaggedErrorClass<AgentProfileError>()("AgentProfileError", {
-  reason: Schema.Literals(["invalid-max-turns"]),
-  cause: Schema.optional(Schema.Defect())
-}) {}
-
-/** The requested session could not be found. */
-export class SessionNotFound extends Schema.TaggedErrorClass<SessionNotFound>()("SessionNotFound", {
-  sessionId: Schema.String,
+  reason: Schema.Literals(["InvalidMaxTurns"]),
   cause: Schema.optional(Schema.Defect())
 }) {}
 
 /** Reasons a session could not be persisted or loaded. */
-export type SessionStorageReason = "conflict" | "encode" | "write" | "read" | "decode";
+export type SessionStorageReason = "Conflict" | "Encode" | "Write" | "Read" | "Decode";
 
 /** A session storage failure projected into the agent error vocabulary. */
 export class SessionStorageError extends Schema.TaggedErrorClass<SessionStorageError>()("SessionStorageError", {
-  reason: Schema.Literals(["conflict", "encode", "write", "read", "decode"]),
+  reason: Schema.Literals(["Conflict", "Encode", "Write", "Read", "Decode"]),
   cause: Schema.optional(Schema.Defect())
 }) {}
 
 /** The provider-neutral categories used to classify model failures. */
 export type ModelReason =
-  | "transport"
-  | "authentication"
-  | "rate-limit"
-  | "quota"
-  | "invalid-request"
-  | "content-policy"
-  | "invalid-output"
-  | "provider";
+  | "Transport"
+  | "Authentication"
+  | "RateLimit"
+  | "Quota"
+  | "InvalidRequest"
+  | "ContentPolicy"
+  | "InvalidOutput"
+  | "Provider";
 
 /** A model failure projected into the agent's public error vocabulary. */
 export class ModelError extends Schema.TaggedErrorClass<ModelError>()("ModelError", {
   reason: Schema.Literals([
-    "transport",
-    "authentication",
-    "rate-limit",
-    "quota",
-    "invalid-request",
-    "content-policy",
-    "invalid-output",
-    "provider"
+    "Transport",
+    "Authentication",
+    "RateLimit",
+    "Quota",
+    "InvalidRequest",
+    "ContentPolicy",
+    "InvalidOutput",
+    "Provider"
   ]),
   cause: Schema.Defect()
 }) {
@@ -68,11 +63,11 @@ export class ModelError extends Schema.TaggedErrorClass<ModelError>()("ModelErro
 }
 
 /** The orchestration failures that prevent a tool call from producing a model-visible result. */
-export type ToolSystemReason = "unknown-tool" | "toolkit-misconfiguration" | "serialization";
+export type ToolSystemReason = "UnknownTool" | "ToolkitMisconfiguration" | "Serialization";
 
 /** A tool orchestration failure projected into the agent's public error vocabulary. */
 export class ToolSystemError extends Schema.TaggedErrorClass<ToolSystemError>()("ToolSystemError", {
-  reason: Schema.Literals(["unknown-tool", "toolkit-misconfiguration", "serialization"]),
+  reason: Schema.Literals(["UnknownTool", "ToolkitMisconfiguration", "Serialization"]),
   cause: Schema.Defect()
 }) {}
 
@@ -80,7 +75,7 @@ export class ToolSystemError extends Schema.TaggedErrorClass<ToolSystemError>()(
 export class InteractionCapabilityError extends Schema.TaggedErrorClass<InteractionCapabilityError>()(
   "InteractionCapabilityError",
   {
-    reason: Schema.Literals(["timeout", "channel-closed", "invalid-response"]),
+    reason: Schema.Literals(["Timeout", "ChannelClosed", "InvalidResponse"]),
     cause: Schema.optional(Schema.Defect())
   }
 ) {}
@@ -96,27 +91,27 @@ export type AgentError =
 
 /** Map a neutral model reason to its retryability policy. */
 export const isRetryableModelReason = (reason: ModelReason): boolean =>
-  reason === "transport" || reason === "rate-limit" || reason === "quota" || reason === "provider";
+  reason === "Transport" || reason === "RateLimit" || reason === "Quota" || reason === "Provider";
 
 const modelReasonFromAiError = (reason: AiError.AiErrorReason): ModelReason => {
   switch (reason._tag) {
     case "NetworkError":
-      return reason.reason === "TransportError" ? "transport" : "provider";
+      return reason.reason === "TransportError" ? "Transport" : "Provider";
     case "AuthenticationError":
-      return "authentication";
+      return "Authentication";
     case "RateLimitError":
-      return "rate-limit";
+      return "RateLimit";
     case "QuotaExhaustedError":
-      return "quota";
+      return "Quota";
     case "InvalidRequestError":
-      return "invalid-request";
+      return "InvalidRequest";
     case "ContentPolicyError":
-      return "content-policy";
+      return "ContentPolicy";
     case "InvalidOutputError":
     case "StructuredOutputError":
-      return "invalid-output";
+      return "InvalidOutput";
     default:
-      return "provider";
+      return "Provider";
   }
 };
 /** Map a provider `AiError` onto the agent's public model error vocabulary. */
@@ -127,15 +122,15 @@ export const agentErrorFromModelError = (error: AiError.AiError): ModelError =>
 export const agentErrorFromToolError = (error: AiError.AiError): ToolSystemError | ModelError => {
   switch (error.reason._tag) {
     case "ToolNotFoundError":
-      return new ToolSystemError({ reason: "unknown-tool", cause: error });
+      return new ToolSystemError({ reason: "UnknownTool", cause: error });
     case "ToolConfigurationError":
     case "ToolkitRequiredError":
-      return new ToolSystemError({ reason: "toolkit-misconfiguration", cause: error });
+      return new ToolSystemError({ reason: "ToolkitMisconfiguration", cause: error });
     case "ToolParameterValidationError":
     case "ToolResultEncodingError":
     case "InvalidToolResultError":
     case "InvalidOutputError":
-      return new ToolSystemError({ reason: "serialization", cause: error });
+      return new ToolSystemError({ reason: "Serialization", cause: error });
     default:
       return agentErrorFromModelError(error);
   }
@@ -146,29 +141,29 @@ const sessionStorageReasonFromError = (
 ): SessionStorageReason => {
   switch (error._tag) {
     case "SessionConflict":
-      return "conflict";
+      return "Conflict";
     case "SessionEncodeFailure":
-      return "encode";
+      return "Encode";
     case "SessionWriteFailure":
-      return "write";
+      return "Write";
     case "SessionReadFailure":
-      return "read";
+      return "Read";
     case "SessionDecodeFailure":
-      return "decode";
+      return "Decode";
   }
 };
 
 /** Project a SessionStore failure into the stable agent error vocabulary. */
 export const agentErrorFromSessionError = (error: SessionError): SessionNotFound | SessionStorageError => {
   if (error._tag === "SessionLookupError" && error.reason._tag === "SessionNotFound") {
-    return new SessionNotFound({ sessionId: error.reason.id, cause: error });
+    return error.reason;
   }
 
   const reason =
     error._tag === "SessionLookupError"
       ? error.reason._tag === "SessionReadFailure"
-        ? "read"
-        : "decode"
+        ? "Read"
+        : "Decode"
       : sessionStorageReasonFromError(error.reason);
   const cause = error;
   return new SessionStorageError({ reason, cause });

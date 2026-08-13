@@ -51,7 +51,7 @@ type TurnReduction = {
 
 const decodeJson = (value: unknown) =>
   Schema.decodeUnknownResult(Schema.Json)(value).pipe(
-    Result.mapError((cause) => new ToolSystemError({ reason: "serialization", cause }))
+    Result.mapError((cause) => new ToolSystemError({ reason: "Serialization", cause }))
   );
 
 /**
@@ -74,7 +74,7 @@ export const reducePart = (
     case "tool-call": {
       if (!Object.hasOwn(tools, part.name)) {
         return Result.fail(
-          new ToolSystemError({ reason: "unknown-tool", cause: new Error(`Unknown tool: ${part.name}`) })
+          new ToolSystemError({ reason: "UnknownTool", cause: new Error(`Unknown tool: ${part.name}`) })
         );
       }
       return decodeJson(part.params).pipe(
@@ -105,7 +105,7 @@ export const reducePart = (
       if (toolCall === undefined) {
         return Result.fail(
           new ToolSystemError({
-            reason: "serialization",
+            reason: "Serialization",
             cause: new Error(`Approval request ${part.approvalId} has no matching tool call`)
           })
         );

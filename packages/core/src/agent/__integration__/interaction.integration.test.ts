@@ -273,7 +273,7 @@ layer(
 const failingInteractionLayer = Layer.succeed(
   HumanInteraction,
   HumanInteraction.of({
-    request: () => Effect.fail(new HumanInteractionError({ reason: "channel-closed" }))
+    request: () => Effect.fail(new HumanInteractionError({ reason: "ChannelClosed" }))
   })
 );
 
@@ -301,7 +301,7 @@ layer(
 
       expect(failure._tag).toBe("InteractionCapabilityError");
       if (failure._tag === "InteractionCapabilityError") {
-        expect(failure.reason).toBe("channel-closed");
+        expect(failure.reason).toBe("ChannelClosed");
       }
     })
   );
@@ -352,7 +352,7 @@ it.effect("fails at composition when an approval-gated tool lacks HumanInteracti
 
     expect(failure._tag).toBe("ToolSystemError");
     if (failure._tag === "ToolSystemError") {
-      expect(failure.reason).toBe("toolkit-misconfiguration");
+      expect(failure.reason).toBe("ToolkitMisconfiguration");
     }
   })
 );
@@ -390,7 +390,7 @@ layer(
 
       expect(failure._tag).toBe("ToolSystemError");
       if (failure._tag === "ToolSystemError") {
-        expect(failure.reason).toBe("toolkit-misconfiguration");
+        expect(failure.reason).toBe("ToolkitMisconfiguration");
       }
     })
   );

@@ -71,11 +71,11 @@ const describeCapabilityError = (error: ToolkitCapabilityError): string => {
       }
     case "HumanInteractionError":
       switch (error.reason) {
-        case "timeout":
+        case "Timeout":
           return "human interaction timed out";
-        case "channel-closed":
+        case "ChannelClosed":
           return "human interaction channel closed";
-        case "invalid-response":
+        case "InvalidResponse":
           return "invalid response from human interaction";
       }
     case "SchemaError":

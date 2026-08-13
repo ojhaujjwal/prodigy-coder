@@ -38,6 +38,9 @@ The terminal outcome of a successfully completed run. It carries run metadata an
 **AgentError**:
 The stable failure vocabulary for the core. It distinguishes failures in the model, tool orchestration, session state, execution authorities, and human interaction without making provider-specific error names part of the domain.
 
+**Capability error**:
+The typed failure vocabulary of an execution authority, exposed through its service's error channel and sharing the same PascalCase reason convention as `AgentError`. The agent boundary projects capability errors onto `AgentError` at the `agent-error` seam, so consumers of a run match the agent vocabulary rather than adapter failures.
+
 ## Tools And Profiles
 
 **Tool definition**:

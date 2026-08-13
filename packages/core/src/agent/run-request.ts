@@ -19,7 +19,7 @@ const RunRequestShape = Schema.Struct({
   prompt: Schema.String,
   sessionId: Schema.optional(SessionId),
   // `maxTurns` is intentionally not refined at the struct level: a malformed
-  // value must project to `invalid-max-turns` (not `empty-prompt`), so it is
+  // value must project to `InvalidMaxTurns` (not `EmptyPrompt`), so it is
   // decoded against the `PositiveInt` schema separately in `decodeRunRequest`.
   maxTurns: Schema.optional(Schema.Unknown)
 });
@@ -29,40 +29,40 @@ type DecodedRunRequest = Schema.Schema.Type<typeof RunRequestShape>;
 /**
  * Validate a `maxTurns` override against the profile's bounds before any
  * session or model work. Returns a canonical `InvalidRunRequest` failure when
- * the override is missing/malformed (`invalid-max-turns`) or outside the
- * profile's validated resource bounds (`out-of-bounds-override`).
+ * the override is missing/malformed (`InvalidMaxTurns`) or outside the
+ * profile's validated resource bounds (`OutOfBoundsOverride`).
  */
 export const validateMaxTurnsOverride = (
   override: unknown,
   profileMaxTurns: PositiveIntType
 ): Effect.Effect<PositiveIntType, InvalidRunRequest> =>
   Schema.decodeUnknownEffect(PositiveInt)(override).pipe(
-    Effect.mapError(() => new InvalidRunRequest({ reason: "invalid-max-turns" })),
+    Effect.mapError(() => new InvalidRunRequest({ reason: "InvalidMaxTurns" })),
     Effect.flatMap((value) =>
       value > profileMaxTurns
-        ? Effect.fail(new InvalidRunRequest({ reason: "out-of-bounds-override" }))
+        ? Effect.fail(new InvalidRunRequest({ reason: "OutOfBoundsOverride" }))
         : Effect.succeed(value)
     )
   );
 
 /**
  * Validate a run request at the lazy agent boundary. A malformed `maxTurns`
- * override projects to `invalid-max-turns`; an empty prompt projects to
- * `empty-prompt`.
+ * override projects to `InvalidMaxTurns`; an empty prompt projects to
+ * `EmptyPrompt`.
  */
 export const decodeRunRequest = (input: unknown): Effect.Effect<RunRequest, InvalidRunRequest> =>
   Effect.gen(function* () {
     const request: DecodedRunRequest = yield* Schema.decodeUnknownEffect(RunRequestShape)(input).pipe(
-      Effect.mapError((cause) => new InvalidRunRequest({ reason: "empty-prompt", cause }))
+      Effect.mapError((cause) => new InvalidRunRequest({ reason: "EmptyPrompt", cause }))
     );
     if (request.prompt.trim().length === 0) {
-      return yield* new InvalidRunRequest({ reason: "empty-prompt" });
+      return yield* new InvalidRunRequest({ reason: "EmptyPrompt" });
     }
     const maxTurns =
       request.maxTurns === undefined
         ? undefined
         : yield* Schema.decodeUnknownEffect(PositiveInt)(request.maxTurns).pipe(
-            Effect.mapError(() => new InvalidRunRequest({ reason: "invalid-max-turns" }))
+            Effect.mapError(() => new InvalidRunRequest({ reason: "InvalidMaxTurns" }))
           );
     return {
       prompt: request.prompt,

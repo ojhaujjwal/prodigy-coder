@@ -30,10 +30,10 @@ describe("agentErrorFromToolError", () => {
       reason: new AiError.ToolConfigurationError({ toolName: "echo", description: "handler missing" })
     });
 
-    expect(agentErrorFromToolError(unknownTool)).toMatchObject({ _tag: "ToolSystemError", reason: "unknown-tool" });
+    expect(agentErrorFromToolError(unknownTool)).toMatchObject({ _tag: "ToolSystemError", reason: "UnknownTool" });
     expect(agentErrorFromToolError(misconfigured)).toMatchObject({
       _tag: "ToolSystemError",
-      reason: "toolkit-misconfiguration"
+      reason: "ToolkitMisconfiguration"
     });
   });
 });

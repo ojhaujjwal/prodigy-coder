@@ -88,7 +88,7 @@ layer(validRunLayer)("ProdigyAgent request errors", (it) => {
         const failure = failureFromExit(result.exit);
         expect(failure._tag).toBe("InvalidRunRequest");
         if (failure._tag === "InvalidRunRequest") {
-          expect(failure.reason).toBe("empty-prompt");
+          expect(failure.reason).toBe("EmptyPrompt");
         }
       }
     })
@@ -107,7 +107,7 @@ layer(failingStoreRunLayer)("ProdigyAgent storage errors", (it) => {
         const failure = failureFromExit(result.exit);
         expect(failure._tag).toBe("SessionStorageError");
         if (failure._tag === "SessionStorageError") {
-          expect(failure.reason).toBe("write");
+          expect(failure.reason).toBe("Write");
         }
       }
     })
@@ -126,7 +126,7 @@ layer(failingModelRunLayer)("ProdigyAgent model errors", (it) => {
         const failure = failureFromExit(result.exit);
         expect(failure._tag).toBe("ModelError");
         if (failure._tag === "ModelError") {
-          expect(failure.reason).toBe("rate-limit");
+          expect(failure.reason).toBe("RateLimit");
           expect(failure.isRetryable).toBe(true);
         }
       }

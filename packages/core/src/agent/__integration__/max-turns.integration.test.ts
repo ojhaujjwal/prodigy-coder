@@ -116,7 +116,7 @@ layer(runLayer)("ProdigyAgent maxTurns", (it) => {
 
         expect(failure._tag).toBe("InvalidRunRequest");
         if (failure._tag === "InvalidRunRequest") {
-          expect(failure.reason).toBe("invalid-max-turns");
+          expect(failure.reason).toBe("InvalidMaxTurns");
         }
 
         // Validation precedes session resolution: no run events are emitted.
@@ -134,7 +134,7 @@ layer(runLayer)("ProdigyAgent maxTurns", (it) => {
 
         expect(failure._tag).toBe("InvalidRunRequest");
         if (failure._tag === "InvalidRunRequest") {
-          expect(failure.reason).toBe("out-of-bounds-override");
+          expect(failure.reason).toBe("OutOfBoundsOverride");
         }
       })
     );
@@ -149,7 +149,7 @@ layer(runLayer)("ProdigyAgent maxTurns", (it) => {
 
         expect(failure._tag).toBe("InvalidRunRequest");
         if (failure._tag === "InvalidRunRequest") {
-          expect(failure.reason).toBe("invalid-max-turns");
+          expect(failure.reason).toBe("InvalidMaxTurns");
         }
       })
     );

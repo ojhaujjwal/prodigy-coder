@@ -53,8 +53,8 @@ const resolveApproval = (
           approved: false,
           ...(decision.reason === undefined ? {} : { reason: decision.reason })
         };
-      case "invalid-response":
-        return yield* agentErrorFromHumanInteractionError(new HumanInteractionError({ reason: "invalid-response" }));
+      case "InvalidResponse":
+        return yield* agentErrorFromHumanInteractionError(new HumanInteractionError({ reason: "InvalidResponse" }));
     }
   });
 
@@ -104,7 +104,7 @@ export const executeTurn = Effect.fn("TurnExecution.execute")(function* <TTools 
             const interaction = readHumanInteraction(profile.toolkitContext);
             if (Option.isNone(interaction)) {
               return yield* new ToolSystemError({
-                reason: "toolkit-misconfiguration",
+                reason: "ToolkitMisconfiguration",
                 cause: new Error(
                   "Toolkit produced tool-approval-request parts, but no HumanInteraction service is provided in the toolkit context"
                 )
