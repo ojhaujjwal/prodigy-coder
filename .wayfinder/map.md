@@ -30,13 +30,13 @@ Established constraints from the destination discussion:
 
 ## Decisions so far
 
-<!-- Closed tickets only. Open tickets are discovered from .wayfinder/tickets/. -->
+<!-- Closed tickets only. Open tickets are discovered from the GitHub issue tracker. -->
 
-- [Define the ProdigyAgent Run Contract](tickets/01-define-the-prodigyagent-run-contract.md) — The canonical API is a lazy Effect service returning semantic `AgentEvent`s with explicit session identity, typed union failures, terminal results, and interruption-based cancellation.
-- [Define Capability Services and Layer Composition](tickets/02-define-capability-services-and-layer-composition.md) — Separate Workspace, CommandExecutor, SessionStore, and HumanInteraction authorities compose through explicit Layers and one caller-owned ManagedRuntime; Effect built-ins provide observability.
-- [Define Typed Toolkit Profiles and Custom Tool Composition](tickets/03-define-typed-toolkit-profiles-and-custom-tool-composition.md) — Effect AI `Toolkit` values and Layers compose typed, runtime-fixed profiles; existing tools remain a compatibility surface while handlers migrate behind the authorities established by Define Capability Services and Layer Composition, and native approval adapts the existing CLI policy.
-- [Define SessionStore Checkpoint Semantics](tickets/04-define-sessionstore-checkpoint-semantics.md) — Session state is committed as versioned, atomic transcript snapshots with prompt-first and complete-turn checkpoints; optimistic revisions prevent lost updates, while interruption recovery and continuation remain caller policy.
-- [Define Package and Public Export Boundaries](tickets/08-define-package-and-public-export-boundaries.md) — The existing CLI moves mechanically into `@prodigy/cli` as a temporary compatibility scaffold, then is rebuilt against `@prodigy/core`; Ralph package placement remains a follow-up decision.
+- [Define the ProdigyAgent Run Contract](https://github.com/ojhaujjwal/prodigy-coder/issues/6) — The canonical API is a lazy Effect service returning semantic `AgentEvent`s with explicit session identity, typed union failures, terminal results, and interruption-based cancellation.
+- [Define Capability Services and Layer Composition](https://github.com/ojhaujjwal/prodigy-coder/issues/7) — Separate Workspace, CommandExecutor, SessionStore, and HumanInteraction authorities compose through explicit Layers and one caller-owned ManagedRuntime; Effect built-ins provide observability.
+- [Define Typed Toolkit Profiles and Custom Tool Composition](https://github.com/ojhaujjwal/prodigy-coder/issues/8) — Effect AI `Toolkit` values and Layers compose typed, runtime-fixed profiles; existing tools remain a compatibility surface while handlers migrate behind the authorities established by Define Capability Services and Layer Composition, and native approval adapts the existing CLI policy.
+- [Define SessionStore Checkpoint Semantics](https://github.com/ojhaujjwal/prodigy-coder/issues/9) — Session state is committed as versioned, atomic transcript snapshots with prompt-first and complete-turn checkpoints; optimistic revisions prevent lost updates, while interruption recovery and continuation remain caller policy.
+- [Define Package and Public Export Boundaries](https://github.com/ojhaujjwal/prodigy-coder/issues/13) — The existing CLI moves mechanically into `@prodigy/cli` as a temporary compatibility scaffold, then is rebuilt against `@prodigy/core`; Ralph package placement remains a follow-up decision.
 
 ## Not yet specified
 
