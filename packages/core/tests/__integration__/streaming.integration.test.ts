@@ -1,26 +1,24 @@
 import { describe, expect, layer } from "@effect/vitest";
 import { Context, Deferred, Effect, Layer, Stream } from "effect";
-import * as BunCrypto from "@effect/platform-bun/BunCrypto";
 import { LanguageModel, Response } from "effect/unstable/ai";
-import { layerNoDeps as memoryStoreLayer } from "../../capabilities/memory-session-store.ts";
-import { SessionStore } from "../../capabilities/session-store.ts";
-import { textProfile } from "./helpers.ts";
-import { ProdigyAgent, makeProdigyAgentLayer as agentLayer } from "../prodigy-agent.ts";
-import type { AgentEvent } from "../agent-event.ts";
+import { SessionStore } from "../../src/capabilities/session-store.ts";
+import { makeProdigyAgentLayer, ProdigyAgent } from "../../src/agent/prodigy-agent.ts";
+import type { AgentEvent } from "../../src/agent/agent-event.ts";
+import { textProfile } from "./agent-helpers.ts";
+import { storeLayer } from "./wire-run.ts";
 
 /**
  * A test-only gate service: the `Deferred` that the model double's second part
  * waits on. The test completes it to let the model stream finish.
  */
 class StreamGate extends Context.Service<StreamGate, { readonly release: Deferred.Deferred<void> }>()(
-  "@prodigy/core/agent/__integration__/prodigy-agent.streaming.test/StreamGate"
+  "@prodigy/core/tests/__integration__/streaming.integration.test/StreamGate"
 ) {}
 
 /**
- * A `LanguageModel` double built with `LanguageModel.make` whose provider
- * stream emits the first `text-delta` immediately and gates the second on the
- * shared `StreamGate`. This proves the agent's run stream emits deltas before
- * the model has finished.
+ * A `LanguageModel` double whose provider stream emits the first `text-delta`
+ * immediately and gates the second on the shared `StreamGate`. This proves the
+ * agent's run stream emits deltas before the model has finished.
  */
 const streamingModelLayer = Layer.effect(
   LanguageModel.LanguageModel,
@@ -28,7 +26,7 @@ const streamingModelLayer = Layer.effect(
     const gate = yield* StreamGate;
     const first: Response.StreamPartEncoded = { type: "text-delta", id: "1", delta: "Hello" };
     const second: Response.StreamPartEncoded = { type: "text-delta", id: "2", delta: " world" };
-    const finish: Response.StreamPartEncoded = {
+    const finishPart: Response.StreamPartEncoded = {
       type: "finish",
       reason: "stop",
       usage: {
@@ -45,7 +43,7 @@ const streamingModelLayer = Layer.effect(
           Stream.suspend(() =>
             Stream.fromEffect(Deferred.await(gate.release)).pipe(Stream.flatMap(() => Stream.succeed(second)))
           )
-        ).pipe(Stream.concat(Stream.succeed(finish)))
+        ).pipe(Stream.concat(Stream.succeed(finishPart)))
     });
   })
 );
@@ -59,13 +57,8 @@ const gateLayer = Layer.effect(
 );
 
 const testLayer = Layer.provideMerge(
-  Layer.provideMerge(
-    // `agentLayer` requires `LanguageModel`; the model layer (which itself
-    // consumes `StreamGate`) is provided as the dependency (`that`).
-    Layer.provideMerge(agentLayer(textProfile()), Layer.provideMerge(streamingModelLayer, gateLayer)),
-    memoryStoreLayer
-  ),
-  BunCrypto.layer
+  Layer.provideMerge(Layer.provideMerge(makeProdigyAgentLayer(textProfile()), streamingModelLayer), gateLayer),
+  storeLayer
 );
 
 const runTypes = (events: ReadonlyArray<AgentEvent>) => events.map((e) => e.type);
@@ -77,19 +70,13 @@ layer(testLayer)("ProdigyAgent streaming", (it) => {
         const gate = yield* StreamGate;
         const agent = yield* ProdigyAgent;
 
-        // Consume the run stream up to the first delta. The model double gates
-        // its second delta on `release`, so if the run is truly streaming the
-        // first delta arrives now, before the model has finished.
         const firstDelta: ReadonlyArray<AgentEvent> = yield* agent
           .run({ prompt: "Hi" })
           .pipe(Stream.take(3), Stream.runCollect);
 
         expect(runTypes(firstDelta)).toEqual(["run-started", "turn-started", "text-delta"]);
-
-        // The model is still pending; there must be no run-ended yet.
         expect(firstDelta.some((e) => e.type === "run-ended")).toBe(false);
 
-        // Release the model; the run completes and emits the remaining delta + run-ended.
         yield* Deferred.succeed(gate.release, undefined);
         const rest: ReadonlyArray<AgentEvent> = yield* agent
           .run({ prompt: "Hi" })
@@ -107,8 +94,6 @@ layer(testLayer)("ProdigyAgent streaming", (it) => {
         const agent = yield* ProdigyAgent;
         const store = yield* SessionStore;
 
-        // Take only up to turn-started; the model stream has not been pulled yet,
-        // so the prompt checkpoint must already be persisted.
         const events = yield* agent.run({ prompt: "Hello" }).pipe(Stream.take(2), Stream.runCollect);
         expect(runTypes(events)).toEqual(["run-started", "turn-started"]);
 

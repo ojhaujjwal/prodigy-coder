@@ -4,7 +4,7 @@ import * as PlatformError from "effect/PlatformError";
 import * as Scope from "effect/Scope";
 import { BunServices } from "@effect/platform-bun";
 import type { BunServices as BunServicesType } from "@effect/platform-bun/BunServices";
-import { Session, type Message } from "../capabilities/session.ts";
+import { Session, type Message } from "../../src/capabilities/session.ts";
 
 /**
  * The real Bun-backed platform services for integration tests: `FileSystem`,

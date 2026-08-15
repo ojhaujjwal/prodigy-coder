@@ -5,17 +5,17 @@ import {
   HumanInteraction,
   type InteractionRequest,
   type InteractionResponse
-} from "../../capabilities/human-interaction.ts";
-import { CommandExecutor, type CommandRequest, type CommandResult } from "../../capabilities/command-executor.ts";
+} from "../../src/capabilities/human-interaction.ts";
+import { CommandExecutor, type CommandRequest, type CommandResult } from "../../src/capabilities/command-executor.ts";
 import {
   Workspace,
   WorkspaceLookupError,
   WorkspacePath,
   type GrepMatch,
   type GrepRequest
-} from "../../capabilities/workspace.ts";
-import { SkillRepository, type Skill } from "../../capabilities/skill-repository.ts";
-import { PositiveInt, type AgentProfile } from "../agent-profile.ts";
+} from "../../src/capabilities/workspace.ts";
+import { SkillRepository, type Skill } from "../../src/capabilities/skill-repository.ts";
+import { PositiveInt, type AgentProfile } from "../../src/agent/agent-profile.ts";
 
 /** A scripted `Workspace` over an in-memory map, honoring read/write/replace/grep/glob. */
 export type ScriptedWorkspace = {
@@ -114,6 +114,44 @@ export const scriptedSkillRepositoryLayer = (skills: readonly Skill[]): Layer.La
     })
   );
 
+/**
+ * A scripted `LanguageModel` that serves one scripted turn per `streamText`
+ * call, advancing an internal cursor each call. This is the provider-neutral
+ * seam for cases the wire-level OpenAI mock cannot express.
+ */
+export const scriptedToolModelLayer = (
+  turns: ReadonlyArray<ReadonlyArray<Response.StreamPartEncoded>>
+): Layer.Layer<LanguageModel.LanguageModel> => {
+  let index = 0;
+  return Layer.effect(
+    LanguageModel.LanguageModel,
+    LanguageModel.make({
+      generateText: () => Effect.succeed([]),
+      streamText: () => {
+        const parts = turns[index] ?? [];
+        index += 1;
+        return Stream.fromIterable(parts);
+      }
+    })
+  );
+};
+
+export const textDelta = (id: string, delta: string): Response.StreamPartEncoded => ({
+  type: "text-delta",
+  id,
+  delta
+});
+
+export const finishPart = (reason: "stop" | "tool-calls" | "length"): Response.StreamPartEncoded => ({
+  type: "finish",
+  reason,
+  usage: {
+    inputTokens: { uncached: 1, total: 1, cacheRead: undefined, cacheWrite: undefined },
+    outputTokens: { total: 1, text: 1, reasoning: undefined }
+  },
+  response: undefined
+});
+
 export const EchoTool = Tool.make("echo", {
   description: "Echo a value",
   parameters: Schema.Struct({ value: Schema.String }),
@@ -192,23 +230,6 @@ export const scriptedEchoToolkit = (
     }
   });
   return { layer, calls };
-};
-
-export const scriptedToolModelLayer = (
-  turns: ReadonlyArray<ReadonlyArray<Response.StreamPartEncoded>>
-): Layer.Layer<LanguageModel.LanguageModel> => {
-  let index = 0;
-  return Layer.effect(
-    LanguageModel.LanguageModel,
-    LanguageModel.make({
-      generateText: () => Effect.succeed([]),
-      streamText: () => {
-        const parts = turns[index] ?? [];
-        index += 1;
-        return Stream.fromIterable(parts);
-      }
-    })
-  );
 };
 
 export type ScriptedInteraction = {

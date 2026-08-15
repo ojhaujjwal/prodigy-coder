@@ -13,7 +13,7 @@ export default defineConfig({
         test: {
           name: "unit",
           include: ["src/**/*.test.ts"],
-          exclude: ["src/**/__integration__/**"],
+          exclude: ["src/**/__integration__/**", "tests/**"],
           sequence: { concurrent: false },
           maxConcurrency: 1,
           fileParallelism: false
@@ -22,7 +22,7 @@ export default defineConfig({
       {
         test: {
           name: "integration",
-          include: ["src/**/__integration__/**/*.test.ts"],
+          include: ["tests/__integration__/**/*.test.ts"],
           sequence: { concurrent: false },
           maxConcurrency: 1,
           fileParallelism: false

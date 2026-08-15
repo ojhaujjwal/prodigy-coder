@@ -1,16 +1,118 @@
 import { describe, expect, layer } from "@effect/vitest";
 import { Effect, Layer, Option } from "effect";
 import * as FileSystem from "effect/FileSystem";
-import { createTestSession, platformLayer } from "../../__integration__/helpers.ts";
-import { layer as fileStoreLayer } from "../file-session-store.ts";
-import { SessionLookupError, SessionPersistenceError, SessionStore } from "../session-store.ts";
-import { SessionRevision, type SessionId, type Session } from "../session.ts";
+import * as BunCrypto from "@effect/platform-bun/BunCrypto";
+import { layer as fileStoreLayer } from "../../src/capabilities/file-session-store.ts";
+import { layerNoDeps as memoryStoreLayer } from "../../src/capabilities/memory-session-store.ts";
+import { SessionLookupError, SessionPersistenceError, SessionStore } from "../../src/capabilities/session-store.ts";
+import { SessionRevision, type Session, type SessionId } from "../../src/capabilities/session.ts";
+import { createTestSession, platformLayer } from "./helpers.ts";
+
+const memoryLayer = Layer.provideMerge(memoryStoreLayer, BunCrypto.layer);
+
+layer(memoryLayer)("MemorySessionStore", (it) => {
+  describe("create", () => {
+    it.effect("returns a revision-0 snapshot with a fresh well-formed SessionId", () =>
+      Effect.gen(function* () {
+        const store = yield* SessionStore;
+        const snapshot = yield* store.create({});
+
+        expect(snapshot.revision).toBe(0);
+        expect(snapshot.session.id).toMatch(/^[a-z0-9]{8}$/);
+        expect(snapshot.session.messages).toEqual([]);
+        expect(snapshot.session.createdAt).toBeInstanceOf(Date);
+        expect(snapshot.session.updatedAt).toBeInstanceOf(Date);
+      })
+    );
+
+    it.effect("allocates distinct ids for successive creates", () =>
+      Effect.gen(function* () {
+        const store = yield* SessionStore;
+        const first = yield* store.create({});
+        const second = yield* store.create({});
+
+        expect(first.session.id).not.toBe(second.session.id);
+      })
+    );
+
+    it.effect("seeds the transcript with a system message when a systemPrompt is given", () =>
+      Effect.gen(function* () {
+        const store = yield* SessionStore;
+        const snapshot = yield* store.create({ systemPrompt: "You are a helpful assistant" });
+
+        expect(snapshot.session.messages).toEqual([{ role: "system", content: "You are a helpful assistant" }]);
+      })
+    );
+  });
+
+  describe("save and load", () => {
+    it.effect("save commits the transcript and advances the revision; load returns it", () =>
+      Effect.gen(function* () {
+        const store = yield* SessionStore;
+        const created = yield* store.create({});
+        const session: Session = { ...created.session, messages: [{ role: "user", content: "Hello" }] };
+
+        const saved = yield* store.save({ session, expectedRevision: created.revision });
+
+        expect(saved.revision).toBe(1);
+        expect(saved.session.messages).toEqual([{ role: "user", content: "Hello" }]);
+
+        const loaded = yield* store.load(created.session.id);
+        expect(loaded.revision).toBe(1);
+        expect(loaded.session.messages).toEqual([{ role: "user", content: "Hello" }]);
+      })
+    );
+
+    it.effect("save refreshes updatedAt and keeps createdAt stable", () =>
+      Effect.gen(function* () {
+        const store = yield* SessionStore;
+        const created = yield* store.create({});
+
+        const saved = yield* store.save({ session: created.session, expectedRevision: created.revision });
+
+        expect(saved.session.createdAt).toEqual(created.session.createdAt);
+        expect(saved.session.updatedAt.getTime()).toBeGreaterThanOrEqual(created.session.updatedAt.getTime());
+      })
+    );
+
+    it.effect("a stale expectedRevision fails as SessionConflict and leaves the prior revision loadable", () =>
+      Effect.gen(function* () {
+        const store = yield* SessionStore;
+        const created = yield* store.create({});
+        yield* store.save({ session: created.session, expectedRevision: created.revision });
+
+        const failure = yield* store
+          .save({ session: created.session, expectedRevision: created.revision })
+          .pipe(Effect.flip);
+
+        expect(failure).toBeInstanceOf(SessionPersistenceError);
+        expect(failure.reason._tag).toBe("SessionConflict");
+
+        const loaded = yield* store.load(created.session.id);
+        expect(loaded.revision).toBe(1);
+        expect(loaded.session.messages).toEqual([]);
+      })
+    );
+  });
+
+  describe("load", () => {
+    it.effect("load of an unknown id fails as SessionLookupError/SessionNotFound", () =>
+      Effect.gen(function* () {
+        const store = yield* SessionStore;
+        const unknown = createTestSession("00000000");
+
+        const failure = yield* store.load(unknown.id).pipe(Effect.flip);
+
+        expect(failure).toBeInstanceOf(SessionLookupError);
+        expect(failure.reason._tag).toBe("SessionNotFound");
+      })
+    );
+  });
+});
 
 const TEST_SESSION_DIR = "/tmp/.prodigy-core/test-sessions";
 
-const storeLayer = fileStoreLayer(TEST_SESSION_DIR).pipe(Layer.provideMerge(platformLayer));
-
-let persistedId: Option.Option<SessionId> = Option.none();
+const fileLayer = fileStoreLayer(TEST_SESSION_DIR).pipe(Layer.provideMerge(platformLayer));
 
 const cleanupSessions = () =>
   Effect.gen(function* () {
@@ -22,7 +124,7 @@ const cleanupSessions = () =>
     yield* fs.makeDirectory(TEST_SESSION_DIR, { recursive: true });
   });
 
-layer(storeLayer)("FileSessionStore", (it) => {
+layer(fileLayer)("FileSessionStore", (it) => {
   describe("create", () => {
     it.effect("returns a revision-0 snapshot with a fresh well-formed SessionId and writes no file", () =>
       Effect.gen(function* () {
@@ -64,18 +166,14 @@ layer(storeLayer)("FileSessionStore", (it) => {
         const session: Session = { ...created.session, messages: [{ role: "user", content: "Hello" }] };
 
         const saved = yield* store.save({ session, expectedRevision: created.revision });
-
         expect(saved.revision).toBe(1);
 
         const entries = yield* fs.readDirectory(TEST_SESSION_DIR);
         expect(entries).toEqual([`${created.session.id}.json`]);
 
         const raw = yield* fs.readFileString(`${TEST_SESSION_DIR}/${created.session.id}.json`);
-        const parsed: {
-          formatVersion: number;
-          revision: number;
-          session: { id: string; createdAt: string; updatedAt: string };
-        } = JSON.parse(raw);
+        const parsed: { formatVersion: number; revision: number; session: { id: string; createdAt: string } } =
+          JSON.parse(raw);
         expect(parsed.formatVersion).toBe(1);
         expect(parsed.revision).toBe(1);
         expect(parsed.session.id).toBe(created.session.id);
@@ -119,48 +217,9 @@ layer(storeLayer)("FileSessionStore", (it) => {
 
         const loaded = yield* store.load(created.session.id);
         expect(loaded.revision).toBe(1);
+        expect(loaded.session.messages).toEqual([]);
       })
     );
-
-    it.effect("a store saves a session to disk at revision 1", () =>
-      Effect.gen(function* () {
-        yield* cleanupSessions();
-        const store = yield* SessionStore;
-
-        const created = yield* store.create({});
-        const session: Session = { ...created.session, messages: [{ role: "user", content: "Hello" }] };
-        const saved = yield* store.save({ session, expectedRevision: created.revision });
-        persistedId = Option.some(saved.session.id);
-
-        expect(saved.revision).toBe(1);
-      })
-    );
-
-    it.layer(fileStoreLayer(TEST_SESSION_DIR))("a fresh store over the same directory", (it) => {
-      it.effect("loads what the previous store persisted", () =>
-        Effect.gen(function* () {
-          const store = yield* SessionStore;
-          const loaded = yield* store.load(Option.getOrThrow(persistedId));
-
-          expect(loaded.revision).toBe(1);
-          expect(loaded.session.messages).toEqual([{ role: "user", content: "Hello" }]);
-        })
-      );
-
-      it.effect("rejects a stale checkpoint from the previous instance as SessionConflict", () =>
-        Effect.gen(function* () {
-          const store = yield* SessionStore;
-          const loaded = yield* store.load(Option.getOrThrow(persistedId));
-
-          const failure = yield* store
-            .save({ session: loaded.session, expectedRevision: SessionRevision.make(0) })
-            .pipe(Effect.flip);
-
-          expect(failure).toBeInstanceOf(SessionPersistenceError);
-          expect(failure.reason._tag).toBe("SessionConflict");
-        })
-      );
-    });
   });
 
   describe("load failures", () => {
@@ -266,4 +325,39 @@ layer(storeLayer)("FileSessionStore", (it) => {
       })
     );
   });
+});
+
+let persistedId: Option.Option<SessionId> = Option.none();
+
+layer(fileLayer)("a fresh FileSessionStore over the same directory", (it) => {
+  it.effect("persists a revision-1 session for a later store instance", () =>
+    Effect.gen(function* () {
+      yield* cleanupSessions();
+      const store = yield* SessionStore;
+      const created = yield* store.create({});
+      const session: Session = { ...created.session, messages: [{ role: "user", content: "Hello" }] };
+      const saved = yield* store.save({ session, expectedRevision: created.revision });
+      persistedId = Option.some(saved.session.id);
+
+      expect(saved.revision).toBe(1);
+    })
+  );
+
+  it.effect("loads what the previous store persisted and rejects stale checkpoints", () =>
+    Effect.gen(function* () {
+      const store = yield* SessionStore;
+      const id = Option.getOrThrow(persistedId);
+      const loaded = yield* store.load(id);
+
+      expect(loaded.revision).toBe(1);
+      expect(loaded.session.messages).toEqual([{ role: "user", content: "Hello" }]);
+
+      const failure = yield* store
+        .save({ session: loaded.session, expectedRevision: SessionRevision.make(0) })
+        .pipe(Effect.flip);
+
+      expect(failure).toBeInstanceOf(SessionPersistenceError);
+      expect(failure.reason._tag).toBe("SessionConflict");
+    })
+  );
 });

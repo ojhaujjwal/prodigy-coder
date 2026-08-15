@@ -13,15 +13,20 @@
   "scripts": {
     "ci": "bun run lint && bun run typecheck && bun run test --run",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "lint": "bun --bun oxlint src",
-    "lint-fix": "bun --bun oxlint --fix src",
+    "lint": "bun --bun oxlint src tests",
+    "lint-fix": "bun --bun oxlint --fix src tests",
     "test": "bun --bun vitest",
     "coverage": "bun --bun vitest --coverage"
   },
   "devDependencies": {
+    "@effect/ai-anthropic": "catalog:",
+    "@effect/ai-openai": "catalog:",
+    "@effect/ai-openai-compat": "catalog:",
+    "@effect/ai-openrouter": "catalog:",
     "@effect/language-service": "catalog:",
     "@effect/platform-bun": "catalog:",
     "@effect/vitest": "catalog:",
+    "@types/bun": "latest",
     "effect": "catalog:",
     "oxlint": "catalog:",
     "typescript": "catalog:",
