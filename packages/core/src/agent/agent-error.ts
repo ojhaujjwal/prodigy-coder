@@ -4,12 +4,8 @@ import type { HumanInteractionError as HumanInteractionErrorType } from "../capa
 import { SessionNotFound } from "../capabilities/session-store.ts";
 import type { SessionError } from "../capabilities/session-store.ts";
 
-/** Reasons for rejecting a run request before execution starts. */
-export type InvalidRunReason = "EmptyPrompt" | "InvalidMaxTurns" | "OutOfBoundsOverride";
-
 /** A run request that fails validation at the agent boundary. */
 export class InvalidRunRequest extends Schema.TaggedErrorClass<InvalidRunRequest>()("InvalidRunRequest", {
-  reason: Schema.Literals(["EmptyPrompt", "InvalidMaxTurns", "OutOfBoundsOverride"]),
   cause: Schema.optional(Schema.Defect())
 }) {}
 

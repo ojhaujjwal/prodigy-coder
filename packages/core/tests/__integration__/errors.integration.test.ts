@@ -5,9 +5,9 @@ import { SessionPersistenceError, SessionStore, SessionWriteFailure } from "../.
 import { layerNoDeps as memoryStoreLayer } from "../../src/capabilities/memory-session-store.ts";
 import * as BunCrypto from "@effect/platform-bun/BunCrypto";
 import { makeProdigyAgentLayer, ProdigyAgent } from "../../src/agent/prodigy-agent.ts";
+import { decodeRunRequest } from "../../src/agent/run-request.ts";
 import type { AgentEvent } from "../../src/agent/agent-event.ts";
 import { textProfile } from "./agent-helpers.ts";
-import { finish, storeLayer, buildWireContext } from "./wire-run.ts";
 
 const emptyModelLayer = Layer.effect(
   LanguageModel.LanguageModel,
@@ -74,26 +74,18 @@ const runWithEvents = (agent: ProdigyAgent["Service"], request: Parameters<Prodi
     return { events: yield* Ref.get(events), exit };
   });
 
+/** Assert that a malformed request payload is rejected by the boundary decode. */
+const expectRejected = (input: unknown) =>
+  Effect.gen(function* () {
+    const failure = yield* decodeRunRequest(input).pipe(Effect.flip);
+    expect(failure._tag).toBe("InvalidRunRequest");
+  });
+
 describe("ProdigyAgent errors", () => {
-  it.effect("rejects an empty prompt before execution", () =>
-    Effect.gen(function* () {
-      const { agent } = yield* buildWireContext(
-        [[{ type: "text-delta", delta: "x" }, finish("stop")]],
-        Layer.provideMerge(makeProdigyAgentLayer(textProfile()), storeLayer)
-      );
+  it.effect("rejects an empty prompt before execution", () => expectRejected({ prompt: "   " }));
 
-      const { events, exit } = yield* runWithEvents(agent, { prompt: "   " });
-
-      expect(Exit.isFailure(exit)).toBe(true);
-      expect(events.some((event) => event.type === "run-ended")).toBe(false);
-      if (Exit.isFailure(exit)) {
-        const failure = failureFromExit(exit);
-        expect(failure).toHaveProperty("_tag", "InvalidRunRequest");
-        if (failure._tag === "InvalidRunRequest") {
-          expect(failure.reason).toBe("EmptyPrompt");
-        }
-      }
-    })
+  it.effect("a malformed sessionId fails with InvalidRunRequest before execution", () =>
+    expectRejected({ prompt: "Hello", sessionId: "ABC" })
   );
 
   it.effect("a model rate-limit error maps to a retryable ModelError", () =>

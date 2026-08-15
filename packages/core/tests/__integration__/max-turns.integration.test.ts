@@ -2,8 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer, Stream } from "effect";
 import { LanguageModel } from "effect/unstable/ai";
 import { makeProdigyAgentLayer, ProdigyAgent } from "../../src/agent/prodigy-agent.ts";
-import type { AgentError } from "../../src/agent/agent-error.ts";
-import type { AgentEvent } from "../../src/agent/agent-event.ts";
+import { decodeRunRequest } from "../../src/agent/run-request.ts";
 import { textProfile } from "./agent-helpers.ts";
 import { storeLayer } from "./wire-run.ts";
 
@@ -31,13 +30,21 @@ const runLayer = Layer.provideMerge(
   neverFinishModelLayer
 );
 
+/** Assert that a malformed request payload is rejected by the boundary decode. */
+const expectRejected = (input: unknown) =>
+  Effect.gen(function* () {
+    const failure = yield* decodeRunRequest(input).pipe(Effect.flip);
+    expect(failure._tag).toBe("InvalidRunRequest");
+  });
+
 describe("ProdigyAgent maxTurns", () => {
   it.effect("run({ maxTurns: 2 }) emits two turns then Stopped with the limit", () =>
     Effect.gen(function* () {
       const context = yield* Layer.build(runLayer);
       const agent = yield* ProdigyAgent.pipe(Effect.provide(context));
 
-      const events = yield* agent.run({ prompt: "Hello", maxTurns: 2 }).pipe(Stream.runCollect);
+      const request = yield* decodeRunRequest({ prompt: "Hello", maxTurns: 2 });
+      const events = yield* agent.run(request).pipe(Stream.runCollect);
       expect(events.filter((e) => e.type === "turn-started")).toHaveLength(2);
       const ended = events[events.length - 1];
       if (ended.type !== "run-ended") throw new Error("expected run-ended");
@@ -52,27 +59,7 @@ describe("ProdigyAgent maxTurns", () => {
   );
 
   it.effect("an invalid maxTurns fails with InvalidRunRequest before any run events", () =>
-    Effect.gen(function* () {
-      const context = yield* Layer.build(runLayer);
-      const agent = yield* ProdigyAgent.pipe(Effect.provide(context));
-
-      const events: Array<AgentEvent> = [];
-      const failure: AgentError = yield* agent.run({ prompt: "Hello", maxTurns: 0 }).pipe(
-        Stream.tap((event) =>
-          Effect.sync(() => {
-            events.push(event);
-          })
-        ),
-        Stream.runCollect,
-        Effect.flip
-      );
-
-      expect(failure._tag).toBe("InvalidRunRequest");
-      if (failure._tag === "InvalidRunRequest") {
-        expect(failure.reason).toBe("InvalidMaxTurns");
-      }
-      expect(events).toHaveLength(0);
-    })
+    expectRejected({ prompt: "Hello", maxTurns: 0 })
   );
 
   it.effect("run without maxTurns exhausts the profile default and emits Stopped with that limit", () =>
@@ -80,7 +67,8 @@ describe("ProdigyAgent maxTurns", () => {
       const context = yield* Layer.build(runLayer);
       const agent = yield* ProdigyAgent.pipe(Effect.provide(context));
 
-      const events = yield* agent.run({ prompt: "Hello" }).pipe(Stream.runCollect);
+      const request = yield* decodeRunRequest({ prompt: "Hello" });
+      const events = yield* agent.run(request).pipe(Stream.runCollect);
       expect(events.filter((e) => e.type === "turn-started")).toHaveLength(50);
       const ended = events[events.length - 1];
       if (ended.type !== "run-ended") throw new Error("expected run-ended");
@@ -88,34 +76,19 @@ describe("ProdigyAgent maxTurns", () => {
     })
   );
 
-  it.effect("an override beyond the profile bound fails with OutOfBoundsOverride", () =>
+  it.effect("an override beyond the profile bound fails with InvalidRunRequest", () =>
     Effect.gen(function* () {
       const context = yield* Layer.build(runLayer);
       const agent = yield* ProdigyAgent.pipe(Effect.provide(context));
+      const request = yield* decodeRunRequest({ prompt: "Hello", maxTurns: 51 });
 
-      const failure: AgentError = yield* agent
-        .run({ prompt: "Hello", maxTurns: 51 })
-        .pipe(Stream.runCollect, Effect.flip);
+      const failure = yield* agent.run(request).pipe(Stream.runCollect, Effect.flip);
       expect(failure._tag).toBe("InvalidRunRequest");
-      if (failure._tag === "InvalidRunRequest") {
-        expect(failure.reason).toBe("OutOfBoundsOverride");
-      }
     })
   );
 
-  it.effect("a non-integer maxTurns fails with InvalidMaxTurns", () =>
-    Effect.gen(function* () {
-      const context = yield* Layer.build(runLayer);
-      const agent = yield* ProdigyAgent.pipe(Effect.provide(context));
-
-      const failure: AgentError = yield* agent
-        .run({ prompt: "Hello", maxTurns: 1.5 })
-        .pipe(Stream.runCollect, Effect.flip);
-      expect(failure._tag).toBe("InvalidRunRequest");
-      if (failure._tag === "InvalidRunRequest") {
-        expect(failure.reason).toBe("InvalidMaxTurns");
-      }
-    })
+  it.effect("a non-integer maxTurns fails with InvalidRunRequest", () =>
+    expectRejected({ prompt: "Hello", maxTurns: 1.5 })
   );
 
   it.effect("a model that finishes on the last allowed turn emits Finished, not Stopped", () =>
@@ -135,7 +108,8 @@ describe("ProdigyAgent maxTurns", () => {
       );
       const agent = yield* ProdigyAgent.pipe(Effect.provide(context));
 
-      const events = yield* agent.run({ prompt: "Hello", maxTurns: 1 }).pipe(Stream.runCollect);
+      const request = yield* decodeRunRequest({ prompt: "Hello", maxTurns: 1 });
+      const events = yield* agent.run(request).pipe(Stream.runCollect);
       const ended = events[events.length - 1];
       if (ended.type !== "run-ended") throw new Error("expected run-ended");
       expect(ended.result._tag).toBe("Finished");
