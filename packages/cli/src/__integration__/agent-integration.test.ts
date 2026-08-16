@@ -8,7 +8,7 @@ import { runAgent, type AgentConfig } from "../agent.ts";
 import { buildProviderLayer } from "../provider.ts";
 import { makeToolkitLayer, AgenticToolkit, EmptySkillsRepoLayer } from "../tools/index.ts";
 import { ApprovalGate, makeApprovalGateLayer } from "../approval-gate.ts";
-import type { OutputEvent } from "../output.ts";
+import type { OutputEvent, ToolCall } from "../output.ts";
 import type { Message } from "../session.ts";
 import { createMockOpenAIServer, createTestConfig, createTestSession, type MockOpenAIResponse } from "./helpers.ts";
 import type { ConfigData } from "../config.ts";
@@ -459,10 +459,7 @@ layer(Layer.merge(BunServices.layer, EmptySkillsRepoLayer))("e2e", (it) => {
       const finishes = result.filter((e: OutputEvent) => e.type === "finish");
 
       const toolCallNames = toolCalls
-        .filter(
-          (e: OutputEvent): e is { type: "tool-call"; id: string; name: string; params: unknown } =>
-            e.type === "tool-call"
-        )
+        .filter((e: OutputEvent): e is ToolCall => e.type === "tool-call")
         .map((e: { name: string }) => e.name);
       expect(toolCallNames).toEqual(["glob", "read", "read", "write"]);
 

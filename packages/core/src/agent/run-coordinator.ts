@@ -6,7 +6,7 @@ import { SessionStore } from "../capabilities/session-store.ts";
 import { agentErrorFromSessionError, type AgentError } from "./agent-error.ts";
 import type { AgentEvent } from "./agent-event.ts";
 import type { ResolvedAgentProfile } from "./profile-resolution.ts";
-import { decodeRunRequest, generateRunId, validateMaxTurnsOverride, type RunRequest } from "./run-request.ts";
+import { decodeRunRequest, generateRunId, type RunRequest } from "./run-request.ts";
 import { executeTurn, type TurnOutcome } from "./turn-execution.ts";
 
 /** The stable dependencies required to coordinate one Run. */
@@ -74,9 +74,8 @@ export const coordinateRun = <TTools extends Record<string, Tool.Any>>(
       Effect.gen(function* () {
         const validatedRequest = yield* decodeRunRequest(request);
         const effectiveMaxTurns =
-          validatedRequest.maxTurns === undefined
-            ? dependencies.profile.maxTurns
-            : yield* validateMaxTurnsOverride(validatedRequest.maxTurns, dependencies.profile.maxTurns);
+          validatedRequest.maxTurns === undefined ? dependencies.profile.maxTurns : validatedRequest.maxTurns;
+
         let snapshot = yield* resolveSession(
           validatedRequest.sessionId,
           dependencies.store,
@@ -91,8 +90,8 @@ export const coordinateRun = <TTools extends Record<string, Tool.Any>>(
           switch (outcome._tag) {
             case "ToolCalls":
               return runTurns(turn + 1);
-            case "Finished":
-              return Stream.succeed({
+            case "Finished": {
+              const finishedEvent: AgentEvent = {
                 type: "run-ended",
                 result: {
                   _tag: "Finished",
@@ -100,7 +99,9 @@ export const coordinateRun = <TTools extends Record<string, Tool.Any>>(
                   turns: turn,
                   finishReason: outcome.finishReason
                 }
-              } satisfies AgentEvent);
+              };
+              return Stream.succeed(finishedEvent);
+            }
             case "Incomplete":
               return turn >= effectiveMaxTurns
                 ? Stream.succeed(stoppedEvent(sessionId, turn, effectiveMaxTurns))
@@ -124,10 +125,8 @@ export const coordinateRun = <TTools extends Record<string, Tool.Any>>(
           );
         };
 
-        return Stream.concat(
-          Stream.succeed({ type: "run-started", runId, sessionId } satisfies AgentEvent),
-          runTurns(1)
-        );
+        const startedEvent: AgentEvent = { type: "run-started", runId, sessionId };
+        return Stream.concat(Stream.succeed(startedEvent), runTurns(1));
       })
     )
   );

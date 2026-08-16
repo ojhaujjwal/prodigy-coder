@@ -91,7 +91,7 @@ const promptArg = Argument.string("prompt").pipe(Argument.optional, Argument.wit
 
 const printFlag = Flag.boolean("print").pipe(Flag.withAlias("p"), Flag.withDescription("Print output"));
 
-const outputFormatFlag = Flag.choice("output-format", ["text", "stream-json"]).pipe(
+const outputFormatFlag = Flag.choice("output-format", ["text", "stream-json"] as const).pipe(
   Flag.withAlias("f"),
   Flag.withDefault("text"),
   Flag.withDescription("Output format")
@@ -193,8 +193,7 @@ const mainCommand = Command.make(
         nonInteractive: nonInteractive || appConfig.nonInteractive
       };
 
-      const format: "text" | "stream-json" = outputFormat satisfies "text" | "stream-json";
-      const formatter = createFormatter(format);
+      const formatter = createFormatter(outputFormat);
       const { outputEvents, sessionId: resultingSessionId } = yield* runAgent(
         userMessages,
         sessionId,

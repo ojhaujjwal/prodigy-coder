@@ -5,6 +5,7 @@ import * as HttpClientResponse from "effect/unstable/http/HttpClientResponse";
 import * as Layer from "effect/Layer";
 import * as Effect from "effect/Effect";
 import * as Config from "effect/Config";
+import * as Predicate from "effect/Predicate";
 
 const LOG_DIR = "logs";
 const LOG_FILE = `${LOG_DIR}/http-debug.log`;
@@ -33,7 +34,7 @@ const formatRequest = (request: HttpClientRequest.HttpClientRequest): string => 
   if (request.body._tag === "Uint8Array") {
     body = new TextDecoder().decode(request.body.body);
   } else if (request.body._tag === "Raw") {
-    body = typeof request.body.body === "string" ? request.body.body : JSON.stringify(request.body.body);
+    body = Predicate.isString(request.body.body) ? request.body.body : JSON.stringify(request.body.body);
   } else {
     body = `[${request.body._tag}]`;
   }

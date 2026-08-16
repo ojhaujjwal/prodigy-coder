@@ -5,7 +5,7 @@ import { SessionPersistenceError, SessionStore, SessionWriteFailure } from "../.
 import { layerNoDeps as memoryStoreLayer } from "../../src/capabilities/memory-session-store.ts";
 import * as BunCrypto from "@effect/platform-bun/BunCrypto";
 import { makeProdigyAgentLayer, ProdigyAgent } from "../../src/agent/prodigy-agent.ts";
-import { decodeRunRequest } from "../../src/agent/run-request.ts";
+import { decodeRunRequest, type RunRequestInput } from "../../src/agent/run-request.ts";
 import type { AgentEvent } from "../../src/agent/agent-event.ts";
 import { textProfile } from "./agent-helpers.ts";
 
@@ -75,7 +75,7 @@ const runWithEvents = (agent: ProdigyAgent["Service"], request: Parameters<Prodi
   });
 
 /** Assert that a malformed request payload is rejected by the boundary decode. */
-const expectRejected = (input: unknown) =>
+const expectRejected = (input: RunRequestInput) =>
   Effect.gen(function* () {
     const failure = yield* decodeRunRequest(input).pipe(Effect.flip);
     expect(failure._tag).toBe("InvalidRunRequest");

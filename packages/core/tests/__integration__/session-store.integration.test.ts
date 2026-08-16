@@ -177,7 +177,7 @@ layer(fileLayer)("FileSessionStore", (it) => {
         expect(parsed.formatVersion).toBe(1);
         expect(parsed.revision).toBe(1);
         expect(parsed.session.id).toBe(created.session.id);
-        expect(typeof parsed.session.createdAt).toBe("string");
+        expect(parsed.session.createdAt).toEqual(expect.any(String));
 
         const loaded = yield* store.load(created.session.id);
         expect(loaded.revision).toBe(1);

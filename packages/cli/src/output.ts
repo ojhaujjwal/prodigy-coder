@@ -1,4 +1,5 @@
 import { Console, Effect, Schema } from "effect";
+import type { JsonValue } from "@prodigy/core";
 
 export const TextDelta = Schema.Struct({
   type: Schema.Literal("text-delta"),
@@ -10,7 +11,7 @@ export const ToolCall = Schema.Struct({
   type: Schema.Literal("tool-call"),
   id: Schema.String,
   name: Schema.String,
-  params: Schema.Unknown
+  params: Schema.Json
 });
 export type ToolCall = typeof ToolCall.Type;
 
@@ -46,6 +47,15 @@ export type OutputEvent = typeof OutputEvent.Type;
 
 export type OutputFormatter = (event: OutputEvent) => Effect.Effect<void>;
 
+/** The JSON protocol payload emitted by the stream-json formatter. */
+export type OutputPayload =
+  | { readonly type: "content"; readonly content: ReadonlyArray<{ readonly type: "text"; readonly text: string }> }
+  | { readonly type: "tool_use"; readonly name: string; readonly input: JsonValue }
+  | { readonly type: "tool_result"; readonly content: string; readonly is_error: boolean }
+  | { readonly type: "final"; readonly content: string }
+  | { readonly type: "error"; readonly message: string }
+  | { readonly type: "session"; readonly session_id: string; readonly export_command: string };
+
 const textColor = (color: number, text: string): string => `\x1b[${color}m${text}\x1b[0m`;
 
 const truncate = (str: string, maxLen: number): string => {
@@ -78,32 +88,26 @@ export const makeTextFormatter =
 export const makeStreamJsonFormatter =
   (): OutputFormatter =>
   (event: OutputEvent): Effect.Effect<void> => {
-    let output: Record<string, unknown> = { type: event.type };
-
-    switch (event.type) {
-      case "text-delta":
-        output = { type: "content", content: [{ type: "text", text: event.delta }] };
-        break;
-      case "tool-call":
-        output = { type: "tool_use", name: event.name, input: event.params };
-        break;
-      case "tool-result":
-        output = { type: "tool_result", content: event.result, is_error: event.isError };
-        break;
-      case "finish":
-        output = { type: "final", content: event.text };
-        break;
-      case "error":
-        output = { type: "error", message: event.message };
-        break;
-      case "session-info":
-        output = {
-          type: "session",
-          session_id: event.sessionId,
-          export_command: `export PRODIGY_SESSION_ID=${event.sessionId}`
-        };
-        break;
-    }
+    const output: OutputPayload = (() => {
+      switch (event.type) {
+        case "text-delta":
+          return { type: "content", content: [{ type: "text", text: event.delta }] };
+        case "tool-call":
+          return { type: "tool_use", name: event.name, input: event.params };
+        case "tool-result":
+          return { type: "tool_result", content: event.result, is_error: event.isError };
+        case "finish":
+          return { type: "final", content: event.text };
+        case "error":
+          return { type: "error", message: event.message };
+        case "session-info":
+          return {
+            type: "session",
+            session_id: event.sessionId,
+            export_command: `export PRODIGY_SESSION_ID=${event.sessionId}`
+          };
+      }
+    })();
 
     return Console.log(JSON.stringify(output));
   };

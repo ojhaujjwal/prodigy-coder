@@ -1,4 +1,4 @@
-import { Effect, Option, Schema } from "effect";
+import { Effect, Option, Predicate, Schema } from "effect";
 import { Tool, Toolkit } from "effect/unstable/ai";
 import * as AiError from "effect/unstable/ai/AiError";
 import * as HttpClient from "effect/unstable/http/HttpClient";
@@ -330,7 +330,7 @@ export const askUserHandler = (
       .request({ question })
       .pipe(Effect.mapError(toToolError("AskUserTool", "askUserHandler")));
     if (response._tag === "Answered") {
-      return typeof response.answer === "string" ? response.answer : JSON.stringify(response.answer);
+      return Predicate.isString(response.answer) ? response.answer : JSON.stringify(response.answer);
     }
     return yield* AiError.make({
       module: "AskUserTool",
@@ -360,7 +360,10 @@ export const LoadSkillTool = Tool.make("load_skill", {
 
 export type LoadSkillTool = typeof LoadSkillTool;
 
-export const loadSkillHandler = ({ name }: Tool.Parameters<typeof LoadSkillTool>, _context: unknown) =>
+export const loadSkillHandler = (
+  { name }: Tool.Parameters<typeof LoadSkillTool>,
+  _context: Toolkit.HandlerContext<typeof LoadSkillTool>
+) =>
   Effect.gen(function* () {
     const repo = yield* SkillRepository;
     const skillName = yield* parseSkillName(name);

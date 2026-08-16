@@ -16,7 +16,7 @@
 export { ProdigyAgent } from "./agent/prodigy-agent.ts";
 export { makeProdigyAgentLayer } from "./agent/prodigy-agent.ts";
 export type { RunRequest, RunId } from "./agent/run-request.ts";
-export type { AgentEvent, AgentResult, AgentFinishReason } from "./agent/agent-event.ts";
+export type { AgentEvent, AgentResult, AgentFinishReason, JsonValue } from "./agent/agent-event.ts";
 export type { AgentError } from "./agent/agent-error.ts";
 export { PositiveInt } from "./agent/agent-profile.ts";
 export type { AgentProfile, PositiveInt as PositiveIntType } from "./agent/agent-profile.ts";

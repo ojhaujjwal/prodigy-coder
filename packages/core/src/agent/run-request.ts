@@ -1,6 +1,6 @@
 import { Crypto, Effect, Schema } from "effect";
 import { SessionId } from "../capabilities/session.ts";
-import { PositiveInt, type PositiveInt as PositiveIntType } from "./agent-profile.ts";
+import { PositiveInt } from "./agent-profile.ts";
 import { InvalidRunRequest } from "./agent-error.ts";
 
 /** The `RunId` brand schema: a strict UUIDv7. */
@@ -15,26 +15,15 @@ export const RunRequest = Schema.Struct({
 
 export type RunRequest = Schema.Schema.Type<typeof RunRequest>;
 
-/**
- * Validate a `maxTurns` override against the profile's bounds before any
- * session or model work. Returns a canonical `InvalidRunRequest` failure when
- * the override is outside the profile's validated resource bounds.
- */
-export const validateMaxTurnsOverride = (
-  override: unknown,
-  profileMaxTurns: PositiveIntType
-): Effect.Effect<PositiveIntType, InvalidRunRequest> =>
-  Schema.decodeUnknownEffect(PositiveInt)(override).pipe(
-    Effect.mapError(() => new InvalidRunRequest()),
-    Effect.flatMap((value) => (value > profileMaxTurns ? Effect.fail(new InvalidRunRequest()) : Effect.succeed(value)))
-  );
+/** The unvalidated representation accepted at the request boundary. */
+export type RunRequestInput = Schema.Codec.Encoded<typeof RunRequest>;
 
 /**
  * Validate a run request at the lazy agent boundary. Any malformed field
  * (empty prompt, bad `sessionId`, bad `maxTurns`) fails the struct decode and
  * projects to `InvalidRunRequest`.
  */
-export const decodeRunRequest = (input: unknown): Effect.Effect<RunRequest, InvalidRunRequest> =>
+export const decodeRunRequest = (input: RunRequestInput): Effect.Effect<RunRequest, InvalidRunRequest> =>
   Schema.decodeUnknownEffect(RunRequest)(input).pipe(Effect.mapError((cause) => new InvalidRunRequest({ cause })));
 
 /** Allocate a fresh `RunId` from the `Crypto` service. */

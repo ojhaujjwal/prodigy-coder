@@ -1,6 +1,7 @@
 import { Context, Effect, Layer } from "effect";
 import * as AiError from "effect/unstable/ai/AiError";
 import type * as Prompt from "effect/unstable/cli/Prompt";
+import type { JsonValue } from "@prodigy/core";
 import { needsApproval } from "./approval.ts";
 import { ApprovalPrompt, makeApprovalPromptLayer } from "./approval-prompt.ts";
 import type { ConfigData } from "./config.ts";
@@ -8,7 +9,7 @@ import type { ConfigData } from "./config.ts";
 export class ApprovalGate extends Context.Service<
   ApprovalGate,
   {
-    readonly approve: (toolName: string, params: unknown) => Effect.Effect<boolean, never, never>;
+    readonly approve: (toolName: string, params: JsonValue) => Effect.Effect<boolean, never, never>;
   }
 >()("@prodigy/cli/approval-gate/ApprovalGate") {}
 
@@ -31,7 +32,7 @@ export const createApprovalGate = (
   },
   prompt: typeof ApprovalPrompt.Service
 ): typeof ApprovalGate.Service => ({
-  approve: (toolName: string, params: unknown) => {
+  approve: (toolName: string, params: JsonValue) => {
     if (config.approvalMode === "none") {
       return Effect.succeed(true);
     }

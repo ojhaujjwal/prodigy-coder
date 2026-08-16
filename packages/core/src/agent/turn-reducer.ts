@@ -2,7 +2,13 @@ import { Option, Result, Schema } from "effect";
 import { Response, Tool } from "effect/unstable/ai";
 import type { ToolApprovalRequest } from "../capabilities/human-interaction.ts";
 import type { ToolApprovalRequestPart, ToolApprovalResponsePart, ToolResultPart } from "../capabilities/session.ts";
-import { mapAgentFinishReason, type AgentEvent, type AgentFinishReason, type JsonValue } from "./agent-event.ts";
+import {
+  mapAgentFinishReason,
+  type AgentEvent,
+  type AgentFinishReason,
+  type JsonValue,
+  type ToolOutcome
+} from "./agent-event.ts";
 import { ToolSystemError } from "./agent-error.ts";
 
 /** A tool call whose params were decoded to JSON-safe form, recorded in the turn state. */
@@ -49,7 +55,7 @@ type TurnReduction = {
   readonly event: Option.Option<AgentEvent>;
 };
 
-const decodeJson = (value: unknown) =>
+const decodeJson = <Value>(value: Value) =>
   Schema.decodeUnknownResult(Schema.Json)(value).pipe(
     Result.mapError((cause) => new ToolSystemError({ reason: "Serialization", cause }))
   );
@@ -60,17 +66,19 @@ const decodeJson = (value: unknown) =>
  * variant, and failures are `ToolSystemError`s the caller projects onto the
  * stream's error channel.
  */
-export const reducePart = (
-  tools: Readonly<Record<string, Tool.Any>>,
+export const reducePart = <TTools extends Record<string, Tool.Any>>(
+  tools: TTools,
   state: TurnState,
-  part: Response.StreamPart<Record<string, Tool.Any>>
+  part: Response.StreamPart<TTools>
 ): Result.Result<TurnReduction, ToolSystemError> => {
   switch (part.type) {
-    case "text-delta":
+    case "text-delta": {
+      const textEvent: AgentEvent = { type: "text-delta", delta: part.delta };
       return Result.succeed({
         state: { ...state, assistantText: state.assistantText + part.delta },
-        event: Option.some({ type: "text-delta", delta: part.delta } satisfies AgentEvent)
+        event: Option.some(textEvent)
       });
+    }
     case "tool-call": {
       if (!Object.hasOwn(tools, part.name)) {
         return Result.fail(
@@ -78,23 +86,26 @@ export const reducePart = (
         );
       }
       return decodeJson(part.params).pipe(
-        Result.map((input) => ({
-          state: {
-            ...state,
-            hasToolCalls: true,
-            assistantParts: [
-              ...state.assistantParts,
-              {
-                type: "tool-call",
-                id: part.id,
-                name: part.name,
-                params: input,
-                providerExecuted: part.providerExecuted
-              }
-            ]
-          },
-          event: Option.some({ type: "tool-call", callId: part.id, toolName: part.name, input } satisfies AgentEvent)
-        }))
+        Result.map((input) => {
+          const event: AgentEvent = { type: "tool-call", callId: part.id, toolName: part.name, input };
+          return {
+            state: {
+              ...state,
+              hasToolCalls: true,
+              assistantParts: [
+                ...state.assistantParts,
+                {
+                  type: "tool-call",
+                  id: part.id,
+                  name: part.name,
+                  params: input,
+                  providerExecuted: part.providerExecuted
+                }
+              ]
+            },
+            event: Option.some(event)
+          };
+        })
       );
     }
     case "tool-approval-request": {
@@ -115,6 +126,7 @@ export const reducePart = (
         callId: toolCall.id,
         input: toolCall.params
       };
+      const interactionEvent: AgentEvent = { type: "interaction-requested", request };
       return Result.succeed({
         state: {
           ...state,
@@ -128,7 +140,7 @@ export const reducePart = (
             { type: "tool-approval-request", approvalId: part.approvalId, toolCallId: part.toolCallId }
           ]
         },
-        event: Option.some({ type: "interaction-requested", request } satisfies AgentEvent)
+        event: Option.some(interactionEvent)
       });
     }
     case "tool-result": {
@@ -136,23 +148,27 @@ export const reducePart = (
         return Result.succeed({ state, event: Option.none() });
       }
       return decodeJson(part.encodedResult).pipe(
-        Result.map((output) => ({
-          state: {
-            ...state,
-            toolParts: [
-              ...state.toolParts,
-              { type: "tool-result", id: part.id, name: part.name, isFailure: part.isFailure, result: output }
-            ]
-          },
-          event: Option.some({
+        Result.map((output) => {
+          const outcome: ToolOutcome = part.isFailure
+            ? { _tag: "Failed", error: JSON.stringify(output) ?? "Tool execution failed" }
+            : { _tag: "Success", output };
+          const event: AgentEvent = {
             type: "tool-result",
             callId: part.id,
             toolName: part.name,
-            outcome: part.isFailure
-              ? { _tag: "Failed", error: JSON.stringify(output) ?? "Tool execution failed" }
-              : { _tag: "Success", output }
-          } satisfies AgentEvent)
-        }))
+            outcome
+          };
+          return {
+            state: {
+              ...state,
+              toolParts: [
+                ...state.toolParts,
+                { type: "tool-result", id: part.id, name: part.name, isFailure: part.isFailure, result: output }
+              ]
+            },
+            event: Option.some(event)
+          };
+        })
       );
     }
     case "finish":

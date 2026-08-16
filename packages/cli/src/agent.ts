@@ -2,6 +2,8 @@ import * as LanguageModel from "effect/unstable/ai/LanguageModel";
 import { Effect, Option, Stream } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Response from "effect/unstable/ai/Response";
+import { Predicate, Schema } from "effect";
+import type { JsonValue } from "@prodigy/core";
 import type { Session, Message, TextPart, ToolCallPart, ToolResultPart } from "./session.ts";
 import type { ConfigData } from "./config.ts";
 import type { OutputEvent } from "./output.ts";
@@ -13,10 +15,10 @@ export interface AgentConfig {
   readonly cwd?: string;
 }
 
-const formatToolResult = (encodedResult: unknown): string => {
+const formatToolResult = (encodedResult: JsonValue): string => {
   if (Array.isArray(encodedResult)) {
     return encodedResult.join("\n");
-  } else if (typeof encodedResult === "string") {
+  } else if (Predicate.isString(encodedResult)) {
     return encodedResult;
   } else {
     return JSON.stringify(encodedResult);
@@ -50,7 +52,7 @@ const streamPartToOutputEvent = (part: Response.AnyPart): Option.Option<OutputEv
         type: "tool-result",
         id: part.id,
         name: part.name,
-        result: formatToolResult(part.encodedResult),
+        result: formatToolResult(Schema.decodeUnknownSync(Schema.Json)(part.encodedResult)),
         isError: part.isFailure
       });
     }
@@ -133,7 +135,9 @@ export const runAgent = (userMessages: readonly string[], agentConfig: AgentConf
                   result: part.encodedResult
                 });
                 return Effect.logDebug(
-                  `Tool result: ${part.name} -> ${formatToolResult(part.encodedResult).slice(0, 200)}...`
+                  `Tool result: ${part.name} -> ${formatToolResult(
+                    Schema.decodeUnknownSync(Schema.Json)(part.encodedResult)
+                  ).slice(0, 200)}...`
                 );
               }
               case "finish":

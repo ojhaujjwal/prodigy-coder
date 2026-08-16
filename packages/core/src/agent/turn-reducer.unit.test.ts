@@ -10,7 +10,8 @@ const EchoTool = Tool.make("echo", {
   success: Schema.Struct({ value: Schema.String }),
   failureMode: "return"
 });
-const tools = { echo: EchoTool };
+const tools = { echo: EchoTool } as const;
+const untypedTools = Object.fromEntries(new Map<string, Tool.Any>([["echo", EchoTool]]));
 
 describe("reducePart", () => {
   it("appends text deltas and emits a text-delta event", () => {
@@ -43,7 +44,7 @@ describe("reducePart", () => {
 
   it("fails with UnknownTool for an unregistered tool name", () => {
     const result = reducePart(
-      tools,
+      untypedTools,
       emptyTurnState(),
       Response.toolCallPart({ id: "c1", name: "nope", params: {}, providerExecuted: false })
     );
@@ -121,7 +122,7 @@ describe("reducePart", () => {
     const state = emptyTurnState();
     const reduction = Result.getOrThrow(
       reducePart(
-        tools,
+        untypedTools,
         state,
         Response.toolResultPart({
           id: "c1",

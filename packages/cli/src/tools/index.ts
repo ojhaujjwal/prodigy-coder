@@ -12,6 +12,7 @@ import { AskUserTool, makeAskUserHandler } from "./askUser.ts";
 import { LoadSkillTool, loadSkillHandler } from "./loadSkill.ts";
 import { SkillsRepo } from "../skills.ts";
 import { ApprovalGate, DefaultApprovalGateLayer, approvalDeniedError } from "../approval-gate.ts";
+import type { JsonValue } from "@prodigy/core";
 
 export const AgenticToolkit = Toolkit.make(
   ShellTool,
@@ -45,7 +46,7 @@ const withLogging =
     );
 
 export const withApproval =
-  <P, C, A, E, R>(
+  <P extends JsonValue, C, A, E, R>(
     toolName: string,
     gate: typeof ApprovalGate.Service,
     handler: (params: P, context: C) => Effect.Effect<A, E, R>

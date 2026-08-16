@@ -12,14 +12,10 @@ type AssistantPart = { readonly type: "text"; readonly text: string } | Assistan
 export const assembleMessages = (state: TurnState) => {
   const messages: Array<Message> = [];
   if (state.assistantParts.length > 0 || state.assistantText.length > 0) {
+    const textPart: AssistantPart = { type: "text", text: state.assistantText };
     const content: string | ReadonlyArray<AssistantPart> =
       state.assistantParts.length > 0
-        ? [
-            ...(state.assistantText.length > 0
-              ? [{ type: "text", text: state.assistantText } satisfies AssistantPart]
-              : []),
-            ...state.assistantParts
-          ]
+        ? [...(state.assistantText.length > 0 ? [textPart] : []), ...state.assistantParts]
         : state.assistantText;
     messages.push({ role: "assistant", content });
   }

@@ -62,7 +62,10 @@ export const approvalDecisionFromInteraction = (
     case "Approved":
       return { _tag: "Approved" };
     case "Denied":
-      return { _tag: "Denied", ...(response.reason === undefined ? {} : { reason: response.reason }) };
+      if (response.reason === undefined) {
+        return { _tag: "Denied" };
+      }
+      return { _tag: "Denied", reason: response.reason };
     case "Answered":
       return { _tag: "InvalidResponse" };
   }

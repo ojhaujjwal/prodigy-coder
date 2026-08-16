@@ -47,11 +47,14 @@ const resolveApproval = (
       case "Approved":
         return { type: "tool-approval-response", approvalId, approved: true };
       case "Denied":
+        if (decision.reason === undefined) {
+          return { type: "tool-approval-response", approvalId, approved: false };
+        }
         return {
           type: "tool-approval-response",
           approvalId,
           approved: false,
-          ...(decision.reason === undefined ? {} : { reason: decision.reason })
+          reason: decision.reason
         };
       case "InvalidResponse":
         return yield* agentErrorFromHumanInteractionError(new HumanInteractionError({ reason: "InvalidResponse" }));
@@ -94,8 +97,9 @@ export const executeTurn = Effect.fn("TurnExecution.execute")(function* <TTools 
     )
   );
 
+  const turnStartedEvent: AgentEvent = { type: "turn-started", turn };
   const stream = Stream.concat(
-    Stream.succeed({ type: "turn-started", turn } satisfies AgentEvent),
+    Stream.succeed(turnStartedEvent),
     Stream.concat(
       parts,
       Stream.unwrap(

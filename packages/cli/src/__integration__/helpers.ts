@@ -2,20 +2,21 @@ import { Context, Effect, Layer, Schema, Scope, Stream } from "effect";
 import * as LanguageModel from "effect/unstable/ai/LanguageModel";
 import * as Response from "effect/unstable/ai/Response";
 import * as AiError from "effect/unstable/ai/AiError";
-import { Tool } from "effect/unstable/ai";
+import { Prompt, Tool, Toolkit } from "effect/unstable/ai";
 import * as HttpRouter from "effect/unstable/http/HttpRouter";
 import * as HttpServer from "effect/unstable/http/HttpServer";
 import * as HttpServerRequest from "effect/unstable/http/HttpServerRequest";
 import * as HttpServerResponse from "effect/unstable/http/HttpServerResponse";
 import * as BunHttpServer from "@effect/platform-bun/BunHttpServer";
 import type { ConfigData } from "../config.ts";
+import type { JsonValue } from "@prodigy/core";
 import { SessionSchema, type Session, type Message } from "../session.ts";
 import { AgenticToolkit, withApproval, EmptySkillsRepoLayer } from "../tools/index.ts";
 import { ApprovalGate } from "../approval-gate.ts";
 
 export type MockPart =
   | { type: "text-delta"; delta: string }
-  | { type: "tool-call"; id: string; name: string; params: unknown }
+  | { type: "tool-call"; id: string; name: string; params: JsonValue }
   | {
       type: "finish";
       reason: "stop" | "length" | "content-filter" | "tool-calls" | "error" | "pause" | "other" | "unknown";
@@ -53,12 +54,12 @@ const mockPartToEncoded = (part: MockPart): Response.StreamPartEncoded => {
 
 export const createMockLLMLayer = (
   responses: TurnResponse[],
-  onStreamTextCall?: (prompt: unknown) => void
+  onStreamTextCall?: (prompt: Prompt.RawInput) => void
 ): Layer.Layer<LanguageModel.LanguageModel> => {
   let turnIndex = 0;
 
   const service = LanguageModel.make({
-    streamText: (params: { prompt: unknown }) => {
+    streamText: (params: { prompt: Prompt.RawInput }) => {
       if (onStreamTextCall) {
         onStreamTextCall(params.prompt);
       }
@@ -77,15 +78,15 @@ export const createMockLLMLayer = (
 
 export interface StubToolkit {
   layer: Layer.Layer<Tool.HandlersFor<typeof AgenticToolkit.tools>, never, ApprovalGate>;
-  calls: Record<string, unknown[]>;
+  calls: Record<string, JsonValue[]>;
 }
 
 export const createStubToolkit = (overrides?: Record<string, string | Error>): StubToolkit => {
-  const calls: Record<string, unknown[]> = {};
+  const calls: Record<string, JsonValue[]> = {};
 
   const makeHandler =
     <A>(toolName: string, defaultResult: A) =>
-    (_params: unknown, _context: unknown): Effect.Effect<A, AiError.AiError, never> => {
+    (_params: JsonValue, _context: Toolkit.HandlerContext<Tool.Any>): Effect.Effect<A, AiError.AiError, never> => {
       if (!calls[toolName]) {
         calls[toolName] = [];
       }
@@ -147,7 +148,7 @@ export const createTestSession = (id: string, messages?: Message[]): Session =>
 
 export type MockOpenAIResponse =
   | { type: "text"; content: string }
-  | { type: "tool-call"; id: string; name: string; arguments: Record<string, unknown> };
+  | { type: "tool-call"; id: string; name: string; arguments: JsonValue };
 
 const buildSSEChunks = (responses: MockOpenAIResponse[]): Uint8Array[] => {
   const chunks: Uint8Array[] = [];
@@ -389,14 +390,15 @@ const buildResponsesSSEChunks = (responses: MockOpenAIResponse[]): Uint8Array[] 
 
 export const createMockOpenAIServer = (
   responses: MockOpenAIResponse[][]
-): Effect.Effect<{ url: string; calls: unknown[] }, never, Scope.Scope> => {
-  const calls: unknown[] = [];
+): Effect.Effect<{ url: string; calls: JsonValue[] }, never, Scope.Scope> => {
+  const calls: JsonValue[] = [];
   let responseIndex = 0;
 
   const routeEffect = Effect.gen(function* () {
     const request = yield* HttpServerRequest.HttpServerRequest;
     const body = yield* request.json;
-    calls.push(body);
+    const decodedBody = yield* Schema.decodeUnknownEffect(Schema.Json)(body);
+    calls.push(decodedBody);
 
     if (responseIndex >= responses.length) {
       responseIndex = responses.length - 1;
@@ -412,7 +414,8 @@ export const createMockOpenAIServer = (
   const responsesRouteEffect = Effect.gen(function* () {
     const request = yield* HttpServerRequest.HttpServerRequest;
     const body = yield* request.json;
-    calls.push(body);
+    const decodedBody = yield* Schema.decodeUnknownEffect(Schema.Json)(body);
+    calls.push(decodedBody);
 
     if (responseIndex >= responses.length) {
       responseIndex = responses.length - 1;

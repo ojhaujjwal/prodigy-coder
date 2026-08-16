@@ -13,7 +13,7 @@
       "@effect/platform-bun": "^4.0.0-beta.101",
       "@effect/vitest": "^4.0.0-beta.101",
       "effect": "^4.0.0-beta.101",
-      "oxlint": "^1.60.0",
+      "oxlint": "^1.78.0",
       "typescript": "^6.0.2",
       "vitest": "^4.0.0"
     }
@@ -31,7 +31,8 @@
   },
   "devDependencies": {
     "@effect/language-service": "catalog:",
-    "@oxlint/plugins": "^1.60.0",
+    "@ojhaujjwal/effect-backpressure": "^0.0.3",
+    "@oxlint/plugins": "^1.78.0",
     "husky": "^9.1.7",
     "lint-staged": "^16.4.0",
     "oxfmt": "^0.45.0",

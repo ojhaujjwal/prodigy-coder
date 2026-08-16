@@ -1,5 +1,5 @@
 import { Effect, Option, Schema } from "effect";
-import { AiError, Tool } from "effect/unstable/ai";
+import { AiError, Tool, Toolkit } from "effect/unstable/ai";
 import { SkillsRepo } from "../skills.ts";
 
 const LoadSkillParameters = Schema.Struct({
@@ -17,7 +17,10 @@ export const LoadSkillTool = Tool.make("load_skill", {
 
 export type LoadSkillTool = typeof LoadSkillTool;
 
-export const loadSkillHandler = ({ name }: { name: string }, _context: unknown) =>
+export const loadSkillHandler = (
+  { name }: Tool.Parameters<typeof LoadSkillTool>,
+  _context: Toolkit.HandlerContext<typeof LoadSkillTool>
+) =>
   Effect.gen(function* () {
     const skillsRepo = yield* SkillsRepo;
     const skill = yield* skillsRepo.findByName(name);

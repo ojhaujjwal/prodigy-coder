@@ -2,7 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer, Stream } from "effect";
 import { LanguageModel } from "effect/unstable/ai";
 import { makeProdigyAgentLayer, ProdigyAgent } from "../../src/agent/prodigy-agent.ts";
-import { decodeRunRequest } from "../../src/agent/run-request.ts";
+import { decodeRunRequest, type RunRequestInput } from "../../src/agent/run-request.ts";
 import { textProfile } from "./agent-helpers.ts";
 import { storeLayer } from "./wire-run.ts";
 
@@ -31,7 +31,7 @@ const runLayer = Layer.provideMerge(
 );
 
 /** Assert that a malformed request payload is rejected by the boundary decode. */
-const expectRejected = (input: unknown) =>
+const expectRejected = (input: RunRequestInput) =>
   Effect.gen(function* () {
     const failure = yield* decodeRunRequest(input).pipe(Effect.flip);
     expect(failure._tag).toBe("InvalidRunRequest");

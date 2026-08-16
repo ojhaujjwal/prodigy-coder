@@ -1,7 +1,7 @@
 import { describe, expect, layer } from "@effect/vitest";
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Schema } from "effect";
 import * as FileSystem from "effect/FileSystem";
-import { SessionRepo } from "./session.ts";
+import { SessionRepo, SessionSchema } from "./session.ts";
 import { layer as bunServicesLayer } from "@effect/platform-bun/BunServices";
 
 const TEST_SESSION_DIR = "/tmp/.prodigy-coder/test-sessions";
@@ -25,9 +25,9 @@ layer(testLayer)("session", (it) => {
         const repo = yield* SessionRepo;
         const session = yield* repo.create();
 
-        expect(typeof session.id).toBe("string");
-        expect(session.id.length).toBe(8);
-        expect(/^[0-9a-z]{8}$/.test(session.id)).toBe(true);
+        const encoded = Schema.encodeSync(SessionSchema)(session);
+        expect(encoded.id.length).toBe(8);
+        expect(encoded.id).toMatch(/^[0-9a-z]{8}$/);
         expect(session.messages.length === 0).toBe(true);
         expect(session.createdAt instanceof Date).toBe(true);
         expect(session.updatedAt instanceof Date).toBe(true);
