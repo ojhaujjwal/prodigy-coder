@@ -27,7 +27,7 @@ export const applicationLayer = Layer.mergeAll(
   makeFileLoggerLayer(),
   fileSessionStoreLayer(".prodigy-coder/sessions"),
   workspaceLayer("."),
-  commandExecutorLayer
+  commandExecutorLayer(".")
 ).pipe(Layer.provideMerge(BunServices.layer));
 
 export { AppConfig };

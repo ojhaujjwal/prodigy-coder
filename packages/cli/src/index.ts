@@ -105,7 +105,7 @@ const runCoreAgent = (prompt: string, sessionId: Option.Option<string>, config: 
       const capabilityLayer = Layer.mergeAll(
         fileSessionStoreLayer(".prodigy-coder/sessions"),
         workspaceLayer("."),
-        commandExecutorLayer,
+        commandExecutorLayer("."),
         makeHumanInteractionLayer(config.nonInteractive ?? false),
         makeSkillRepositoryLayer(skills)
       ).pipe(Layer.provideMerge(BunServices.layer));

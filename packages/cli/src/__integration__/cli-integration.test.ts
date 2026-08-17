@@ -6,8 +6,6 @@ import * as FileSystem from "effect/FileSystem";
 import { layer as bunServicesLayer } from "@effect/platform-bun/BunServices";
 import { app } from "../index.ts";
 import { loadConfig } from "../config.ts";
-import { SessionRepo } from "../session.ts";
-import { EmptySkillsRepoLayer } from "../tools/index.ts";
 import { SessionStore, fileSessionStoreLayer } from "@prodigy/core";
 
 const runApp = (args: ReadonlyArray<string>) => Command.runWith(app, { version: "0.0.1" })(args);
@@ -23,16 +21,9 @@ const appConfigLayer = loadConfig().pipe(
   Layer.provideMerge(Layer.merge(bunServicesLayer, ConfigProvider.layerAdd(testConfigProvider, { asPrimary: true })))
 );
 
-const sessionLayer = SessionRepo.layer(TEST_SESSION_DIR).pipe(Layer.provideMerge(bunServicesLayer));
 const coreSessionLayer = fileSessionStoreLayer(TEST_SESSION_DIR).pipe(Layer.provideMerge(bunServicesLayer));
 
-const testLayer = Layer.mergeAll(
-  TestConsole.layer,
-  appConfigLayer,
-  sessionLayer,
-  coreSessionLayer,
-  EmptySkillsRepoLayer
-);
+const testLayer = Layer.mergeAll(TestConsole.layer, appConfigLayer, coreSessionLayer);
 
 const cleanupSessions = () =>
   Effect.gen(function* () {

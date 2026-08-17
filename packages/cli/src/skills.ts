@@ -1,4 +1,4 @@
-import { Context, Effect, Layer, Option, Schema } from "effect";
+import { Effect, Layer, Option, Schema } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import { SkillName as CoreSkillName, SkillRepository } from "@prodigy/core";
@@ -9,25 +9,6 @@ export interface Skill {
   readonly content: string;
   readonly source: "cwd" | "home";
   readonly disableModelInvocation: boolean;
-}
-
-export class SkillsRepo extends Context.Service<
-  SkillsRepo,
-  {
-    readonly all: Effect.Effect<readonly Skill[]>;
-    readonly findByName: (name: string) => Effect.Effect<Option.Option<Skill>>;
-    readonly autoInvokable: Effect.Effect<readonly Skill[]>;
-  }
->()("@prodigy/cli/skills/SkillsRepo") {
-  static readonly layer = (skills: readonly Skill[]) =>
-    Layer.succeed(
-      SkillsRepo,
-      SkillsRepo.of({
-        all: Effect.succeed(skills),
-        findByName: (name: string) => Effect.succeed(Option.fromNullishOr(skills.find((s) => s.name === name))),
-        autoInvokable: Effect.succeed(skills.filter((s) => !s.disableModelInvocation))
-      })
-    );
 }
 
 export const makeSkillRepositoryLayer = (skills: readonly Skill[]): Layer.Layer<SkillRepository> =>
