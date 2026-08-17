@@ -1,7 +1,6 @@
 import { BunRuntime, BunServices } from "@effect/platform-bun";
 import { Argument, Command, Flag } from "effect/unstable/cli";
 import { Config, Console, DateTime, Effect, Layer, Option, Predicate, Schema, Stream } from "effect";
-import * as Stdio from "effect/Stdio";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import {
   PositiveInt,
@@ -15,18 +14,18 @@ import {
   makeProdigyAgentLayer
 } from "@prodigy/core";
 import type { AgentError, AgentEvent, JsonValue } from "@prodigy/core";
-import { AppConfig, loadConfig, maskConfig, type ConfigData } from "./config.ts";
+import { AppConfig, maskConfig, type ConfigData } from "./config.ts";
 import { createFormatter } from "./output.ts";
 import type { OutputEvent } from "./output.ts";
 import { buildProviderLayer } from "./provider.ts";
-import { makeFileLoggerLayer } from "./logger.ts";
 import { parseCommand } from "./slash-commands.ts";
 import { discoverSkills, formatSkillsIndex, formatSkillContent, makeSkillRepositoryLayer } from "./skills.ts";
 import type { Skill } from "./skills.ts";
-import { layer as workspaceLayer } from "./adapters/workspace.ts";
-import { layer as commandExecutorLayer } from "./adapters/command-executor.ts";
 import { makeHumanInteractionLayer } from "./human-interaction.ts";
 import { needsApproval } from "./approval.ts";
+import { applicationLayer } from "./application.ts";
+import { layer as workspaceLayer } from "./adapters/workspace.ts";
+import { layer as commandExecutorLayer } from "./adapters/command-executor.ts";
 
 const systemPromptBuilder = (skills: Skill[], config: ConfigData) => {
   const explicitPrompt = config.systemPrompt ?? "";
@@ -35,19 +34,6 @@ const systemPromptBuilder = (skills: Skill[], config: ConfigData) => {
   const skillsIndex = autoInvokable.length > 0 ? formatSkillsIndex(autoInvokable) : "";
 
   return [skillsIndex, explicitPrompt].filter(Boolean).join("\n\n");
-};
-
-const configPathFromArgs = (args: readonly string[]): string | undefined => {
-  for (let index = 0; index < args.length; index++) {
-    const arg = args[index];
-    if (arg?.startsWith("--config=")) {
-      return arg.slice("--config=".length);
-    }
-    if (arg === "--config") {
-      return args[index + 1];
-    }
-  }
-  return undefined;
 };
 
 const agentsPath = Schema.decodeUnknownSync(WorkspacePath)("AGENTS.md");
@@ -351,21 +337,6 @@ export const app = Command.make("prodigy", {}).pipe(
   Command.withDescription("AI coding assistant"),
   Command.withSubcommands([mainCommand, sessionCommand, configCommand])
 );
-
-const appConfigLayer = Layer.unwrap(
-  Stdio.Stdio.pipe(
-    Effect.flatMap((stdio) => stdio.args),
-    Effect.map((args) => loadConfig(configPathFromArgs(args)))
-  )
-);
-
-const applicationLayer = Layer.mergeAll(
-  appConfigLayer,
-  makeFileLoggerLayer(),
-  fileSessionStoreLayer(".prodigy-coder/sessions"),
-  workspaceLayer("."),
-  commandExecutorLayer
-).pipe(Layer.provideMerge(BunServices.layer));
 
 const cli = Command.run(app, {
   version: "0.0.1"
