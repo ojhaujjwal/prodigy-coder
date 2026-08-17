@@ -1,4 +1,4 @@
-import { Crypto, DateTime, Effect, Layer, Option, Schema } from "effect";
+import { Crypto, DateTime, Effect, Layer, Option, PartitionedSemaphore, Schema } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import {
   SessionConflict,
@@ -68,6 +68,7 @@ const make = (sessionDir: string) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const crypto = yield* Crypto.Crypto;
+    const saveLocks = yield* PartitionedSemaphore.make<SessionId>({ permits: 1 });
 
     const sessionPath = (id: SessionId): string => `${sessionDir}/${id}.json`;
 
@@ -103,7 +104,7 @@ const make = (sessionDir: string) =>
       return { session: record, revision: current.value.revision };
     });
 
-    const save = Effect.fn("FileSessionStore.save")(function* (
+    const saveUnlocked = Effect.fn("FileSessionStore.save")(function* (
       checkpoint: SessionCheckpoint
     ): Effect.fn.Return<SessionSnapshot, SessionPersistenceError> {
       const { session, expectedRevision } = checkpoint;
@@ -160,6 +161,9 @@ const make = (sessionDir: string) =>
       return { session: updatedSession, revision: nextRevision };
     });
 
+    const save = (checkpoint: SessionCheckpoint) =>
+      saveLocks.withPermit(checkpoint.session.id)(saveUnlocked(checkpoint));
+
     return { create, load, save };
   });
 
@@ -171,6 +175,9 @@ const make = (sessionDir: string) =>
  *
  * Persists each committed revision as a `PersistedSession` envelope
  * (`formatVersion`, `revision`, `session`) written atomically via a temp file
- * plus rename. A session is durable only after its first successful `save`.
+ * plus rename. Saves are serialized per session within this layer instance so
+ * the revision check and replacement form one compare-and-set operation. A
+ * session is durable only after its first successful `save`; separate
+ * processes must use a single-writer-per-session deployment contract.
  */
 export const layer = (sessionDir: string) => Layer.effect(SessionStore, make(sessionDir));

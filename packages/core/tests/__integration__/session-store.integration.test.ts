@@ -285,6 +285,47 @@ layer(fileLayer)("FileSessionStore", (it) => {
         expect(loaded.session.messages).toEqual([]);
       })
     );
+
+    it.effect("atomically rejects one of two concurrent saves with the same revision", () =>
+      Effect.gen(function* () {
+        yield* cleanupSessions();
+        const store = yield* SessionStore;
+        const created = yield* store.create({});
+        const firstSession: SessionType = {
+          ...created.session,
+          messages: [{ role: "user", content: "first" }]
+        };
+        const secondSession: SessionType = {
+          ...created.session,
+          messages: [{ role: "user", content: "second" }]
+        };
+
+        const outcomes = yield* Effect.all(
+          [firstSession, secondSession].map((session) =>
+            store.save({ session, expectedRevision: created.revision }).pipe(
+              Effect.match({
+                onFailure: (error) => ({ _tag: "failure" as const, error }),
+                onSuccess: (value) => ({ _tag: "success" as const, value })
+              })
+            )
+          ),
+          { concurrency: "unbounded" }
+        );
+        const successes = outcomes.filter((outcome) => outcome._tag === "success");
+        const failures = outcomes.filter((outcome) => outcome._tag === "failure");
+
+        expect(successes).toHaveLength(1);
+        expect(failures).toHaveLength(1);
+        expect(failures[0].error).toBeInstanceOf(SessionPersistenceError);
+        expect(failures[0].error.reason._tag).toBe("SessionConflict");
+
+        const loaded = yield* store.load(created.session.id);
+        expect(loaded.revision).toBe(1);
+        expect(loaded.session.messages).toEqual([
+          { role: "user", content: successes[0].value.session.messages[0].content }
+        ]);
+      })
+    );
   });
 
   describe("load failures", () => {
