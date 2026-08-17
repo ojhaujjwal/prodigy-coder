@@ -1,9 +1,10 @@
-import { Context, Effect, Layer, Option } from "effect";
+import { Context, Effect, Layer, Option, Schema } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
+import { SkillName as CoreSkillName, SkillRepository } from "@prodigy/core";
 
 export interface Skill {
-  readonly name: string;
+  readonly name: CoreSkillName;
   readonly description: string;
   readonly content: string;
   readonly source: "cwd" | "home";
@@ -28,6 +29,15 @@ export class SkillsRepo extends Context.Service<
       })
     );
 }
+
+export const makeSkillRepositoryLayer = (skills: readonly Skill[]): Layer.Layer<SkillRepository> =>
+  Layer.succeed(
+    SkillRepository,
+    SkillRepository.of({
+      findByName: (name) => Effect.succeed(Option.fromUndefinedOr(skills.find((skill) => skill.name === name))),
+      autoInvokable: Effect.succeed(skills.filter((skill) => !skill.disableModelInvocation))
+    })
+  );
 
 export const parseFrontmatter = (
   fileContent: string
@@ -60,13 +70,16 @@ const discoverFromSource = (basePath: string, source: "cwd" | "home") =>
       yield* fs.readFileString(skillFile).pipe(
         Effect.map((content) => {
           Option.tap(parseFrontmatter(content), (parsed) => {
-            skills.push({
-              name: parsed.name,
-              description: parsed.description,
-              content: parsed.content,
-              source,
-              disableModelInvocation: parsed.disableModelInvocation
-            });
+            const name = Schema.decodeUnknownOption(CoreSkillName)(parsed.name);
+            if (Option.isSome(name)) {
+              skills.push({
+                name: name.value,
+                description: parsed.description,
+                content: parsed.content,
+                source,
+                disableModelInvocation: parsed.disableModelInvocation
+              });
+            }
             return Option.none();
           });
         }),
