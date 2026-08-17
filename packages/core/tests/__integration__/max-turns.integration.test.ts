@@ -43,8 +43,7 @@ describe("ProdigyAgent maxTurns", () => {
       const context = yield* Layer.build(runLayer);
       const agent = yield* ProdigyAgent.pipe(Effect.provide(context));
 
-      const request = yield* decodeRunRequest({ prompt: "Hello", maxTurns: 2 });
-      const events = yield* agent.run(request).pipe(Stream.runCollect);
+      const events = yield* agent.run({ prompt: "Hello", maxTurns: 2 }).pipe(Stream.runCollect);
       expect(events.filter((e) => e.type === "turn-started")).toHaveLength(2);
       const ended = events[events.length - 1];
       if (ended.type !== "run-ended") throw new Error("expected run-ended");
@@ -67,8 +66,7 @@ describe("ProdigyAgent maxTurns", () => {
       const context = yield* Layer.build(runLayer);
       const agent = yield* ProdigyAgent.pipe(Effect.provide(context));
 
-      const request = yield* decodeRunRequest({ prompt: "Hello" });
-      const events = yield* agent.run(request).pipe(Stream.runCollect);
+      const events = yield* agent.run({ prompt: "Hello" }).pipe(Stream.runCollect);
       expect(events.filter((e) => e.type === "turn-started")).toHaveLength(50);
       const ended = events[events.length - 1];
       if (ended.type !== "run-ended") throw new Error("expected run-ended");
@@ -80,9 +78,7 @@ describe("ProdigyAgent maxTurns", () => {
     Effect.gen(function* () {
       const context = yield* Layer.build(runLayer);
       const agent = yield* ProdigyAgent.pipe(Effect.provide(context));
-      const request = yield* decodeRunRequest({ prompt: "Hello", maxTurns: 51 });
-
-      const failure = yield* agent.run(request).pipe(Stream.runCollect, Effect.flip);
+      const failure = yield* agent.run({ prompt: "Hello", maxTurns: 51 }).pipe(Stream.runCollect, Effect.flip);
       expect(failure._tag).toBe("InvalidRunRequest");
     })
   );
@@ -108,8 +104,7 @@ describe("ProdigyAgent maxTurns", () => {
       );
       const agent = yield* ProdigyAgent.pipe(Effect.provide(context));
 
-      const request = yield* decodeRunRequest({ prompt: "Hello", maxTurns: 1 });
-      const events = yield* agent.run(request).pipe(Stream.runCollect);
+      const events = yield* agent.run({ prompt: "Hello", maxTurns: 1 }).pipe(Stream.runCollect);
       const ended = events[events.length - 1];
       if (ended.type !== "run-ended") throw new Error("expected run-ended");
       expect(ended.result._tag).toBe("Finished");

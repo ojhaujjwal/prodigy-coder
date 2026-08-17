@@ -37,7 +37,7 @@ export const scriptedWorkspaceLayer = (initial?: Record<string, string>): Script
         const key = pathOf(path);
         const content = files.get(key);
         return content === undefined
-          ? Effect.fail(new WorkspaceLookupError({ path: key, reason: "NotFound" }))
+          ? Effect.fail(new WorkspaceLookupError({ path: brand(key), reason: "NotFound" }))
           : Effect.succeed(content);
       },
       write: (path, content) =>

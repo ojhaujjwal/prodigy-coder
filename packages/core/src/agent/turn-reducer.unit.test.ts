@@ -42,6 +42,18 @@ describe("reducePart", () => {
     });
   });
 
+  it("fails with Serialization for non-JSON tool-call params", () => {
+    const result = reducePart(
+      untypedTools,
+      emptyTurnState(),
+      Response.toolCallPart({ id: "c1", name: "echo", params: new Date(0), providerExecuted: false })
+    );
+    expect(Result.isFailure(result)).toBe(true);
+    if (Result.isFailure(result)) {
+      expect(result.failure.reason).toBe("Serialization");
+    }
+  });
+
   it("fails with UnknownTool for an unregistered tool name", () => {
     const result = reducePart(
       untypedTools,
@@ -116,6 +128,26 @@ describe("reducePart", () => {
       toolName: "echo",
       outcome: { _tag: "Success", output: { value: "ok" } }
     });
+  });
+
+  it("fails with Serialization for a non-JSON encoded tool result", () => {
+    const result = reducePart(
+      tools,
+      emptyTurnState(),
+      Response.toolResultPart({
+        id: "c1",
+        name: "echo",
+        isFailure: false,
+        result: { value: "ok" },
+        encodedResult: new Date(0),
+        providerExecuted: false,
+        preliminary: false
+      })
+    );
+    expect(Result.isFailure(result)).toBe(true);
+    if (Result.isFailure(result)) {
+      expect(result.failure.reason).toBe("Serialization");
+    }
   });
 
   it("skips preliminary tool results", () => {

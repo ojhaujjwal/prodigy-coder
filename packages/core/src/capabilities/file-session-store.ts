@@ -26,7 +26,7 @@ const SESSION_FORMAT_VERSION = 1;
 
 /** The on-disk envelope: the storage format version, the concurrency revision, and the session record. */
 const PersistedSession = Schema.Struct({
-  formatVersion: Schema.Number,
+  formatVersion: Schema.Literal(SESSION_FORMAT_VERSION),
   revision: SessionRevision,
   session: Session
 });
@@ -61,15 +61,7 @@ const readEnvelope = (
     const persisted = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(PersistedSession))(content.value).pipe(
       Effect.mapError((cause) => new SessionDecodeFailure({ id, cause }))
     );
-    switch (persisted.formatVersion) {
-      case SESSION_FORMAT_VERSION:
-        return Option.some(persisted);
-      default:
-        return yield* new SessionDecodeFailure({
-          id,
-          cause: new Error(`Unsupported session format version ${persisted.formatVersion}`)
-        });
-    }
+    return Option.some(persisted);
   });
 
 const make = (sessionDir: string) =>

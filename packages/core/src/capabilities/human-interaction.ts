@@ -23,7 +23,8 @@ export type InteractionResponse =
   | { readonly _tag: "Answered"; readonly answer: JsonValue };
 
 /** The reasons an interaction channel can fail independently of the interaction's content. */
-export type InteractionErrorReason = "Timeout" | "ChannelClosed" | "InvalidResponse";
+export const InteractionErrorReasonSchema = Schema.Literals(["Timeout", "ChannelClosed", "InvalidResponse"]);
+export type InteractionErrorReason = Schema.Schema.Type<typeof InteractionErrorReasonSchema>;
 
 /**
  * A typed one-shot request/response channel for human interaction, selected at
@@ -40,7 +41,7 @@ export class HumanInteraction extends Context.Service<
 
 /** A failure of the interaction channel itself (timeout, closed channel, invalid response). */
 export class HumanInteractionError extends Schema.TaggedErrorClass<HumanInteractionError>()("HumanInteractionError", {
-  reason: Schema.Literals(["Timeout", "ChannelClosed", "InvalidResponse"])
+  reason: InteractionErrorReasonSchema
 }) {}
 
 /**

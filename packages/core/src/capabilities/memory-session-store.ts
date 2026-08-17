@@ -8,9 +8,9 @@ import {
 } from "./session-store.ts";
 import {
   SessionRevision,
+  Session,
   generateSessionId,
   type Message,
-  type Session,
   type SessionCheckpoint,
   type SessionId,
   type SessionInitial,
@@ -25,6 +25,8 @@ type SessionEntry = {
 type SaveOutcome =
   | { readonly _tag: "conflict"; readonly error: SessionPersistenceError }
   | { readonly _tag: "saved"; readonly snapshot: SessionSnapshot };
+
+const copySession = (session: Session): Session => structuredClone(session);
 
 const make = Effect.gen(function* () {
   const entries = yield* Ref.make<ReadonlyMap<SessionId, SessionEntry>>(new Map());
@@ -51,7 +53,7 @@ const make = Effect.gen(function* () {
     if (entry === undefined) {
       return yield* new SessionLookupError({ reason: new SessionNotFound({ id }) });
     }
-    return { session: entry.session, revision: entry.revision };
+    return { session: copySession(entry.session), revision: entry.revision };
   });
 
   const save = Effect.fn("MemorySessionStore.save")(function* (
@@ -59,7 +61,7 @@ const make = Effect.gen(function* () {
   ): Effect.fn.Return<SessionSnapshot, SessionPersistenceError> {
     const { session, expectedRevision } = checkpoint;
     const now = yield* clock.currentTimeMillis;
-    const updatedSession: Session = { ...session, updatedAt: new Date(now) };
+    const updatedSession = copySession({ ...session, updatedAt: new Date(now) });
 
     const outcome = yield* Ref.modify(entries, (current): [SaveOutcome, ReadonlyMap<SessionId, SessionEntry>] => {
       const currentEntry = current.get(session.id);
@@ -73,7 +75,7 @@ const make = Effect.gen(function* () {
       const nextRevision = SessionRevision.make(currentRevision + 1);
       const next = new Map(current);
       next.set(session.id, { session: updatedSession, revision: nextRevision });
-      return [{ _tag: "saved", snapshot: { session: updatedSession, revision: nextRevision } }, next];
+      return [{ _tag: "saved", snapshot: { session: copySession(updatedSession), revision: nextRevision } }, next];
     });
 
     if (outcome._tag === "conflict") {

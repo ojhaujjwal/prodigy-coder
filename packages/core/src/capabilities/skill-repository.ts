@@ -2,7 +2,7 @@ import { Context, Effect, Option, Schema } from "effect";
 
 /** A discovered skill's model-facing metadata and content. */
 export type Skill = {
-  readonly name: string;
+  readonly name: SkillName;
   readonly description: string;
   readonly content: string;
   readonly disableModelInvocation: boolean;

@@ -2,6 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { Cause, Effect, Exit, Layer, Ref, Stream } from "effect";
 import { AiError, LanguageModel } from "effect/unstable/ai";
 import { SessionPersistenceError, SessionStore, SessionWriteFailure } from "../../src/capabilities/session-store.ts";
+import { SessionId } from "../../src/capabilities/session.ts";
 import { layerNoDeps as memoryStoreLayer } from "../../src/capabilities/memory-session-store.ts";
 import * as BunCrypto from "@effect/platform-bun/BunCrypto";
 import { makeProdigyAgentLayer, ProdigyAgent } from "../../src/agent/prodigy-agent.ts";
@@ -44,7 +45,7 @@ const failingStoreLayer = Layer.effect(
       save: () =>
         Effect.fail(
           new SessionPersistenceError({
-            reason: new SessionWriteFailure({ id: "session", cause: new Error("disk") })
+            reason: new SessionWriteFailure({ id: SessionId.make("session1"), cause: new Error("disk") })
           })
         )
     };

@@ -32,6 +32,7 @@ import type {
   InteractionResponse,
   RunId,
   RunRequest,
+  RunRequestInput,
   Session,
   SessionCheckpoint,
   SessionError,
@@ -66,8 +67,10 @@ it("exposes the curated run-contract surface", () => {
 
   // The run-request and finish-reason vocabulary is directly usable.
   const request: RunRequest = { prompt: "" };
+  const requestInput: RunRequestInput = { prompt: "Hello" };
   const finish: AgentFinishReason = "stop";
   expect(request.prompt).toBe("");
+  expect(requestInput.prompt).toBe("Hello");
   expect(finish).toBe("stop");
 });
 

@@ -3,10 +3,10 @@ import { LanguageModel, Tool } from "effect/unstable/ai";
 import type { SessionSnapshot, SessionInitial } from "../capabilities/session.ts";
 import { checkpointWithMessages } from "../capabilities/session.ts";
 import { SessionStore } from "../capabilities/session-store.ts";
-import { agentErrorFromSessionError, type AgentError } from "./agent-error.ts";
+import { agentErrorFromSessionError, InvalidRunRequest, type AgentError } from "./agent-error.ts";
 import type { AgentEvent } from "./agent-event.ts";
 import type { ResolvedAgentProfile } from "./profile-resolution.ts";
-import { decodeRunRequest, generateRunId, type RunRequest } from "./run-request.ts";
+import { decodeRunRequest, generateRunId, type RunRequest, type RunRequestInput } from "./run-request.ts";
 import { executeTurn, type TurnOutcome } from "./turn-execution.ts";
 
 /** The stable dependencies required to coordinate one Run. */
@@ -25,17 +25,9 @@ const resolveSession = (
   Effect.gen(function* () {
     const initial: SessionInitial = systemPrompt === "" ? {} : { systemPrompt };
     if (sessionId === undefined) {
-      const snapshot = yield* store.create(initial).pipe(Effect.mapError(agentErrorFromSessionError));
-      return {
-        ...snapshot,
-        session: { ...snapshot.session, messages: [...snapshot.session.messages] }
-      };
+      return yield* store.create(initial).pipe(Effect.mapError(agentErrorFromSessionError));
     }
-    const snapshot = yield* store.load(sessionId).pipe(Effect.mapError(agentErrorFromSessionError));
-    return {
-      ...snapshot,
-      session: { ...snapshot.session, messages: [...snapshot.session.messages] }
-    };
+    return yield* store.load(sessionId).pipe(Effect.mapError(agentErrorFromSessionError));
   });
 
 const checkpointUserPrompt = (
@@ -66,13 +58,20 @@ const stoppedEvent = (sessionId: SessionSnapshot["session"]["id"], turns: number
  * until the caller consumes the returned stream.
  */
 export const coordinateRun = <TTools extends Record<string, Tool.Any>>(
-  request: RunRequest,
+  request: RunRequestInput,
   dependencies: RunCoordinatorDependencies<TTools>
 ): Stream.Stream<AgentEvent, AgentError> =>
   Stream.suspend(() =>
     Stream.unwrap(
       Effect.gen(function* () {
         const validatedRequest = yield* decodeRunRequest(request);
+        if (validatedRequest.maxTurns !== undefined && validatedRequest.maxTurns > dependencies.profile.maxTurns) {
+          return yield* new InvalidRunRequest({
+            cause: new Error(
+              `Requested maxTurns ${validatedRequest.maxTurns} exceeds the profile bound ${dependencies.profile.maxTurns}`
+            )
+          });
+        }
         const effectiveMaxTurns =
           validatedRequest.maxTurns === undefined ? dependencies.profile.maxTurns : validatedRequest.maxTurns;
 

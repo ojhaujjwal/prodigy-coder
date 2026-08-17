@@ -33,7 +33,7 @@ const ToolCallPart = Schema.Struct({
   type: Schema.Literal("tool-call"),
   id: Schema.String,
   name: Schema.String,
-  params: Schema.Unknown,
+  params: Schema.Json,
   providerExecuted: Schema.Boolean
 });
 export type ToolCallPart = Schema.Schema.Type<typeof ToolCallPart>;
@@ -50,7 +50,7 @@ const ToolResultPart = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
   isFailure: Schema.Boolean,
-  result: Schema.Unknown
+  result: Schema.Json
 });
 export type ToolResultPart = Schema.Schema.Type<typeof ToolResultPart>;
 
@@ -133,7 +133,7 @@ export const checkpointWithMessages = (
  */
 export const Session = Schema.Struct({
   id: SessionId,
-  messages: Schema.mutable(Schema.Array(Message)),
+  messages: Schema.Array(Message),
   createdAt: Schema.DateFromString,
   updatedAt: Schema.DateFromString
 });

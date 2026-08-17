@@ -1,31 +1,31 @@
 import { Context, Effect, Schema } from "effect";
-import type { SessionCheckpoint, SessionId, SessionInitial, SessionSnapshot } from "./session.ts";
+import { SessionId, type SessionCheckpoint, type SessionInitial, type SessionSnapshot } from "./session.ts";
 
 export class SessionNotFound extends Schema.TaggedErrorClass<SessionNotFound>()("SessionNotFound", {
-  id: Schema.String
+  id: SessionId
 }) {}
 
 export class SessionReadFailure extends Schema.TaggedErrorClass<SessionReadFailure>()("SessionReadFailure", {
-  id: Schema.String,
+  id: SessionId,
   cause: Schema.Defect()
 }) {}
 
 export class SessionDecodeFailure extends Schema.TaggedErrorClass<SessionDecodeFailure>()("SessionDecodeFailure", {
-  id: Schema.String,
+  id: SessionId,
   cause: Schema.Defect()
 }) {}
 
 export class SessionConflict extends Schema.TaggedErrorClass<SessionConflict>()("SessionConflict", {
-  id: Schema.String
+  id: SessionId
 }) {}
 
 export class SessionEncodeFailure extends Schema.TaggedErrorClass<SessionEncodeFailure>()("SessionEncodeFailure", {
-  id: Schema.String,
+  id: SessionId,
   cause: Schema.Defect()
 }) {}
 
 export class SessionWriteFailure extends Schema.TaggedErrorClass<SessionWriteFailure>()("SessionWriteFailure", {
-  id: Schema.String,
+  id: SessionId,
   cause: Schema.Defect()
 }) {}
 

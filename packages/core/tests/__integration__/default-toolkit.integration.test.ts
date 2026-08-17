@@ -2,6 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer } from "effect";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import { makeProdigyAgentLayer } from "../../src/agent/prodigy-agent.ts";
+import { SkillName } from "../../src/capabilities/skill-repository.ts";
 import { defaultAgenticProfile } from "../../src/toolkit/default-toolkit.ts";
 import {
   scriptedCommandExecutorLayer,
@@ -17,7 +18,12 @@ const capabilityLayers = () =>
     scriptedCommandExecutorLayer({ "bash -c echo hi": { exitCode: 0, stdout: "hi\n", stderr: "" } }).layer,
     scriptedInteractionLayer([{ _tag: "Answered", answer: "42" }]).layer,
     scriptedSkillRepositoryLayer([
-      { name: "grill", description: "Grills you", content: "Interview relentlessly.", disableModelInvocation: false }
+      {
+        name: SkillName.make("grill"),
+        description: "Grills you",
+        content: "Interview relentlessly.",
+        disableModelInvocation: false
+      }
     ]),
     Layer.succeed(
       HttpClient.HttpClient,

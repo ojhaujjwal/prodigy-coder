@@ -15,7 +15,7 @@ export const RunRequest = Schema.Struct({
 
 export type RunRequest = Schema.Schema.Type<typeof RunRequest>;
 
-/** The unvalidated representation accepted at the request boundary. */
+/** The encoded representation accepted at the public run boundary. */
 export type RunRequestInput = Schema.Codec.Encoded<typeof RunRequest>;
 
 /**

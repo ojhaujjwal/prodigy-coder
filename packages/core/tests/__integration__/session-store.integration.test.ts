@@ -1,11 +1,17 @@
 import { describe, expect, layer } from "@effect/vitest";
-import { Effect, Layer, Option } from "effect";
+import { Effect, Layer, Option, Schema } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import * as BunCrypto from "@effect/platform-bun/BunCrypto";
 import { layer as fileStoreLayer } from "../../src/capabilities/file-session-store.ts";
 import { layerNoDeps as memoryStoreLayer } from "../../src/capabilities/memory-session-store.ts";
 import { SessionLookupError, SessionPersistenceError, SessionStore } from "../../src/capabilities/session-store.ts";
-import { SessionRevision, type Session, type SessionId } from "../../src/capabilities/session.ts";
+import {
+  Session,
+  SessionRevision,
+  type Message,
+  type Session as SessionType,
+  type SessionId
+} from "../../src/capabilities/session.ts";
 import { createTestSession, platformLayer } from "./helpers.ts";
 
 const memoryLayer = Layer.provideMerge(memoryStoreLayer, BunCrypto.layer);
@@ -50,16 +56,40 @@ layer(memoryLayer)("MemorySessionStore", (it) => {
       Effect.gen(function* () {
         const store = yield* SessionStore;
         const created = yield* store.create({});
-        const session: Session = { ...created.session, messages: [{ role: "user", content: "Hello" }] };
+        const params = { nested: { values: [1] } };
+        const messages: Message[] = [
+          { role: "user", content: "Hello" },
+          {
+            role: "assistant",
+            content: [{ type: "tool-call", id: "call-1", name: "echo", params, providerExecuted: false }]
+          }
+        ];
+        const session: SessionType = { ...created.session, messages };
 
         const saved = yield* store.save({ session, expectedRevision: created.revision });
+        messages.push({ role: "user", content: "Caller mutation" });
+        params.nested.values.push(2);
 
         expect(saved.revision).toBe(1);
-        expect(saved.session.messages).toEqual([{ role: "user", content: "Hello" }]);
+        expect(saved.session.messages).toEqual([
+          { role: "user", content: "Hello" },
+          {
+            role: "assistant",
+            content: [
+              {
+                type: "tool-call",
+                id: "call-1",
+                name: "echo",
+                params: { nested: { values: [1] } },
+                providerExecuted: false
+              }
+            ]
+          }
+        ]);
 
         const loaded = yield* store.load(created.session.id);
         expect(loaded.revision).toBe(1);
-        expect(loaded.session.messages).toEqual([{ role: "user", content: "Hello" }]);
+        expect(loaded.session.messages).toEqual(saved.session.messages);
       })
     );
 
@@ -163,7 +193,36 @@ layer(fileLayer)("FileSessionStore", (it) => {
         const fs = yield* FileSystem.FileSystem;
 
         const created = yield* store.create({});
-        const session: Session = { ...created.session, messages: [{ role: "user", content: "Hello" }] };
+        const session: SessionType = {
+          ...created.session,
+          messages: [
+            { role: "user", content: "Hello" },
+            {
+              role: "assistant",
+              content: [
+                {
+                  type: "tool-call",
+                  id: "call-1",
+                  name: "echo",
+                  params: { nested: { values: [1, true, null] } },
+                  providerExecuted: false
+                }
+              ]
+            },
+            {
+              role: "tool",
+              content: [
+                {
+                  type: "tool-result",
+                  id: "call-1",
+                  name: "echo",
+                  isFailure: false,
+                  result: { nested: [{ value: "ok" }, { value: "done" }] }
+                }
+              ]
+            }
+          ]
+        };
 
         const saved = yield* store.save({ session, expectedRevision: created.revision });
         expect(saved.revision).toBe(1);
@@ -172,16 +231,18 @@ layer(fileLayer)("FileSessionStore", (it) => {
         expect(entries).toEqual([`${created.session.id}.json`]);
 
         const raw = yield* fs.readFileString(`${TEST_SESSION_DIR}/${created.session.id}.json`);
-        const parsed: { formatVersion: number; revision: number; session: { id: string; createdAt: string } } =
-          JSON.parse(raw);
-        expect(parsed.formatVersion).toBe(1);
-        expect(parsed.revision).toBe(1);
-        expect(parsed.session.id).toBe(created.session.id);
-        expect(parsed.session.createdAt).toEqual(expect.any(String));
+        const persisted = Schema.decodeUnknownSync(
+          Schema.Struct({ formatVersion: Schema.Number, revision: SessionRevision, session: Session })
+        )(JSON.parse(raw));
+        expect(persisted.formatVersion).toBe(1);
+        expect(persisted.revision).toBe(1);
+        expect(persisted.session.id).toBe(created.session.id);
+        expect(persisted.session.createdAt).toEqual(created.session.createdAt);
+        expect(persisted.session.messages).toEqual(session.messages);
 
         const loaded = yield* store.load(created.session.id);
         expect(loaded.revision).toBe(1);
-        expect(loaded.session.messages).toEqual([{ role: "user", content: "Hello" }]);
+        expect(loaded.session.messages).toEqual(session.messages);
       })
     );
 
@@ -335,7 +396,7 @@ layer(fileLayer)("a fresh FileSessionStore over the same directory", (it) => {
       yield* cleanupSessions();
       const store = yield* SessionStore;
       const created = yield* store.create({});
-      const session: Session = { ...created.session, messages: [{ role: "user", content: "Hello" }] };
+      const session: SessionType = { ...created.session, messages: [{ role: "user", content: "Hello" }] };
       const saved = yield* store.save({ session, expectedRevision: created.revision });
       persistedId = Option.some(saved.session.id);
 

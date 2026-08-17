@@ -1,6 +1,9 @@
 import { Schema } from "effect";
 import type { AiError } from "effect/unstable/ai";
-import type { HumanInteractionError as HumanInteractionErrorType } from "../capabilities/human-interaction.ts";
+import {
+  InteractionErrorReasonSchema,
+  type HumanInteractionError as HumanInteractionErrorType
+} from "../capabilities/human-interaction.ts";
 import { SessionNotFound } from "../capabilities/session-store.ts";
 import type { SessionError } from "../capabilities/session-store.ts";
 
@@ -9,47 +12,32 @@ export class InvalidRunRequest extends Schema.TaggedErrorClass<InvalidRunRequest
   cause: Schema.optional(Schema.Defect())
 }) {}
 
-/** Reasons an Agent profile can fail eager binding. */
-export type AgentProfileReason = "InvalidMaxTurns";
-
-/** An Agent profile contains invalid configuration. */
-export class AgentProfileError extends Schema.TaggedErrorClass<AgentProfileError>()("AgentProfileError", {
-  reason: Schema.Literals(["InvalidMaxTurns"]),
-  cause: Schema.optional(Schema.Defect())
-}) {}
-
 /** Reasons a session could not be persisted or loaded. */
-export type SessionStorageReason = "Conflict" | "Encode" | "Write" | "Read" | "Decode";
+const SessionStorageReasonSchema = Schema.Literals(["Conflict", "Encode", "Write", "Read", "Decode"]);
+export type SessionStorageReason = Schema.Schema.Type<typeof SessionStorageReasonSchema>;
 
 /** A session storage failure projected into the agent error vocabulary. */
 export class SessionStorageError extends Schema.TaggedErrorClass<SessionStorageError>()("SessionStorageError", {
-  reason: Schema.Literals(["Conflict", "Encode", "Write", "Read", "Decode"]),
+  reason: SessionStorageReasonSchema,
   cause: Schema.optional(Schema.Defect())
 }) {}
 
 /** The provider-neutral categories used to classify model failures. */
-export type ModelReason =
-  | "Transport"
-  | "Authentication"
-  | "RateLimit"
-  | "Quota"
-  | "InvalidRequest"
-  | "ContentPolicy"
-  | "InvalidOutput"
-  | "Provider";
+const ModelReasonSchema = Schema.Literals([
+  "Transport",
+  "Authentication",
+  "RateLimit",
+  "Quota",
+  "InvalidRequest",
+  "ContentPolicy",
+  "InvalidOutput",
+  "Provider"
+]);
+export type ModelReason = Schema.Schema.Type<typeof ModelReasonSchema>;
 
 /** A model failure projected into the agent's public error vocabulary. */
 export class ModelError extends Schema.TaggedErrorClass<ModelError>()("ModelError", {
-  reason: Schema.Literals([
-    "Transport",
-    "Authentication",
-    "RateLimit",
-    "Quota",
-    "InvalidRequest",
-    "ContentPolicy",
-    "InvalidOutput",
-    "Provider"
-  ]),
+  reason: ModelReasonSchema,
   cause: Schema.Defect()
 }) {
   /** Whether callers may retry the model operation for this reason. */
@@ -59,11 +47,12 @@ export class ModelError extends Schema.TaggedErrorClass<ModelError>()("ModelErro
 }
 
 /** The orchestration failures that prevent a tool call from producing a model-visible result. */
-export type ToolSystemReason = "UnknownTool" | "ToolkitMisconfiguration" | "Serialization";
+const ToolSystemReasonSchema = Schema.Literals(["UnknownTool", "ToolkitMisconfiguration", "Serialization"]);
+export type ToolSystemReason = Schema.Schema.Type<typeof ToolSystemReasonSchema>;
 
 /** A tool orchestration failure projected into the agent's public error vocabulary. */
 export class ToolSystemError extends Schema.TaggedErrorClass<ToolSystemError>()("ToolSystemError", {
-  reason: Schema.Literals(["UnknownTool", "ToolkitMisconfiguration", "Serialization"]),
+  reason: ToolSystemReasonSchema,
   cause: Schema.Defect()
 }) {}
 
@@ -71,7 +60,7 @@ export class ToolSystemError extends Schema.TaggedErrorClass<ToolSystemError>()(
 export class InteractionCapabilityError extends Schema.TaggedErrorClass<InteractionCapabilityError>()(
   "InteractionCapabilityError",
   {
-    reason: Schema.Literals(["Timeout", "ChannelClosed", "InvalidResponse"]),
+    reason: InteractionErrorReasonSchema,
     cause: Schema.optional(Schema.Defect())
   }
 ) {}

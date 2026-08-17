@@ -14,7 +14,7 @@ export type WorkspacePath = Schema.Schema.Type<typeof WorkspacePath>;
 
 /** A lookup failure: the path is missing or could not be read. */
 export class WorkspaceLookupError extends Schema.TaggedErrorClass<WorkspaceLookupError>()("WorkspaceLookupError", {
-  path: Schema.String,
+  path: WorkspacePath,
   reason: Schema.Literals(["NotFound", "ReadFailure"]),
   cause: Schema.optional(Schema.Defect())
 }) {}
@@ -23,7 +23,7 @@ export class WorkspaceLookupError extends Schema.TaggedErrorClass<WorkspaceLooku
 export class WorkspacePersistenceError extends Schema.TaggedErrorClass<WorkspacePersistenceError>()(
   "WorkspacePersistenceError",
   {
-    path: Schema.String,
+    path: WorkspacePath,
     reason: Schema.Literals(["WriteFailure", "NoMatch", "Conflict"]),
     cause: Schema.optional(Schema.Defect())
   }
@@ -31,7 +31,7 @@ export class WorkspacePersistenceError extends Schema.TaggedErrorClass<Workspace
 
 /** A search failure: the pattern could not be executed. */
 export class WorkspaceSearchError extends Schema.TaggedErrorClass<WorkspaceSearchError>()("WorkspaceSearchError", {
-  path: Schema.String,
+  path: WorkspacePath,
   reason: Schema.Literals(["SearchFailure"]),
   cause: Schema.optional(Schema.Defect())
 }) {}
