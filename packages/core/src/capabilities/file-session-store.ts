@@ -120,7 +120,10 @@ const make = (sessionDir: string) =>
       const current = yield* readEnvelope(fs, id, sessionPath(id)).pipe(
         Effect.mapError((reason) => new SessionPersistenceError({ reason }))
       );
-      const currentRevision = Option.isNone(current) ? SessionRevision.make(0) : current.value.revision;
+      const currentRevision = current.pipe(
+        Option.map((record) => record.revision),
+        Option.getOrElse(() => SessionRevision.make(0))
+      );
       if (currentRevision !== expectedRevision) {
         return yield* new SessionPersistenceError({ reason: new SessionConflict({ id }) });
       }

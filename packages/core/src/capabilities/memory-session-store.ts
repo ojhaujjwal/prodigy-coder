@@ -1,4 +1,4 @@
-import { Clock, Crypto, Effect, Layer, Ref } from "effect";
+import { Clock, Crypto, Effect, HashMap, Layer, Option, Ref } from "effect";
 import {
   SessionConflict,
   SessionLookupError,
@@ -29,7 +29,7 @@ type SaveOutcome =
 const copySession = (session: Session): Session => structuredClone(session);
 
 const make = Effect.gen(function* () {
-  const entries = yield* Ref.make<ReadonlyMap<SessionId, SessionEntry>>(new Map());
+  const entries = yield* Ref.make(HashMap.empty<SessionId, SessionEntry>());
   const clock = yield* Clock.Clock;
   const crypto = yield* Crypto.Crypto;
 
@@ -49,11 +49,11 @@ const make = Effect.gen(function* () {
     id: SessionId
   ): Effect.fn.Return<SessionSnapshot, SessionLookupError> {
     const current = yield* Ref.get(entries);
-    const entry = current.get(id);
-    if (entry === undefined) {
+    const entry = HashMap.get(current, id);
+    if (Option.isNone(entry)) {
       return yield* new SessionLookupError({ reason: new SessionNotFound({ id }) });
     }
-    return { session: copySession(entry.session), revision: entry.revision };
+    return { session: copySession(entry.value.session), revision: entry.value.revision };
   });
 
   const save = Effect.fn("MemorySessionStore.save")(function* (
@@ -63,18 +63,23 @@ const make = Effect.gen(function* () {
     const now = yield* clock.currentTimeMillis;
     const updatedSession = copySession({ ...session, updatedAt: new Date(now) });
 
-    const outcome = yield* Ref.modify(entries, (current): [SaveOutcome, ReadonlyMap<SessionId, SessionEntry>] => {
-      const currentEntry = current.get(session.id);
-      const currentRevision = currentEntry === undefined ? SessionRevision.make(0) : currentEntry.revision;
+    const outcome = yield* Ref.modify(entries, (current): [SaveOutcome, HashMap.HashMap<SessionId, SessionEntry>] => {
+      const currentEntry = HashMap.get(current, session.id);
+      const currentRevision = currentEntry.pipe(
+        Option.map((entry) => entry.revision),
+        Option.getOrElse(() => SessionRevision.make(0))
+      );
       if (currentRevision !== expectedRevision) {
         return [
-          { _tag: "conflict", error: new SessionPersistenceError({ reason: new SessionConflict({ id: session.id }) }) },
+          {
+            _tag: "conflict",
+            error: new SessionPersistenceError({ reason: new SessionConflict({ id: session.id }) })
+          },
           current
         ];
       }
       const nextRevision = SessionRevision.make(currentRevision + 1);
-      const next = new Map(current);
-      next.set(session.id, { session: updatedSession, revision: nextRevision });
+      const next = HashMap.set(current, session.id, { session: updatedSession, revision: nextRevision });
       return [{ _tag: "saved", snapshot: { session: copySession(updatedSession), revision: nextRevision } }, next];
     });
 

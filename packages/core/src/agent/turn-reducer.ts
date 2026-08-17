@@ -109,11 +109,13 @@ export const reducePart = <TTools extends Record<string, Tool.Any>>(
       );
     }
     case "tool-approval-request": {
-      const toolCall = state.assistantParts.find(
-        (candidate): candidate is AssistantToolCall =>
-          candidate.type === "tool-call" && candidate.id === part.toolCallId
+      const toolCall = Option.fromUndefinedOr(
+        state.assistantParts.find(
+          (candidate): candidate is AssistantToolCall =>
+            candidate.type === "tool-call" && candidate.id === part.toolCallId
+        )
       );
-      if (toolCall === undefined) {
+      if (Option.isNone(toolCall)) {
         return Result.fail(
           new ToolSystemError({
             reason: "Serialization",
@@ -122,9 +124,9 @@ export const reducePart = <TTools extends Record<string, Tool.Any>>(
         );
       }
       const request: ToolApprovalRequest = {
-        toolName: toolCall.name,
-        callId: toolCall.id,
-        input: toolCall.params
+        toolName: toolCall.value.name,
+        callId: toolCall.value.id,
+        input: toolCall.value.params
       };
       const interactionEvent: AgentEvent = { type: "interaction-requested", request };
       return Result.succeed({
