@@ -16,6 +16,8 @@ import { makeFileLoggerLayer } from "./logger.ts";
 import { parseCommand } from "./slash-commands.ts";
 import { discoverSkills, SkillsRepo, formatSkillsIndex, formatSkillContent } from "./skills.ts";
 import type { Skill } from "./skills.ts";
+import { layer as workspaceLayer } from "./adapters/workspace.ts";
+import { layer as commandExecutorLayer } from "./adapters/command-executor.ts";
 
 const systemPromptBuilder = (skills: Skill[], config: ConfigData) => {
   const explicitPrompt = config.systemPrompt ?? "";
@@ -278,6 +280,8 @@ const applicationLayer = Layer.mergeAll(
   makeFileLoggerLayer(),
   SessionRepo.layer(".prodigy-coder/sessions"),
   fileSessionStoreLayer(".prodigy-coder/sessions"),
+  workspaceLayer("."),
+  commandExecutorLayer,
   SkillsRepo.layer([])
 ).pipe(Layer.provideMerge(BunServices.layer));
 
