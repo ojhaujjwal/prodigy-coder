@@ -1,6 +1,7 @@
 import { Crypto, DateTime, Effect, HashMap, Layer, Option, Ref } from "effect";
 import {
   SessionConflict,
+  SessionAdministrationError,
   SessionLookupError,
   SessionNotFound,
   SessionPersistenceError,
@@ -14,7 +15,8 @@ import {
   type SessionCheckpoint,
   type SessionId,
   type SessionInitial,
-  type SessionSnapshot
+  type SessionSnapshot,
+  type SessionSummary
 } from "./session.ts";
 
 type SessionEntry = {
@@ -86,7 +88,25 @@ const make = Effect.gen(function* () {
     return outcome.snapshot;
   });
 
-  return { create, load, save };
+  const list = Effect.fn("MemorySessionStore.list")(function* (): Effect.fn.Return<
+    ReadonlyArray<SessionSummary>,
+    SessionAdministrationError
+  > {
+    const current = yield* Ref.get(entries);
+    return Array.from(HashMap.values(current), (entry) => ({
+      id: entry.session.id,
+      createdAt: entry.session.createdAt,
+      updatedAt: entry.session.updatedAt
+    })).sort((left, right) => right.updatedAt.epochMilliseconds - left.updatedAt.epochMilliseconds);
+  });
+
+  const deleteSession = Effect.fn("MemorySessionStore.delete")(function* (
+    id: SessionId
+  ): Effect.fn.Return<void, SessionAdministrationError> {
+    yield* Ref.update(entries, (current) => HashMap.remove(current, id));
+  });
+
+  return { create, load, save, list, delete: deleteSession };
 });
 
 /**

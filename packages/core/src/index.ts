@@ -35,6 +35,7 @@ export {
   SessionConflict,
   SessionEncodeFailure,
   SessionWriteFailure,
+  SessionAdministrationError,
   SessionLookupError,
   SessionPersistenceError
 } from "./capabilities/session-store.ts";
@@ -45,11 +46,12 @@ export { InteractionErrorReasonSchema, approvalDecisionFromInteraction } from ".
 export { HumanInteractionError } from "./capabilities/human-interaction.ts";
 export type {
   Session,
-  SessionId,
   SessionRevision,
   SessionSnapshot,
-  SessionCheckpoint
+  SessionCheckpoint,
+  SessionSummary
 } from "./capabilities/session.ts";
+export { SessionId } from "./capabilities/session.ts";
 export { Workspace, WorkspacePath } from "./capabilities/workspace.ts";
 export type { WorkspaceError, GrepRequest, GrepMatch, GlobRequest } from "./capabilities/workspace.ts";
 export { CommandExecutor } from "./capabilities/command-executor.ts";

@@ -1,8 +1,9 @@
 import { BunRuntime, BunServices } from "@effect/platform-bun";
 import { Argument, Command, Flag } from "effect/unstable/cli";
-import { Config, Console, Effect, Layer, Option, Schema } from "effect";
+import { Config, Console, DateTime, Effect, Layer, Option, Schema } from "effect";
 import * as Stdio from "effect/Stdio";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
+import { SessionId, SessionStore, fileSessionStoreLayer } from "@prodigy/core";
 import { AppConfig, loadConfig, maskConfig, type ConfigData } from "./config.ts";
 import { SessionRepo } from "./session.ts";
 import { createFormatter } from "./output.ts";
@@ -211,15 +212,15 @@ const mainCommand = Command.make(
 
 const listSessionsCommand = Command.make("list", {}, () =>
   Effect.gen(function* () {
-    const repo = yield* SessionRepo;
-    const sessions = yield* repo.list();
+    const store = yield* SessionStore;
+    const sessions = yield* store.list();
 
     if (sessions.length === 0) {
       yield* Console.log("No sessions found");
     } else {
       for (const session of sessions) {
         yield* Console.log(
-          `${session.id} | Created: ${session.createdAt.toISOString()} | Updated: ${session.updatedAt.toISOString()}`
+          `${session.id} | Created: ${DateTime.formatIso(session.createdAt)} | Updated: ${DateTime.formatIso(session.updatedAt)}`
         );
       }
     }
@@ -230,8 +231,13 @@ const deleteSessionArg = Argument.string("id").pipe(Argument.withDescription("Se
 
 const deleteSessionCommand = Command.make("delete", { id: deleteSessionArg }, ({ id }) =>
   Effect.gen(function* () {
-    const repo = yield* SessionRepo;
-    yield* repo.delete(id);
+    const store = yield* SessionStore;
+    const sessionId = Schema.decodeUnknownOption(SessionId)(id);
+    if (Option.isNone(sessionId)) {
+      yield* Console.log(`Invalid session ID: ${id}`);
+      return;
+    }
+    yield* store.delete(sessionId.value);
     yield* Console.log(`Deleted session ${id}`);
   })
 ).pipe(Command.withDescription("Delete a session"));
@@ -271,6 +277,7 @@ const applicationLayer = Layer.mergeAll(
   appConfigLayer,
   makeFileLoggerLayer(),
   SessionRepo.layer(".prodigy-coder/sessions"),
+  fileSessionStoreLayer(".prodigy-coder/sessions"),
   SkillsRepo.layer([])
 ).pipe(Layer.provideMerge(BunServices.layer));
 

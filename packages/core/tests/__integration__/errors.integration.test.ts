@@ -47,7 +47,9 @@ const failingStoreLayer = Layer.effect(
           new SessionPersistenceError({
             reason: new SessionWriteFailure({ id: SessionId.make("session1"), cause: new Error("disk") })
           })
-        )
+        ),
+      list: store.list,
+      delete: store.delete
     };
   })
 ).pipe(Layer.provide(baseLayers));

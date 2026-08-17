@@ -9,17 +9,19 @@ import {
   SessionPersistenceError,
   SessionReadFailure,
   SessionStore,
-  SessionWriteFailure
+  SessionWriteFailure,
+  SessionAdministrationError
 } from "./session-store.ts";
 import {
   Session,
   SessionRevision,
+  SessionId,
   generateSessionId,
   type Message,
   type SessionCheckpoint,
-  type SessionId,
   type SessionInitial,
-  type SessionSnapshot
+  type SessionSnapshot,
+  type SessionSummary
 } from "./session.ts";
 
 const SESSION_FORMAT_VERSION = 1;
@@ -164,7 +166,47 @@ const make = (sessionDir: string) =>
     const save = (checkpoint: SessionCheckpoint) =>
       saveLocks.withPermit(checkpoint.session.id)(saveUnlocked(checkpoint));
 
-    return { create, load, save };
+    const list = Effect.fn("FileSessionStore.list")(function* (): Effect.fn.Return<
+      ReadonlyArray<SessionSummary>,
+      SessionAdministrationError
+    > {
+      yield* fs
+        .makeDirectory(sessionDir, { recursive: true })
+        .pipe(Effect.mapError((cause) => new SessionAdministrationError({ operation: "list", cause })));
+      const entries = yield* fs
+        .readDirectory(sessionDir)
+        .pipe(Effect.mapError((cause) => new SessionAdministrationError({ operation: "list", cause })));
+      const summaries: SessionSummary[] = [];
+      for (const entry of entries.filter((value) => value.endsWith(".json"))) {
+        const id = Schema.decodeUnknownOption(SessionId)(entry.slice(0, -5));
+        if (Option.isNone(id)) continue;
+        const record = yield* readEnvelope(fs, id.value, sessionPath(id.value)).pipe(
+          Effect.option,
+          Effect.map(Option.flatten)
+        );
+        if (Option.isSome(record)) {
+          summaries.push({
+            id: record.value.session.id,
+            createdAt: record.value.session.createdAt,
+            updatedAt: record.value.session.updatedAt
+          });
+        }
+      }
+      return summaries.sort((left, right) => right.updatedAt.epochMilliseconds - left.updatedAt.epochMilliseconds);
+    });
+
+    const deleteSession = Effect.fn("FileSessionStore.delete")(function* (
+      id: SessionId
+    ): Effect.fn.Return<void, SessionAdministrationError> {
+      yield* saveLocks
+        .withPermit(id)(fs.remove(sessionPath(id)))
+        .pipe(
+          Effect.catch((error) => (error.reason._tag === "NotFound" ? Effect.void : Effect.fail(error))),
+          Effect.mapError((cause) => new SessionAdministrationError({ operation: "delete", id, cause }))
+        );
+    });
+
+    return { create, load, save, list, delete: deleteSession };
   });
 
 /**

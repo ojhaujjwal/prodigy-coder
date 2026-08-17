@@ -8,6 +8,7 @@ import { app } from "../index.ts";
 import { loadConfig } from "../config.ts";
 import { SessionRepo } from "../session.ts";
 import { EmptySkillsRepoLayer } from "../tools/index.ts";
+import { SessionStore, fileSessionStoreLayer } from "@prodigy/core";
 
 const runApp = (args: ReadonlyArray<string>) => Command.runWith(app, { version: "0.0.1" })(args);
 
@@ -23,8 +24,15 @@ const appConfigLayer = loadConfig().pipe(
 );
 
 const sessionLayer = SessionRepo.layer(TEST_SESSION_DIR).pipe(Layer.provideMerge(bunServicesLayer));
+const coreSessionLayer = fileSessionStoreLayer(TEST_SESSION_DIR).pipe(Layer.provideMerge(bunServicesLayer));
 
-const testLayer = Layer.mergeAll(TestConsole.layer, appConfigLayer, sessionLayer, EmptySkillsRepoLayer);
+const testLayer = Layer.mergeAll(
+  TestConsole.layer,
+  appConfigLayer,
+  sessionLayer,
+  coreSessionLayer,
+  EmptySkillsRepoLayer
+);
 
 const cleanupSessions = () =>
   Effect.gen(function* () {
@@ -47,25 +55,25 @@ layer(testLayer)("CLI integration", (it) => {
 
   it.effect("session list with sessions", () =>
     Effect.gen(function* () {
-      const repo = yield* SessionRepo;
-      const session = yield* repo.create();
-      yield* repo.save(session);
+      const store = yield* SessionStore;
+      const snapshot = yield* store.create({});
+      yield* store.save({ session: snapshot.session, expectedRevision: snapshot.revision });
 
       yield* runApp(["session", "list"]);
       const logs = yield* TestConsole.logLines;
-      expect(logs.some((log) => String(log).includes(session.id))).toBe(true);
+      expect(logs.some((log) => String(log).includes(snapshot.session.id))).toBe(true);
 
-      yield* repo.delete(session.id);
+      yield* store.delete(snapshot.session.id);
     })
   );
 
   it.effect("session delete", () =>
     Effect.gen(function* () {
-      const repo = yield* SessionRepo;
-      const session = yield* repo.create();
-      yield* repo.save(session);
+      const store = yield* SessionStore;
+      const snapshot = yield* store.create({});
+      yield* store.save({ session: snapshot.session, expectedRevision: snapshot.revision });
 
-      yield* runApp(["session", "delete", session.id]);
+      yield* runApp(["session", "delete", snapshot.session.id]);
       const logs = yield* TestConsole.logLines;
       expect(logs.some((log) => String(log).includes("Deleted session"))).toBe(true);
     })
@@ -105,29 +113,38 @@ layer(testLayer)("CLI integration", (it) => {
 
   it.effect("session save and load roundtrip persists messages", () =>
     Effect.gen(function* () {
-      const repo = yield* SessionRepo;
+      const store = yield* SessionStore;
       yield* cleanupSessions();
 
-      const session1 = yield* repo.create("system prompt");
-      session1.messages.push({ role: "user", content: "hello" });
-      session1.messages.push({ role: "assistant", content: "hi there" });
-      yield* repo.save(session1);
+      const session1 = yield* store.create({ systemPrompt: "system prompt" });
+      const firstSession = {
+        ...session1.session,
+        messages: [
+          ...session1.session.messages,
+          { role: "user" as const, content: "hello" },
+          { role: "assistant" as const, content: "hi there" }
+        ]
+      };
+      const saved1 = yield* store.save({ session: firstSession, expectedRevision: session1.revision });
 
-      const loaded = yield* repo.load(session1.id);
-      expect(loaded.id).toBe(session1.id);
-      expect(loaded.messages.length).toBe(3);
-      expect(loaded.messages[1].role).toBe("user");
-      expect(loaded.messages[1].content).toBe("hello");
-      expect(loaded.messages[2].role).toBe("assistant");
-      expect(loaded.messages[2].content).toBe("hi there");
+      const loaded = yield* store.load(session1.session.id);
+      expect(loaded.session.id).toBe(session1.session.id);
+      expect(loaded.session.messages.length).toBe(3);
+      expect(loaded.session.messages[1].role).toBe("user");
+      expect(loaded.session.messages[1].content).toBe("hello");
+      expect(loaded.session.messages[2].role).toBe("assistant");
+      expect(loaded.session.messages[2].content).toBe("hi there");
 
-      session1.messages.push({ role: "user", content: "how are you?" });
-      yield* repo.save(session1);
+      const secondSession = {
+        ...saved1.session,
+        messages: [...saved1.session.messages, { role: "user" as const, content: "how are you?" }]
+      };
+      yield* store.save({ session: secondSession, expectedRevision: saved1.revision });
 
-      const loaded2 = yield* repo.load(session1.id);
-      expect(loaded2.messages.length).toBe(4);
-      expect(loaded2.messages[3].role).toBe("user");
-      expect(loaded2.messages[3].content).toBe("how are you?");
+      const loaded2 = yield* store.load(session1.session.id);
+      expect(loaded2.session.messages.length).toBe(4);
+      expect(loaded2.session.messages[3].role).toBe("user");
+      expect(loaded2.session.messages[3].content).toBe("how are you?");
 
       yield* cleanupSessions();
     })

@@ -1,5 +1,11 @@
 import { Context, Effect, Schema } from "effect";
-import { SessionId, type SessionCheckpoint, type SessionInitial, type SessionSnapshot } from "./session.ts";
+import {
+  SessionId,
+  type SessionCheckpoint,
+  type SessionInitial,
+  type SessionSnapshot,
+  type SessionSummary
+} from "./session.ts";
 
 export class SessionNotFound extends Schema.TaggedErrorClass<SessionNotFound>()("SessionNotFound", {
   id: SessionId
@@ -50,6 +56,15 @@ export class SessionPersistenceError extends Schema.TaggedErrorClass<SessionPers
 
 export type SessionError = SessionLookupError | SessionPersistenceError;
 
+export class SessionAdministrationError extends Schema.TaggedErrorClass<SessionAdministrationError>()(
+  "SessionAdministrationError",
+  {
+    operation: Schema.Literals(["list", "delete"]),
+    id: Schema.optional(SessionId),
+    cause: Schema.optional(Schema.Defect())
+  }
+) {}
+
 /**
  * The runtime `SessionStore` port: create/load/save a `SessionRecord` transcript
  * with optimistic compare-and-set. Callers match the family tag first
@@ -61,5 +76,7 @@ export class SessionStore extends Context.Service<
     readonly create: (initial: SessionInitial) => Effect.Effect<SessionSnapshot, SessionPersistenceError>;
     readonly load: (id: SessionId) => Effect.Effect<SessionSnapshot, SessionLookupError>;
     readonly save: (checkpoint: SessionCheckpoint) => Effect.Effect<SessionSnapshot, SessionPersistenceError>;
+    readonly list: () => Effect.Effect<ReadonlyArray<SessionSummary>, SessionAdministrationError>;
+    readonly delete: (id: SessionId) => Effect.Effect<void, SessionAdministrationError>;
   }
 >()("@prodigy/core/capabilities/session-store/SessionStore") {}
