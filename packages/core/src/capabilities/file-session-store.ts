@@ -1,4 +1,4 @@
-import { Clock, Crypto, Effect, Layer, Option, Schema } from "effect";
+import { Crypto, DateTime, Effect, Layer, Option, Schema } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import {
   SessionConflict,
@@ -67,7 +67,6 @@ const readEnvelope = (
 const make = (sessionDir: string) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
-    const clock = yield* Clock.Clock;
     const crypto = yield* Crypto.Crypto;
 
     const sessionPath = (id: SessionId): string => `${sessionDir}/${id}.json`;
@@ -76,8 +75,7 @@ const make = (sessionDir: string) =>
       initial: SessionInitial
     ): Effect.fn.Return<SessionSnapshot, SessionPersistenceError> {
       const id = yield* generateSessionId.pipe(Effect.provideService(Crypto.Crypto, crypto));
-      const now = yield* clock.currentTimeMillis;
-      const timestamp = new Date(now);
+      const timestamp = yield* DateTime.now;
       const messages: Message[] =
         initial.systemPrompt === undefined ? [] : [{ role: "system", content: initial.systemPrompt }];
       const session: Session = { id, messages, createdAt: timestamp, updatedAt: timestamp };
@@ -128,8 +126,7 @@ const make = (sessionDir: string) =>
         return yield* new SessionPersistenceError({ reason: new SessionConflict({ id }) });
       }
 
-      const now = yield* clock.currentTimeMillis;
-      const updatedSession: Session = { ...session, updatedAt: new Date(now) };
+      const updatedSession: Session = { ...session, updatedAt: yield* DateTime.now };
       const nextRevision = SessionRevision.make(currentRevision + 1);
       const persisted: PersistedSession = {
         formatVersion: SESSION_FORMAT_VERSION,

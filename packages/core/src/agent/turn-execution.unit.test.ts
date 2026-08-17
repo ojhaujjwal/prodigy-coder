@@ -1,5 +1,5 @@
 import { expect, it } from "@effect/vitest";
-import { Effect, Layer, Schema, Stream } from "effect";
+import { DateTime, Effect, Layer, Schema, Stream } from "effect";
 import { LanguageModel, Toolkit } from "effect/unstable/ai";
 import type { SessionCheckpoint, SessionSnapshot } from "../capabilities/session.ts";
 import { Session, SessionRevision } from "../capabilities/session.ts";
@@ -35,7 +35,7 @@ it.effect("streams one turn and commits one completed checkpoint", () =>
         Effect.sync(() => {
           saved.push(checkpoint);
           return {
-            session: { ...checkpoint.session, updatedAt: new Date(1) },
+            session: { ...checkpoint.session, updatedAt: DateTime.makeUnsafe(1) },
             revision: SessionRevision.make(checkpoint.expectedRevision + 1)
           };
         })

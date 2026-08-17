@@ -124,7 +124,7 @@ export const checkpointWithMessages = (
 /**
  * The canonical session type: a session id, its messages, and timestamps.
  *
- * Persisted via `DateFromString` timestamps and the validating message
+ * Persisted via UTC ISO timestamps and the validating message
  * schemas, so decoding a stored record re-validates and re-brands the
  * `SessionId` at the persistence boundary.
  *
@@ -134,8 +134,8 @@ export const checkpointWithMessages = (
 export const Session = Schema.Struct({
   id: SessionId,
   messages: Schema.Array(Message),
-  createdAt: Schema.DateFromString,
-  updatedAt: Schema.DateFromString
+  createdAt: Schema.DateTimeUtcFromString,
+  updatedAt: Schema.DateTimeUtcFromString
 });
 export type Session = Schema.Schema.Type<typeof Session>;
 

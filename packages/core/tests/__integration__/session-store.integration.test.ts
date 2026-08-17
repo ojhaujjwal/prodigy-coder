@@ -1,5 +1,5 @@
 import { describe, expect, layer } from "@effect/vitest";
-import { Effect, Layer, Option, Schema } from "effect";
+import { DateTime, Effect, Layer, Option, Schema } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import * as BunCrypto from "@effect/platform-bun/BunCrypto";
 import { layer as fileStoreLayer } from "../../src/capabilities/file-session-store.ts";
@@ -26,8 +26,8 @@ layer(memoryLayer)("MemorySessionStore", (it) => {
         expect(snapshot.revision).toBe(0);
         expect(snapshot.session.id).toMatch(/^[a-z0-9]{8}$/);
         expect(snapshot.session.messages).toEqual([]);
-        expect(snapshot.session.createdAt).toBeInstanceOf(Date);
-        expect(snapshot.session.updatedAt).toBeInstanceOf(Date);
+        expect(DateTime.isUtc(snapshot.session.createdAt)).toBe(true);
+        expect(DateTime.isUtc(snapshot.session.updatedAt)).toBe(true);
       })
     );
 
@@ -101,7 +101,9 @@ layer(memoryLayer)("MemorySessionStore", (it) => {
         const saved = yield* store.save({ session: created.session, expectedRevision: created.revision });
 
         expect(saved.session.createdAt).toEqual(created.session.createdAt);
-        expect(saved.session.updatedAt.getTime()).toBeGreaterThanOrEqual(created.session.updatedAt.getTime());
+        expect(saved.session.updatedAt.epochMilliseconds).toBeGreaterThanOrEqual(
+          created.session.updatedAt.epochMilliseconds
+        );
       })
     );
 
@@ -257,7 +259,9 @@ layer(fileLayer)("FileSessionStore", (it) => {
 
         expect(second.revision).toBe(2);
         expect(second.session.createdAt).toEqual(created.session.createdAt);
-        expect(second.session.updatedAt.getTime()).toBeGreaterThanOrEqual(created.session.updatedAt.getTime());
+        expect(second.session.updatedAt.epochMilliseconds).toBeGreaterThanOrEqual(
+          created.session.updatedAt.epochMilliseconds
+        );
       })
     );
 

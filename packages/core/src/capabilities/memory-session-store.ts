@@ -1,4 +1,4 @@
-import { Clock, Crypto, Effect, HashMap, Layer, Option, Ref } from "effect";
+import { Crypto, DateTime, Effect, HashMap, Layer, Option, Ref } from "effect";
 import {
   SessionConflict,
   SessionLookupError,
@@ -26,19 +26,17 @@ type SaveOutcome =
   | { readonly _tag: "conflict"; readonly error: SessionPersistenceError }
   | { readonly _tag: "saved"; readonly snapshot: SessionSnapshot };
 
-const copySession = (session: Session): Session => structuredClone(session);
+const copySession = (session: Session): Session => ({ ...session, messages: structuredClone(session.messages) });
 
 const make = Effect.gen(function* () {
   const entries = yield* Ref.make(HashMap.empty<SessionId, SessionEntry>());
-  const clock = yield* Clock.Clock;
   const crypto = yield* Crypto.Crypto;
 
   const create = Effect.fn("MemorySessionStore.create")(function* (
     initial: SessionInitial
   ): Effect.fn.Return<SessionSnapshot, SessionPersistenceError> {
     const id = yield* generateSessionId.pipe(Effect.provideService(Crypto.Crypto, crypto));
-    const now = yield* clock.currentTimeMillis;
-    const timestamp = new Date(now);
+    const timestamp = yield* DateTime.now;
     const messages: Message[] =
       initial.systemPrompt === undefined ? [] : [{ role: "system", content: initial.systemPrompt }];
     const session: Session = { id, messages, createdAt: timestamp, updatedAt: timestamp };
@@ -60,8 +58,7 @@ const make = Effect.gen(function* () {
     checkpoint: SessionCheckpoint
   ): Effect.fn.Return<SessionSnapshot, SessionPersistenceError> {
     const { session, expectedRevision } = checkpoint;
-    const now = yield* clock.currentTimeMillis;
-    const updatedSession = copySession({ ...session, updatedAt: new Date(now) });
+    const updatedSession = copySession({ ...session, updatedAt: yield* DateTime.now });
 
     const outcome = yield* Ref.modify(entries, (current): [SaveOutcome, HashMap.HashMap<SessionId, SessionEntry>] => {
       const currentEntry = HashMap.get(current, session.id);
