@@ -17,13 +17,32 @@ export { ProdigyAgent } from "./agent/prodigy-agent.ts";
 export { makeProdigyAgentLayer } from "./agent/prodigy-agent.ts";
 export type { RunRequest, RunRequestInput, RunId } from "./agent/run-request.ts";
 export type { AgentEvent, AgentResult, AgentFinishReason, JsonValue } from "./agent/agent-event.ts";
-export type { AgentError } from "./agent/agent-error.ts";
+export {
+  InvalidRunRequest,
+  SessionStorageError,
+  ModelError,
+  ToolSystemError,
+  InteractionCapabilityError
+} from "./agent/agent-error.ts";
+export type { AgentError, ModelReason, SessionStorageReason, ToolSystemReason } from "./agent/agent-error.ts";
 export { PositiveInt } from "./agent/agent-profile.ts";
 export type { AgentProfile, PositiveInt as PositiveIntType } from "./agent/agent-profile.ts";
 export { SessionStore } from "./capabilities/session-store.ts";
+export {
+  SessionNotFound,
+  SessionReadFailure,
+  SessionDecodeFailure,
+  SessionConflict,
+  SessionEncodeFailure,
+  SessionWriteFailure,
+  SessionLookupError,
+  SessionPersistenceError
+} from "./capabilities/session-store.ts";
 export type { SessionError } from "./capabilities/session-store.ts";
 export { layer as memorySessionStoreLayer } from "./capabilities/memory-session-store.ts";
 export { layer as fileSessionStoreLayer } from "./capabilities/file-session-store.ts";
+export { InteractionErrorReasonSchema, approvalDecisionFromInteraction } from "./capabilities/human-interaction.ts";
+export { HumanInteractionError } from "./capabilities/human-interaction.ts";
 export type {
   Session,
   SessionId,
@@ -32,20 +51,11 @@ export type {
   SessionCheckpoint
 } from "./capabilities/session.ts";
 export { Workspace, WorkspacePath } from "./capabilities/workspace.ts";
-export type {
-  WorkspaceError,
-  WorkspaceLookupError,
-  WorkspacePersistenceError,
-  WorkspaceSearchError,
-  GrepRequest,
-  GrepMatch,
-  GlobRequest
-} from "./capabilities/workspace.ts";
+export type { WorkspaceError, GrepRequest, GrepMatch, GlobRequest } from "./capabilities/workspace.ts";
 export { CommandExecutor } from "./capabilities/command-executor.ts";
 export type { CommandRequest, CommandResult } from "./capabilities/command-executor.ts";
 export { HumanInteraction } from "./capabilities/human-interaction.ts";
 export type {
-  HumanInteractionError,
   InteractionRequest,
   InteractionResponse,
   ToolApprovalRequest,
@@ -53,5 +63,16 @@ export type {
 } from "./capabilities/human-interaction.ts";
 export { SkillRepository, SkillName } from "./capabilities/skill-repository.ts";
 export type { Skill } from "./capabilities/skill-repository.ts";
-export { DefaultAgenticToolkit, defaultAgenticToolkitLayer, defaultAgenticProfile } from "./toolkit/default-toolkit.ts";
-export type { DefaultAgenticHandlers } from "./toolkit/default-toolkit.ts";
+export { CommandExecuteError } from "./capabilities/command-executor.ts";
+export { WorkspaceLookupError, WorkspacePersistenceError, WorkspaceSearchError } from "./capabilities/workspace.ts";
+export {
+  DefaultAgenticToolkit,
+  defaultAgenticToolkitLayer,
+  defaultAgenticProfile,
+  makeDefaultAgenticProfile
+} from "./toolkit/default-toolkit.ts";
+export type {
+  DefaultAgenticHandlers,
+  DefaultAgenticProfileOptions,
+  DefaultToolApprovalPredicate
+} from "./toolkit/default-toolkit.ts";

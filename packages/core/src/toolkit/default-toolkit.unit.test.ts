@@ -1,13 +1,15 @@
+import { Predicate } from "effect";
 import { describe, expect, it } from "vitest";
 import { CommandExecuteError } from "../capabilities/command-executor.ts";
 import { HumanInteractionError } from "../capabilities/human-interaction.ts";
+import { PositiveInt } from "../agent/agent-profile.ts";
 import {
   WorkspaceLookupError,
   WorkspacePath,
   WorkspacePersistenceError,
   WorkspaceSearchError
 } from "../capabilities/workspace.ts";
-import { toToolError } from "./default-toolkit.ts";
+import { makeDefaultAgenticProfile, toToolError } from "./default-toolkit.ts";
 
 describe("toToolError", () => {
   it("projects every capability failure to a model-facing AiError description", () => {
@@ -35,6 +37,27 @@ describe("toToolError", () => {
         method: "handler",
         reason: { _tag: "UnknownError", description }
       });
+    }
+  });
+});
+
+describe("makeDefaultAgenticProfile", () => {
+  it("applies the caller's approval policy to the default toolkit", () => {
+    const profile = makeDefaultAgenticProfile({
+      systemPrompt: "Be concise",
+      maxTurns: PositiveInt.make(3),
+      needsApproval: (toolName) => toolName === "shell"
+    });
+
+    expect(profile.systemPrompt).toBe("Be concise");
+    expect(profile.maxTurns).toBe(3);
+    const shellApproval = profile.toolkit.tools.shell.needsApproval;
+    const readApproval = profile.toolkit.tools.read.needsApproval;
+    expect(Predicate.isFunction(shellApproval)).toBe(true);
+    expect(Predicate.isFunction(readApproval)).toBe(true);
+    if (Predicate.isFunction(shellApproval) && Predicate.isFunction(readApproval)) {
+      expect(shellApproval({}, { toolCallId: "call", messages: [] })).toBe(true);
+      expect(readApproval({}, { toolCallId: "call", messages: [] })).toBe(false);
     }
   });
 });

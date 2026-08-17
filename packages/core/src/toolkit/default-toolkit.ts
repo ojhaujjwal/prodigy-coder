@@ -1,4 +1,4 @@
-import { Effect, Option, Predicate, Schema } from "effect";
+import { Effect, Layer, Option, Predicate, Schema } from "effect";
 import { Tool, Toolkit } from "effect/unstable/ai";
 import * as AiError from "effect/unstable/ai/AiError";
 import * as HttpClient from "effect/unstable/http/HttpClient";
@@ -419,6 +419,116 @@ export type DefaultAgenticToolkit = typeof DefaultAgenticToolkit;
 export type DefaultAgenticHandlers = Toolkit.HandlersFrom<typeof DefaultAgenticToolkit.tools>;
 
 /**
+ * Application-owned policy for deciding which default tools need approval.
+ * The core only applies the decision to native Effect AI tool metadata; it
+ * does not define the policy or its user-facing interaction.
+ */
+export type DefaultToolApprovalPredicate = (toolName: string) => boolean;
+
+const makeDefaultAgenticToolkit = (needsApproval?: DefaultToolApprovalPredicate) => {
+  const approval = (toolName: string) => (needsApproval === undefined ? undefined : () => needsApproval(toolName));
+
+  return Toolkit.make(
+    Tool.make("shell", {
+      description: ShellTool.description,
+      parameters: ShellTool.parametersSchema,
+      success: ShellTool.successSchema,
+      failure: ShellTool.failureSchema,
+      failureMode: "return" as const,
+      dependencies: [CommandExecutor],
+      needsApproval: approval("shell")
+    }),
+    Tool.make("read", {
+      description: ReadTool.description,
+      parameters: ReadTool.parametersSchema,
+      success: ReadTool.successSchema,
+      failure: ReadTool.failureSchema,
+      failureMode: "return" as const,
+      dependencies: [Workspace],
+      needsApproval: approval("read")
+    }),
+    Tool.make("write", {
+      description: WriteTool.description,
+      parameters: WriteTool.parametersSchema,
+      success: WriteTool.successSchema,
+      failure: WriteTool.failureSchema,
+      failureMode: "return" as const,
+      dependencies: [Workspace],
+      needsApproval: approval("write")
+    }),
+    Tool.make("edit", {
+      description: EditTool.description,
+      parameters: EditTool.parametersSchema,
+      success: EditTool.successSchema,
+      failure: EditTool.failureSchema,
+      failureMode: "return" as const,
+      dependencies: [Workspace],
+      needsApproval: approval("edit")
+    }),
+    Tool.make("grep", {
+      description: GrepTool.description,
+      parameters: GrepTool.parametersSchema,
+      success: GrepTool.successSchema,
+      failure: GrepTool.failureSchema,
+      failureMode: "return" as const,
+      dependencies: [Workspace],
+      needsApproval: approval("grep")
+    }),
+    Tool.make("glob", {
+      description: GlobTool.description,
+      parameters: GlobTool.parametersSchema,
+      success: GlobTool.successSchema,
+      failure: GlobTool.failureSchema,
+      failureMode: "return" as const,
+      dependencies: [Workspace],
+      needsApproval: approval("glob")
+    }),
+    Tool.make("webfetch", {
+      description: WebFetchTool.description,
+      parameters: WebFetchTool.parametersSchema,
+      success: WebFetchTool.successSchema,
+      failure: WebFetchTool.failureSchema,
+      failureMode: "return" as const,
+      dependencies: [HttpClient.HttpClient],
+      needsApproval: approval("webfetch")
+    }),
+    Tool.make("ask_user", {
+      description: AskUserTool.description,
+      parameters: AskUserTool.parametersSchema,
+      success: AskUserTool.successSchema,
+      failure: AskUserTool.failureSchema,
+      failureMode: "return" as const,
+      dependencies: [HumanInteraction],
+      needsApproval: approval("ask_user")
+    }),
+    Tool.make("load_skill", {
+      description: LoadSkillTool.description,
+      parameters: LoadSkillTool.parametersSchema,
+      success: LoadSkillTool.successSchema,
+      failure: LoadSkillTool.failureSchema,
+      failureMode: "return" as const,
+      dependencies: [SkillRepository],
+      needsApproval: approval("load_skill")
+    })
+  );
+};
+
+const makeDefaultAgenticToolkitLayer = (
+  toolkit: Toolkit.Toolkit<ReturnType<typeof makeDefaultAgenticToolkit>["tools"]>
+): Layer.Layer<Tool.HandlersFor<ReturnType<typeof makeDefaultAgenticToolkit>["tools"]>> =>
+  toolkit.toLayer({
+    shell: shellHandler,
+    read: readHandler,
+    write: writeHandler,
+    edit: editHandler,
+    grep: grepHandler,
+    glob: globHandler,
+    webfetch: webfetchHandler,
+    ask_user: askUserHandler,
+    load_skill: loadSkillHandler
+  });
+
+/**
  * The handler Layer for the default agentic toolkit. Handlers depend on the
  * capability services (`Workspace`, `CommandExecutor`, `HumanInteraction`,
  * `SkillRepository`, `HttpClient`) — no platform services directly. The
@@ -438,6 +548,31 @@ export const defaultAgenticToolkitLayer = DefaultAgenticToolkit.toLayer(
   }))
 );
 
+/** Options for constructing the default local agent profile. */
+export type DefaultAgenticProfileOptions = {
+  readonly maxTurns?: PositiveInt;
+  readonly systemPrompt?: string;
+  readonly needsApproval?: DefaultToolApprovalPredicate;
+};
+
+/**
+ * Construct a default profile while preserving the exact toolkit and handler
+ * pairing. Approval policy remains in the application composition root.
+ */
+export const makeDefaultAgenticProfile = ({
+  maxTurns = PositiveInt.make(50),
+  systemPrompt = "",
+  needsApproval
+}: DefaultAgenticProfileOptions = {}): AgentProfile<ReturnType<typeof makeDefaultAgenticToolkit>["tools"]> => {
+  const toolkit = makeDefaultAgenticToolkit(needsApproval);
+  return {
+    toolkit,
+    toolkitHandlerLayer: makeDefaultAgenticToolkitLayer(toolkit),
+    systemPrompt,
+    maxTurns
+  };
+};
+
 /**
  * The ready default profile for ordinary local execution: the default agentic
  * toolkit with its handler Layer, declaring the authority services its
@@ -447,9 +582,4 @@ export const defaultAgenticToolkitLayer = DefaultAgenticToolkit.toLayer(
  */
 export const defaultAgenticProfile = (
   maxTurns: PositiveInt = PositiveInt.make(50)
-): AgentProfile<typeof DefaultAgenticToolkit.tools> => ({
-  toolkit: DefaultAgenticToolkit,
-  toolkitHandlerLayer: defaultAgenticToolkitLayer,
-  systemPrompt: "",
-  maxTurns
-});
+): AgentProfile<typeof DefaultAgenticToolkit.tools> => makeDefaultAgenticProfile({ maxTurns });
