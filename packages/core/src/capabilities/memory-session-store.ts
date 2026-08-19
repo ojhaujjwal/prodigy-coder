@@ -1,10 +1,10 @@
 import { Crypto, DateTime, Effect, HashMap, Layer, Option, Ref } from "effect";
 import {
   SessionConflict,
-  SessionAdministrationError,
   SessionLookupError,
   SessionNotFound,
   SessionPersistenceError,
+  SessionQueryError,
   SessionStore
 } from "./session-store.ts";
 import {
@@ -90,7 +90,7 @@ const make = Effect.gen(function* () {
 
   const list = Effect.fn("MemorySessionStore.list")(function* (): Effect.fn.Return<
     ReadonlyArray<SessionSummary>,
-    SessionAdministrationError
+    SessionQueryError
   > {
     const current = yield* Ref.get(entries);
     return Array.from(HashMap.values(current), (entry) => ({
@@ -102,7 +102,7 @@ const make = Effect.gen(function* () {
 
   const deleteSession = Effect.fn("MemorySessionStore.delete")(function* (
     id: SessionId
-  ): Effect.fn.Return<void, SessionAdministrationError> {
+  ): Effect.fn.Return<void, SessionPersistenceError> {
     yield* Ref.update(entries, (current) => HashMap.remove(current, id));
   });
 

@@ -10,7 +10,7 @@ import {
   SessionReadFailure,
   SessionStore,
   SessionWriteFailure,
-  SessionAdministrationError
+  SessionQueryError
 } from "./session-store.ts";
 import {
   Session,
@@ -168,14 +168,14 @@ const make = (sessionDir: string) =>
 
     const list = Effect.fn("FileSessionStore.list")(function* (): Effect.fn.Return<
       ReadonlyArray<SessionSummary>,
-      SessionAdministrationError
+      SessionQueryError
     > {
       yield* fs
         .makeDirectory(sessionDir, { recursive: true })
-        .pipe(Effect.mapError((cause) => new SessionAdministrationError({ operation: "list", cause })));
+        .pipe(Effect.mapError((cause) => new SessionQueryError({ cause })));
       const entries = yield* fs
         .readDirectory(sessionDir)
-        .pipe(Effect.mapError((cause) => new SessionAdministrationError({ operation: "list", cause })));
+        .pipe(Effect.mapError((cause) => new SessionQueryError({ cause })));
       const summaries: SessionSummary[] = [];
       for (const entry of entries.filter((value) => value.endsWith(".json"))) {
         const id = Schema.decodeUnknownOption(SessionId)(entry.slice(0, -5));
@@ -197,12 +197,12 @@ const make = (sessionDir: string) =>
 
     const deleteSession = Effect.fn("FileSessionStore.delete")(function* (
       id: SessionId
-    ): Effect.fn.Return<void, SessionAdministrationError> {
+    ): Effect.fn.Return<void, SessionPersistenceError> {
       yield* saveLocks
         .withPermit(id)(fs.remove(sessionPath(id)))
         .pipe(
           Effect.catch((error) => (error.reason._tag === "NotFound" ? Effect.void : Effect.fail(error))),
-          Effect.mapError((cause) => new SessionAdministrationError({ operation: "delete", id, cause }))
+          Effect.mapError((cause) => new SessionPersistenceError({ reason: new SessionWriteFailure({ id, cause }) }))
         );
     });
 

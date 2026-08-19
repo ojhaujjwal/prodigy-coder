@@ -35,7 +35,7 @@ export {
   SessionConflict,
   SessionEncodeFailure,
   SessionWriteFailure,
-  SessionAdministrationError,
+  SessionQueryError,
   SessionLookupError,
   SessionPersistenceError
 } from "./capabilities/session-store.ts";
