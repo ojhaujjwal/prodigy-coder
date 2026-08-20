@@ -4,9 +4,11 @@ import { Command } from "effect/unstable/cli";
 import * as TestConsole from "effect/testing/TestConsole";
 import * as FileSystem from "effect/FileSystem";
 import { layer as bunServicesLayer } from "@effect/platform-bun/BunServices";
+import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import { app } from "../index.ts";
-import { loadConfig } from "../config.ts";
 import { SessionStore, fileSessionStoreLayer } from "@prodigy/core";
+import { layer as workspaceLayer } from "../adapters/workspace.ts";
+import { layer as commandExecutorLayer } from "../adapters/command-executor.ts";
 
 const runApp = (args: ReadonlyArray<string>) => Command.runWith(app, { version: "0.0.1" })(args);
 
@@ -17,13 +19,18 @@ const testConfigProvider = ConfigProvider.fromUnknown({
 
 const TEST_SESSION_DIR = ".prodigy-coder/test-sessions";
 
-const appConfigLayer = loadConfig().pipe(
-  Layer.provideMerge(Layer.merge(bunServicesLayer, ConfigProvider.layerAdd(testConfigProvider, { asPrimary: true })))
-);
+const configProviderLayer = ConfigProvider.layerAdd(testConfigProvider, { asPrimary: true });
 
-const coreSessionLayer = fileSessionStoreLayer(TEST_SESSION_DIR).pipe(Layer.provideMerge(bunServicesLayer));
+const coreSessionLayer = fileSessionStoreLayer(TEST_SESSION_DIR);
 
-const testLayer = Layer.mergeAll(TestConsole.layer, appConfigLayer, coreSessionLayer);
+const testLayer = Layer.mergeAll(
+  TestConsole.layer,
+  configProviderLayer,
+  coreSessionLayer,
+  workspaceLayer("."),
+  commandExecutorLayer("."),
+  FetchHttpClient.layer
+).pipe(Layer.provideMerge(bunServicesLayer));
 
 const cleanupSessions = () =>
   Effect.gen(function* () {
@@ -75,6 +82,33 @@ layer(testLayer)("CLI integration", (it) => {
       yield* runApp(["config", "show"]);
       const logs = yield* TestConsole.logLines;
       expect(logs.some((log) => String(log).includes("***"))).toBe(true);
+    })
+  );
+
+  it.effect("config show honors the --config flag", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const configPath = yield* Effect.andThen(fs.makeTempDirectoryScoped(), (tmpDir) => {
+        const path = `${tmpDir}/custom.json`;
+        return fs
+          .writeFileString(
+            path,
+            JSON.stringify({
+              provider: { type: "openai-compat", apiKey: "file-key", model: "gpt-4o-mini" },
+              approvalMode: "all",
+              maxTurns: 25,
+              systemPrompt: "From file",
+              nonInteractive: false
+            })
+          )
+          .pipe(Effect.as(path));
+      });
+
+      yield* runApp(["--config", configPath, "config", "show"]);
+      const logs = yield* TestConsole.logLines;
+      const output = logs.map((log) => String(log)).join("\n");
+      expect(output).toContain("gpt-4o-mini");
+      expect(output).toContain('"approvalMode":"all"');
     })
   );
 

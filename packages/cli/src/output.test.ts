@@ -85,6 +85,17 @@ describe("output", () => {
         expect(log).toContain("---");
       })
     );
+
+    it.effect("text formatter processes notice event", () =>
+      Effect.gen(function* () {
+        const formatter = makeTextFormatter();
+        const event: OutputEvent = { type: "notice", message: "Starting a new session." };
+        yield* formatter(event);
+        const logs = yield* TestConsole.logLines;
+        expect(logs.length).toBe(1);
+        expect(String(logs[0])).toContain("Starting a new session.");
+      })
+    );
   });
 
   describe("stream-json formatter", () => {
@@ -179,6 +190,20 @@ describe("output", () => {
         expect(parsed.type).toBe("session");
         expect(parsed.session_id).toBe("abc-123");
         expect(parsed.export_command).toBe("export PRODIGY_SESSION_ID=abc-123");
+      })
+    );
+
+    it.effect("stream-json formatter outputs notice event as content", () =>
+      Effect.gen(function* () {
+        const formatter = makeStreamJsonFormatter();
+        const event: OutputEvent = { type: "notice", message: "Starting a new session." };
+        yield* formatter(event);
+        const outputs = yield* TestConsole.logLines;
+        expect(outputs.length).toBe(1);
+        const parsed = decodeContentOutput(String(outputs[0]));
+        expect(parsed.type).toBe("content");
+        expect(parsed.content[0].type).toBe("text");
+        expect(parsed.content[0].text).toBe("Starting a new session.");
       })
     );
 

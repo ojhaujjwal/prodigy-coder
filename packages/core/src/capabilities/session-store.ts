@@ -73,6 +73,10 @@ export class SessionStore extends Context.Service<
     readonly load: (id: SessionId) => Effect.Effect<SessionSnapshot, SessionLookupError>;
     readonly save: (checkpoint: SessionCheckpoint) => Effect.Effect<SessionSnapshot, SessionPersistenceError>;
     readonly list: () => Effect.Effect<ReadonlyArray<SessionSummary>, SessionQueryError>;
+    /**
+     * Delete the session transcript. Deletion is idempotent: deleting a session
+     * that does not exist (never created or already deleted) succeeds.
+     */
     readonly delete: (id: SessionId) => Effect.Effect<void, SessionPersistenceError>;
   }
 >()("@prodigy/core/capabilities/session-store/SessionStore") {}

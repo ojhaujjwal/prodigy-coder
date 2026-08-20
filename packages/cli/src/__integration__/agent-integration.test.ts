@@ -1,23 +1,13 @@
 import { describe, expect, layer } from "@effect/vitest";
 import { BunServices } from "@effect/platform-bun";
-import { Effect, Layer, Predicate, Schema, Stream } from "effect";
+import { Effect, Layer, Option, Schema, Stream } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import { LanguageModel, Prompt, Response } from "effect/unstable/ai";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
-import {
-  Workspace,
-  WorkspacePath,
-  ProdigyAgent,
-  PositiveInt,
-  SessionStore,
-  makeProdigyAgentLayer,
-  makeDefaultAgenticProfile,
-  memorySessionStoreLayer
-} from "@prodigy/core";
-import type { AgentEvent } from "@prodigy/core";
-import type { OutputEvent } from "../output.ts";
+import { SessionStore, SessionId, memorySessionStoreLayer } from "@prodigy/core";
 import type { ConfigData } from "../config.ts";
-import { needsApproval } from "../approval.ts";
+import { runInvocation } from "../invocation.ts";
+import type { OutputEvent } from "../output.ts";
 import { makeHumanInteractionLayer } from "../human-interaction.ts";
 import { makeSkillRepositoryLayer } from "../skills.ts";
 import { layer as commandExecutorLayer } from "../adapters/command-executor.ts";
@@ -76,42 +66,41 @@ const testToolCall = (id: string, name: string, arguments_: Schema.Json): MockRe
 
 const testText = (content: string): MockResponse => ({ type: "text", content });
 
-const outputEvents = (events: ReadonlyArray<AgentEvent>): ReadonlyArray<OutputEvent> =>
-  events.flatMap((event): ReadonlyArray<OutputEvent> => {
-    switch (event.type) {
-      case "text-delta":
-        return [{ type: "text-delta" as const, delta: event.delta }];
-      case "tool-call":
-        return [{ type: "tool-call" as const, id: event.callId, name: event.toolName, params: event.input }];
-      case "tool-result":
-        return [
-          event.outcome._tag === "Success"
-            ? {
-                type: "tool-result" as const,
-                id: event.callId,
-                name: event.toolName,
-                result: Predicate.isString(event.outcome.output)
-                  ? event.outcome.output
-                  : JSON.stringify(event.outcome.output),
-                isError: false
-              }
-            : {
-                type: "tool-result" as const,
-                id: event.callId,
-                name: event.toolName,
-                result: event.outcome.error,
-                isError: true
-              }
-        ];
-      case "run-ended":
-        return [
-          event.result._tag === "Finished"
-            ? { type: "finish" as const, text: event.result.finishReason }
-            : { type: "error" as const, message: `Max turns exceeded (${event.result.limit})` }
-        ];
-      default:
-        return [];
-    }
+const makeConfig = (overrides: Partial<TestConfig> = {}): ConfigData => ({
+  provider: {
+    type: "openai-compat",
+    model: "test-model"
+  },
+  maxTurns: 50,
+  approvalMode: "none",
+  nonInteractive: true,
+  systemPrompt: undefined,
+  ...overrides
+});
+
+const makeInvocationStream = (
+  userMessages: readonly string[],
+  responses: ReadonlyArray<ReadonlyArray<MockResponse>>,
+  configOverrides: Partial<TestConfig> = {},
+  cwd = "."
+) =>
+  Effect.gen(function* () {
+    const config = makeConfig(configOverrides);
+    const prompts: Array<Prompt.Prompt> = [];
+    const testLayer = Layer.mergeAll(
+      memorySessionStoreLayer,
+      workspaceLayer(cwd),
+      commandExecutorLayer(cwd),
+      makeHumanInteractionLayer(config.nonInteractive ?? false),
+      makeSkillRepositoryLayer([])
+    ).pipe(Layer.provideMerge(BunServices.layer));
+    const runContext = yield* Layer.build(
+      Layer.mergeAll(testLayer, scriptedModelLayer(responses, prompts), FetchHttpClient.layer)
+    );
+
+    const events = runInvocation(userMessages.join("\n\n"), Option.none(), config, []).pipe(Stream.provide(runContext));
+
+    return { config, prompts, events, runContext };
   });
 
 const runAgentWithMockServer = (
@@ -120,73 +109,29 @@ const runAgentWithMockServer = (
   configOverrides: Partial<TestConfig> = {},
   cwd = "."
 ) =>
-  Effect.scoped(
-    Effect.gen(function* () {
-      const config: TestConfig = {
-        maxTurns: 50,
-        approvalMode: "none",
-        nonInteractive: true,
-        systemPrompt: undefined,
-        ...configOverrides
-      };
-      const prompts: Array<Prompt.Prompt> = [];
-      const capabilityLayer = Layer.mergeAll(
-        memorySessionStoreLayer,
-        workspaceLayer(cwd),
-        commandExecutorLayer(cwd),
-        makeHumanInteractionLayer(config.nonInteractive ?? false),
-        makeSkillRepositoryLayer([])
-      ).pipe(Layer.provideMerge(BunServices.layer));
-      const agentsPath = Schema.decodeUnknownSync(WorkspacePath)("AGENTS.md");
-      const agentsMd = yield* Effect.gen(function* () {
-        const workspace = yield* Workspace;
-        return yield* workspace
-          .read(agentsPath)
-          .pipe(Effect.catchTag("WorkspaceLookupError", () => Effect.succeed("")));
-      }).pipe(
-        // @effect-diagnostics-next-line effect/strictEffectProvide:off
-        Effect.provide(capabilityLayer)
-      );
-      const profile = makeDefaultAgenticProfile({
-        maxTurns: PositiveInt.make(config.maxTurns),
-        systemPrompt: [agentsMd.trim(), config.systemPrompt ?? ""].filter(Boolean).join("\n\n"),
-        needsApproval: (toolName) => needsApproval(toolName, config.approvalMode)
-      });
-      const modelLayer = scriptedModelLayer(responses, prompts);
-      const handlerLayer = profile.toolkitHandlerLayer.pipe(
-        Layer.provide(Layer.merge(capabilityLayer, FetchHttpClient.layer))
-      );
-      const agentLayer = Layer.provideMerge(
-        Layer.provideMerge(makeProdigyAgentLayer(profile), capabilityLayer),
-        handlerLayer
-      );
-      const context = yield* Layer.build(Layer.provideMerge(agentLayer, modelLayer));
-      const agent = yield* ProdigyAgent.pipe(Effect.provide(context));
-      const events = yield* agent
-        .run({ prompt: userMessages.join("\n\n"), maxTurns: config.maxTurns })
-        .pipe(Stream.runCollect);
-      const collected = Array.from(events);
-      const started = collected.find(
-        (event): event is Extract<AgentEvent, { readonly type: "run-started" }> => event.type === "run-started"
-      );
-      const session =
-        started === undefined
-          ? undefined
-          : yield* Effect.gen(function* () {
-              const store = yield* SessionStore;
-              return yield* store.load(started.sessionId);
-            }).pipe(Effect.provide(context));
-      return { result: outputEvents(collected), server: { calls: prompts }, session, events: collected };
-    })
-  );
+  Effect.gen(function* () {
+    const { prompts, events, runContext } = yield* makeInvocationStream(userMessages, responses, configOverrides, cwd);
+    const result = yield* events.pipe(Stream.runCollect);
+    const sessionEvent = result.find((event) => event.type === "session-info");
+    const store = yield* SessionStore.pipe(Effect.provide(runContext));
+    const session =
+      sessionEvent && sessionEvent.type === "session-info"
+        ? Option.getOrUndefined(
+            yield* store.load(Schema.decodeUnknownSync(SessionId)(sessionEvent.sessionId)).pipe(Effect.option)
+          )
+        : undefined;
 
-layer(Layer.merge(BunServices.layer, FetchHttpClient.layer))("e2e", (it) => {
+    return { result, session, server: { calls: prompts } };
+  });
+
+layer(Layer.merge(BunServices.layer, FetchHttpClient.layer))("E2E", (it) => {
   it.effect("responds with text from mock OpenAI server", () =>
     Effect.gen(function* () {
       const { result } = yield* runAgentWithMockServer(["hello"], [[testText("Hello from mock server")]]);
-      expect(result.filter((event) => event.type === "text-delta").length).toBeGreaterThan(0);
-      expect(result.filter((event) => event.type === "finish").length).toBeGreaterThanOrEqual(1);
-      expect(result.filter((event) => event.type === "tool-call")).toHaveLength(0);
+      const events = result;
+      expect(events.filter((event) => event.type === "text-delta").length).toBeGreaterThan(0);
+      expect(events.filter((event) => event.type === "finish").length).toBeGreaterThanOrEqual(1);
+      expect(events.filter((event) => event.type === "tool-call")).toHaveLength(0);
     })
   );
 
@@ -196,15 +141,16 @@ layer(Layer.merge(BunServices.layer, FetchHttpClient.layer))("e2e", (it) => {
         ["run echo"],
         [[testToolCall("call-1", "shell", { command: "echo hello-e2e" })], [testText("Done")]]
       );
-      const toolCalls = result.filter((event) => event.type === "tool-call");
-      const toolResults = result.filter((event) => event.type === "tool-result");
+      const events = result;
+      const toolCalls = events.filter((event) => event.type === "tool-call");
+      const toolResults = events.filter((event) => event.type === "tool-result");
       expect(toolCalls).toHaveLength(1);
       expect(toolCalls[0]).toMatchObject({ name: "shell", params: { command: "echo hello-e2e" } });
       expect(toolResults).toHaveLength(1);
       expect(toolResults[0]).toMatchObject({ name: "shell", isError: false });
       if (toolResults[0]?.type === "tool-result") expect(toolResults[0].result).toContain("hello-e2e");
-      expect(result.filter((event) => event.type === "text-delta").length).toBeGreaterThan(0);
-      expect(result.filter((event) => event.type === "finish").length).toBeGreaterThanOrEqual(1);
+      expect(events.filter((event) => event.type === "text-delta").length).toBeGreaterThan(0);
+      expect(events.filter((event) => event.type === "finish").length).toBeGreaterThanOrEqual(1);
     })
   );
 
@@ -226,9 +172,10 @@ layer(Layer.merge(BunServices.layer, FetchHttpClient.layer))("e2e", (it) => {
         {},
         tmpDir
       );
-      expect(result.filter((event) => event.type === "tool-call")).toHaveLength(2);
-      expect(result.filter((event) => event.type === "tool-result")).toHaveLength(2);
-      expect(result.filter((event) => event.type === "finish").length).toBeGreaterThanOrEqual(1);
+      const events = result;
+      expect(events.filter((event) => event.type === "tool-call")).toHaveLength(2);
+      expect(events.filter((event) => event.type === "tool-result")).toHaveLength(2);
+      expect(events.filter((event) => event.type === "finish").length).toBeGreaterThanOrEqual(1);
     })
   );
 
@@ -249,9 +196,10 @@ layer(Layer.merge(BunServices.layer, FetchHttpClient.layer))("e2e", (it) => {
         {},
         tmpDir
       );
-      expect(result.filter((event) => event.type === "tool-call")).toHaveLength(2);
-      expect(result.filter((event) => event.type === "tool-result")).toHaveLength(2);
-      expect(result.filter((event) => event.type === "finish").length).toBeGreaterThanOrEqual(1);
+      const events = result;
+      expect(events.filter((event) => event.type === "tool-call")).toHaveLength(2);
+      expect(events.filter((event) => event.type === "tool-result")).toHaveLength(2);
+      expect(events.filter((event) => event.type === "finish").length).toBeGreaterThanOrEqual(1);
     })
   );
 
@@ -265,9 +213,10 @@ layer(Layer.merge(BunServices.layer, FetchHttpClient.layer))("e2e", (it) => {
           [testText("All complete")]
         ]
       );
-      expect(result.filter((event) => event.type === "tool-call").length).toBeGreaterThanOrEqual(2);
-      expect(result.filter((event) => event.type === "tool-result").length).toBeGreaterThanOrEqual(2);
-      expect(result.filter((event) => event.type === "finish").length).toBeGreaterThanOrEqual(1);
+      const events = result;
+      expect(events.filter((event) => event.type === "tool-call").length).toBeGreaterThanOrEqual(2);
+      expect(events.filter((event) => event.type === "tool-result").length).toBeGreaterThanOrEqual(2);
+      expect(events.filter((event) => event.type === "finish").length).toBeGreaterThanOrEqual(1);
     })
   );
 
@@ -281,7 +230,8 @@ layer(Layer.merge(BunServices.layer, FetchHttpClient.layer))("e2e", (it) => {
         {},
         tmpDir
       );
-      expect(result.filter((event) => event.type === "tool-result")).toEqual(
+      const events = result;
+      expect(events.filter((event) => event.type === "tool-result")).toEqual(
         expect.arrayContaining([expect.objectContaining({ isError: true })])
       );
     })
@@ -337,10 +287,11 @@ layer(Layer.merge(BunServices.layer, FetchHttpClient.layer))("e2e", (it) => {
         { approvalMode: "dangerous", nonInteractive: true },
         tmpDir
       );
-      expect(result).toEqual(
+      const events = result;
+      expect(events).toEqual(
         expect.arrayContaining([expect.objectContaining({ type: "tool-result", name: "shell", isError: true })])
       );
-      expect(result).toEqual(
+      expect(events).toEqual(
         expect.arrayContaining([expect.objectContaining({ type: "tool-result", name: "read", isError: false })])
       );
     })
@@ -407,22 +358,40 @@ layer(Layer.merge(BunServices.layer, FetchHttpClient.layer))("e2e", (it) => {
         {},
         tmpDir
       );
+      const events = result;
       const updatedContent = yield* fs.readFileString(`${tmpDir}/README.md`);
-      expect(result.filter((event) => event.type === "tool-call").map((event) => event.name)).toEqual([
+      expect(events.filter((event) => event.type === "tool-call").map((event) => event.name)).toEqual([
         "glob",
         "read",
         "read",
         "write"
       ]);
-      expect(result.filter((event) => event.type === "tool-result")).toHaveLength(4);
-      expect(result.filter((event) => event.type === "tool-result").every((event) => !event.isError)).toBe(true);
-      expect(result).toEqual(
+      expect(events.filter((event) => event.type === "tool-result")).toHaveLength(4);
+      expect(events.filter((event) => event.type === "tool-result").every((event) => !event.isError)).toBe(true);
+      expect(events).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ type: "text-delta", delta: expect.stringContaining("Updated README.md") })
         ])
       );
       expect(updatedContent).toContain("Coding Agent CLI");
       expect(updatedContent).toContain("prodigy <prompt>");
+    })
+  );
+
+  it.effect("streams events incrementally through per-event handling", () =>
+    Effect.gen(function* () {
+      const { events } = yield* makeInvocationStream(["incremental"], [[testText("first"), testText("second")]], {});
+      const received: OutputEvent[] = [];
+      yield* events.pipe(
+        Stream.runForEach((event) =>
+          Effect.sync(() => {
+            received.push(event);
+          })
+        )
+      );
+      expect(received[0]).toMatchObject({ type: "session-info" });
+      expect(received.some((event) => event.type === "text-delta")).toBe(true);
+      expect(received.at(-1)).toMatchObject({ type: "finish" });
     })
   );
 

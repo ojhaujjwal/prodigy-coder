@@ -22,8 +22,11 @@ A CLI policy that cannot wait for a human prompt. Approval requests are denied a
 The core-owned execution of prompts, model turns, tool calls, approvals, checkpoints, and terminal results. The CLI consumes its lazy event stream.
 
 **OutputEvent**:
-The CLI's presentation-oriented event vocabulary. It includes text deltas, tool calls and results, finish and error messages, and session information; it is not the same protocol as core's `AgentEvent`.
-The CLI translates `AgentEvent` to `OutputEvent` only at the presentation boundary.
+The CLI's presentation-oriented event vocabulary. It includes text deltas, tool calls and results, finish and error messages, notices, and session information; it is not the same protocol as core's `AgentEvent`.
+The CLI translates `AgentEvent` to `OutputEvent` only at the presentation boundary, and the translation is total: every core event is either projected into presentation events or explicitly treated as presentation-internal.
+
+**Notice**:
+A CLI-generated presentation event for invocation-time messages that are not part of the model's output (for example, announcing that a missing session is being restarted). It flows through the same output formats as model output; in stream-JSON it renders as content text so the wire protocol stays stable.
 
 **Output format**:
 The presentation contract used to render CLI events as human-readable text or stream JSON. A format controls presentation and compatibility fields, not the meaning of the underlying agent work.

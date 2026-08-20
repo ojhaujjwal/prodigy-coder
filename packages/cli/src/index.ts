@@ -1,154 +1,15 @@
-import { BunRuntime, BunServices } from "@effect/platform-bun";
+import { BunRuntime } from "@effect/platform-bun";
 import { Argument, Command, Flag } from "effect/unstable/cli";
-import { Config, Console, DateTime, Effect, Layer, Option, Predicate, Schema, Stream } from "effect";
-import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
-import {
-  PositiveInt,
-  ProdigyAgent,
-  SessionId,
-  SessionStore,
-  Workspace,
-  WorkspacePath,
-  fileSessionStoreLayer,
-  makeDefaultAgenticProfile,
-  makeProdigyAgentLayer
-} from "@prodigy/core";
-import type { AgentError, AgentEvent, JsonValue } from "@prodigy/core";
-import { AppConfig, maskConfig, type ConfigData } from "./config.ts";
+import { Config, Console, DateTime, Effect, Option, Schema, Stream } from "effect";
+import { SessionId, SessionStore } from "@prodigy/core";
+import { AppConfig, loadConfig, maskConfig } from "./config.ts";
+import { applicationLayer, configFlag, invoke } from "./invocation.ts";
+import type { InvocationFlags } from "./invocation.ts";
 import { createFormatter } from "./output.ts";
-import type { OutputEvent } from "./output.ts";
-import { buildProviderLayer } from "./provider.ts";
 import { parseCommand } from "./slash-commands.ts";
-import { discoverSkills, formatSkillsIndex, formatSkillContent, makeSkillRepositoryLayer } from "./skills.ts";
-import type { Skill } from "./skills.ts";
-import { makeHumanInteractionLayer } from "./human-interaction.ts";
-import { needsApproval } from "./approval.ts";
-import { applicationLayer } from "./application.ts";
-import { layer as workspaceLayer } from "./adapters/workspace.ts";
-import { layer as commandExecutorLayer } from "./adapters/command-executor.ts";
-
-const systemPromptBuilder = (skills: Skill[], config: ConfigData) => {
-  const explicitPrompt = config.systemPrompt ?? "";
-  const autoInvokable = skills.filter((s) => !s.disableModelInvocation);
-
-  const skillsIndex = autoInvokable.length > 0 ? formatSkillsIndex(autoInvokable) : "";
-
-  return [skillsIndex, explicitPrompt].filter(Boolean).join("\n\n");
-};
-
-const agentsPath = Schema.decodeUnknownSync(WorkspacePath)("AGENTS.md");
-
-const coreErrorMessage = (error: AgentError): string => {
-  switch (error._tag) {
-    case "SessionNotFound":
-      return `Session ${error.id} not found`;
-    case "InvalidRunRequest":
-      return `Invalid run request: ${String(error.cause ?? "unknown request")}`;
-    case "SessionStorageError":
-      return `Session storage error: ${error.reason}`;
-    case "ModelError":
-      return `Model error: ${error.reason}`;
-    case "ToolSystemError":
-      return `Tool error: ${error.reason}`;
-    case "InteractionCapabilityError":
-      return `Interaction error: ${error.reason}`;
-  }
-};
-
-const mapAgentEvent = (event: AgentEvent): OutputEvent | undefined => {
-  switch (event.type) {
-    case "text-delta":
-      return { type: "text-delta", delta: event.delta };
-    case "tool-call":
-      return { type: "tool-call", id: event.callId, name: event.toolName, params: event.input };
-    case "tool-result":
-      return event.outcome._tag === "Success"
-        ? {
-            type: "tool-result",
-            id: event.callId,
-            name: event.toolName,
-            result: formatCoreToolOutput(event.outcome.output),
-            isError: false
-          }
-        : {
-            type: "tool-result",
-            id: event.callId,
-            name: event.toolName,
-            result: event.outcome.error,
-            isError: true
-          };
-    case "run-ended":
-      return event.result._tag === "Finished"
-        ? { type: "finish", text: event.result.finishReason }
-        : { type: "error", message: `Max turns exceeded (${event.result.limit})` };
-    default:
-      return undefined;
-  }
-};
-
-const formatCoreToolOutput = (output: JsonValue): string => {
-  if (Array.isArray(output)) return output.join("\n");
-  return Predicate.isString(output) ? output : JSON.stringify(output);
-};
-
-const errorOutput = (message: string): OutputEvent[] => [{ type: "error", message }];
-
-const runCoreAgent = (prompt: string, sessionId: Option.Option<string>, config: ConfigData, skills: Skill[]) =>
-  Effect.scoped(
-    Effect.gen(function* () {
-      const profile = makeDefaultAgenticProfile({
-        maxTurns: PositiveInt.make(config.maxTurns),
-        systemPrompt: "",
-        needsApproval: (toolName) => needsApproval(toolName, config.approvalMode)
-      });
-      const providerLayer = buildProviderLayer(config.provider).pipe(Layer.provideMerge(FetchHttpClient.layer));
-      const capabilityLayer = Layer.mergeAll(
-        fileSessionStoreLayer(".prodigy-coder/sessions"),
-        workspaceLayer("."),
-        commandExecutorLayer("."),
-        makeHumanInteractionLayer(config.nonInteractive ?? false),
-        makeSkillRepositoryLayer(skills)
-      ).pipe(Layer.provideMerge(BunServices.layer));
-      const handlerLayer = profile.toolkitHandlerLayer.pipe(
-        Layer.provide(Layer.merge(capabilityLayer, FetchHttpClient.layer))
-      );
-      const runtimeLayer = Layer.mergeAll(providerLayer, handlerLayer).pipe(Layer.provideMerge(capabilityLayer));
-      const program = Effect.gen(function* () {
-        const workspace = yield* Workspace;
-        const agentsMd = yield* workspace
-          .read(agentsPath)
-          .pipe(Effect.catchTag("WorkspaceLookupError", () => Effect.succeed("")));
-        const systemPrompt = [agentsMd.trim(), systemPromptBuilder(skills, config)].filter(Boolean).join("\n\n");
-        const configuredProfile = { ...profile, systemPrompt };
-        const agentLayer = makeProdigyAgentLayer(configuredProfile).pipe(Layer.provide(runtimeLayer));
-        const events = yield* Effect.gen(function* () {
-          const agent = yield* ProdigyAgent;
-          const run = Option.match(sessionId, {
-            onNone: () => agent.run({ prompt, maxTurns: config.maxTurns }),
-            onSome: (id) => agent.run({ prompt, sessionId: id, maxTurns: config.maxTurns })
-          });
-          return yield* run.pipe(Stream.runCollect);
-        }).pipe(
-          // @effect-diagnostics-next-line effect/strictEffectProvide:off
-          Effect.provide(agentLayer)
-        );
-        const outputEvents: OutputEvent[] = [];
-        let resultingSessionId: string | undefined;
-        for (const event of events) {
-          if (event.type === "run-started") resultingSessionId = event.sessionId;
-          const mapped = mapAgentEvent(event);
-          if (mapped !== undefined) outputEvents.push(mapped);
-        }
-        return { outputEvents, sessionId: resultingSessionId };
-      });
-      // @effect-diagnostics-next-line effect/strictEffectProvide:off
-      return yield* program.pipe(Effect.provide(runtimeLayer));
-    })
-  );
+import { discoverSkills, formatSkillContent } from "./skills.ts";
 
 const promptArg = Argument.string("prompt").pipe(Argument.optional, Argument.withDescription("The prompt to process"));
-
-const printFlag = Flag.boolean("print").pipe(Flag.withAlias("p"), Flag.withDescription("Print output"));
 
 const outputFormatFlag = Flag.choice("output-format", ["text", "stream-json"] as const).pipe(
   Flag.withAlias("f"),
@@ -176,15 +37,13 @@ const maxTurnsFlag = Flag.integer("max-turns").pipe(
   Flag.optional
 );
 
-const approvalModeFlag = Flag.choice("approval-mode", ["none", "dangerous", "all"]).pipe(
+const approvalModeFlag = Flag.choice("approval-mode", ["none", "dangerous", "all"] as const).pipe(
   Flag.withAlias("a"),
   Flag.withDescription("Approval mode"),
   Flag.optional
 );
 
 const systemPromptFlag = Flag.string("system-prompt").pipe(Flag.withDescription("System prompt"), Flag.optional);
-
-const configFlag = Flag.string("config").pipe(Flag.withDescription("Config file path"), Flag.optional);
 
 const nonInteractiveFlag = Flag.boolean("non-interactive").pipe(
   Flag.withAlias("n"),
@@ -196,7 +55,6 @@ const mainCommand = Command.make(
   "prodigy",
   {
     prompt: promptArg,
-    print: printFlag,
     outputFormat: outputFormatFlag,
     session: sessionFlag,
     continue: continueFlag,
@@ -204,7 +62,6 @@ const mainCommand = Command.make(
     maxTurns: maxTurnsFlag,
     approvalMode: approvalModeFlag,
     systemPrompt: systemPromptFlag,
-    config: configFlag,
     nonInteractive: nonInteractiveFlag
   },
   ({ prompt, outputFormat, session, continue: cont, model, maxTurns, approvalMode, systemPrompt, nonInteractive }) =>
@@ -240,45 +97,10 @@ const mainCommand = Command.make(
         userMessages = [promptText];
       }
 
-      const finalConfig: ConfigData = {
-        ...appConfig,
-        provider: {
-          ...appConfig.provider,
-          model: Option.getOrElse(model, () => appConfig.provider.model)
-        },
-        maxTurns: Option.getOrElse(maxTurns, () => appConfig.maxTurns),
-        approvalMode: Option.getOrElse(approvalMode, () => appConfig.approvalMode),
-        systemPrompt: Option.getOrElse(systemPrompt, () => appConfig.systemPrompt),
-        nonInteractive: nonInteractive || appConfig.nonInteractive
-      };
-
+      const flags: InvocationFlags = { model, maxTurns, approvalMode, systemPrompt, nonInteractive };
       const formatter = createFormatter(outputFormat);
       const promptForRun = userMessages.join("\n\n");
-      const run = runCoreAgent(promptForRun, sessionId, finalConfig, skills);
-      const { outputEvents, sessionId: resultingSessionId } = yield* run.pipe(
-        Effect.catchTag("SessionNotFound", () =>
-          Effect.gen(function* () {
-            if (Option.isSome(sessionId)) {
-              yield* Console.log(`Session ${sessionId.value} not found, starting a new session.`);
-            }
-            return yield* runCoreAgent(promptForRun, Option.none(), finalConfig, skills);
-          })
-        ),
-        Effect.catch((error) =>
-          Effect.succeed({
-            outputEvents: errorOutput(coreErrorMessage(error)),
-            sessionId: undefined
-          })
-        )
-      );
-
-      for (const event of outputEvents) {
-        yield* formatter(event);
-      }
-
-      if (resultingSessionId !== undefined) {
-        yield* formatter({ type: "session-info", sessionId: resultingSessionId });
-      }
+      yield* invoke(promptForRun, sessionId, appConfig, flags, skills).pipe(Stream.runForEach(formatter));
     })
 ).pipe(Command.withDescription("Run the AI coder"));
 
@@ -335,7 +157,9 @@ const configCommand = Command.make("config", {}, () => Effect.void).pipe(
 
 export const app = Command.make("prodigy", {}).pipe(
   Command.withDescription("AI coding assistant"),
-  Command.withSubcommands([mainCommand, sessionCommand, configCommand])
+  Command.withSharedFlags({ config: configFlag }),
+  Command.withSubcommands([mainCommand, sessionCommand, configCommand]),
+  Command.provide((input) => loadConfig(Option.getOrUndefined(input.config)))
 );
 
 const cli = Command.run(app, {

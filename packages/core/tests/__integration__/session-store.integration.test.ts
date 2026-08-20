@@ -140,6 +140,37 @@ layer(memoryLayer)("MemorySessionStore", (it) => {
       })
     );
   });
+
+  describe("delete", () => {
+    it.effect("removes the session so load fails with SessionNotFound and list omits it", () =>
+      Effect.gen(function* () {
+        const store = yield* SessionStore;
+        const created = yield* store.create({});
+        yield* store.save({ session: created.session, expectedRevision: created.revision });
+
+        yield* store.delete(created.session.id);
+
+        const failure = yield* store.load(created.session.id).pipe(Effect.flip);
+        expect(failure).toBeInstanceOf(SessionLookupError);
+        expect(failure.reason._tag).toBe("SessionNotFound");
+
+        const summaries = yield* store.list();
+        expect(summaries.map((summary) => summary.id)).not.toContain(created.session.id);
+      })
+    );
+
+    it.effect("is idempotent: deleting an already-deleted or never-saved id succeeds", () =>
+      Effect.gen(function* () {
+        const store = yield* SessionStore;
+        const created = yield* store.create({});
+        yield* store.save({ session: created.session, expectedRevision: created.revision });
+
+        yield* store.delete(created.session.id);
+        yield* store.delete(created.session.id);
+        yield* store.delete(createTestSession("00000000").id);
+      })
+    );
+  });
 });
 
 const TEST_SESSION_DIR = "/tmp/.prodigy-core/test-sessions";
@@ -428,6 +459,42 @@ layer(fileLayer)("FileSessionStore", (it) => {
 
         expect(failure).toBeInstanceOf(SessionPersistenceError);
         expect(failure.reason._tag).toBe("SessionDecodeFailure");
+      })
+    );
+  });
+
+  describe("delete", () => {
+    it.effect("removes the persisted file so load fails with SessionNotFound and list omits it", () =>
+      Effect.gen(function* () {
+        yield* cleanupSessions();
+        const store = yield* SessionStore;
+        const fs = yield* FileSystem.FileSystem;
+        const created = yield* store.create({});
+        yield* store.save({ session: created.session, expectedRevision: created.revision });
+        expect(yield* fs.exists(`${TEST_SESSION_DIR}/${created.session.id}.json`)).toBe(true);
+
+        yield* store.delete(created.session.id);
+
+        expect(yield* fs.exists(`${TEST_SESSION_DIR}/${created.session.id}.json`)).toBe(false);
+        const failure = yield* store.load(created.session.id).pipe(Effect.flip);
+        expect(failure).toBeInstanceOf(SessionLookupError);
+        expect(failure.reason._tag).toBe("SessionNotFound");
+
+        const summaries = yield* store.list();
+        expect(summaries.map((summary) => summary.id)).not.toContain(created.session.id);
+      })
+    );
+
+    it.effect("is idempotent: deleting an already-deleted or never-saved id succeeds", () =>
+      Effect.gen(function* () {
+        yield* cleanupSessions();
+        const store = yield* SessionStore;
+        const created = yield* store.create({});
+        yield* store.save({ session: created.session, expectedRevision: created.revision });
+
+        yield* store.delete(created.session.id);
+        yield* store.delete(created.session.id);
+        yield* store.delete(createTestSession("00000000").id);
       })
     );
   });
