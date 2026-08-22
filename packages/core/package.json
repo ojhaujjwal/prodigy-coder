@@ -1,5 +1,6 @@
 {
   "name": "@prodigy/core",
+  "sideEffects": false,
   "version": "0.0.0",
   "description": "Runtime-neutral Prodigy SDK core",
   "files": [
@@ -14,7 +15,7 @@
     "ci": "bun run lint && bun run typecheck && bun run test --run",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "bun --bun oxlint src tests",
-    "lint-fix": "bun --bun oxlint --fix src tests",
+    "lint-fix": "bun --bun oxlint --fix --fix-suggestions src tests",
     "test": "bun --bun vitest",
     "coverage": "bun --bun vitest --coverage"
   },

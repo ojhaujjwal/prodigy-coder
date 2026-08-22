@@ -59,7 +59,4 @@ const make = (root: string) =>
     return CommandExecutor.of({ execute });
   });
 
-export const layer = (
-  root: string
-): Layer.Layer<CommandExecutor, never, ChildProcessSpawner.ChildProcessSpawner | Path.Path> =>
-  Layer.effect(CommandExecutor, make(root));
+export const layer = (root: string) => Layer.effect(CommandExecutor, make(root));

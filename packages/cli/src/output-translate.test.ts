@@ -1,15 +1,15 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Schema } from "effect";
-import { SessionId, type AgentEvent, type RunId } from "@prodigy/core";
+import { SessionId, type AgentEvent } from "@prodigy/core";
 import { translateAgentEvent } from "./output-translate.ts";
 
 /** A decoded `SessionId` for use as event fixture data. */
 const session = Schema.decodeUnknownSync(SessionId)("abcd1234");
 
 /** A decoded UUIDv7 `RunId` for use as event fixture data. */
-const runId: RunId = Schema.decodeUnknownSync(
-  Schema.String.pipe(Schema.check(Schema.isUUID(7)), Schema.brand("RunId"))
-)("22222222-2222-7222-8222-222222222222");
+const runId = Schema.decodeUnknownSync(Schema.String.pipe(Schema.check(Schema.isUUID(7)), Schema.brand("RunId")))(
+  "22222222-2222-7222-8222-222222222222"
+);
 
 const runStarted: AgentEvent = { type: "run-started", runId, sessionId: session };
 const turnStarted: AgentEvent = { type: "turn-started", turn: 1 };

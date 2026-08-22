@@ -11,7 +11,7 @@ export interface Skill {
   readonly disableModelInvocation: boolean;
 }
 
-export const makeSkillRepositoryLayer = (skills: readonly Skill[]): Layer.Layer<SkillRepository> =>
+export const makeSkillRepositoryLayer = (skills: readonly Skill[]) =>
   Layer.succeed(
     SkillRepository,
     SkillRepository.of({
@@ -85,10 +85,10 @@ export const discoverSkills = (home: string) =>
     return [...cwdSkills, ...homeFiltered];
   });
 
-export const formatSkillsIndex = (skills: readonly Skill[]): string => {
+export const formatSkillsIndex = (skills: readonly Skill[]) => {
   if (skills.length === 0) return "";
   const lines = skills.map((s) => `- ${s.name}: ${s.description}`);
   return `Available Skills (use load_skill to view full content):\n${lines.join("\n")}`;
 };
 
-export const formatSkillContent = (skill: Skill): string => `# Skill: ${skill.name}\n\n${skill.content}`;
+export const formatSkillContent = (skill: Skill) => `# Skill: ${skill.name}\n\n${skill.content}`;

@@ -1,11 +1,7 @@
 import { BunServices } from "@effect/platform-bun";
 import {
-  CommandExecutor,
-  HumanInteraction,
   PositiveInt,
   ProdigyAgent,
-  SessionStore,
-  SkillRepository,
   Workspace,
   WorkspacePath,
   fileSessionStoreLayer,
@@ -13,12 +9,8 @@ import {
   makeProdigyAgentLayer
 } from "@prodigy/core";
 import type { AgentError } from "@prodigy/core";
-import { Crypto, Effect, Layer, Option, Schema, Stream } from "effect";
-import type * as FileSystem from "effect/FileSystem";
-import { LanguageModel } from "effect/unstable/ai";
+import { Effect, Layer, Option, Schema, Stream } from "effect";
 import { Flag } from "effect/unstable/cli";
-import type * as Prompt from "effect/unstable/cli/Prompt";
-import type * as HttpClient from "effect/unstable/http/HttpClient";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import { layer as commandExecutorLayer } from "./adapters/command-executor.ts";
 import { layer as workspaceLayer } from "./adapters/workspace.ts";
@@ -50,7 +42,7 @@ export interface InvocationFlags {
 /** The root `--config` flag: single source for the configuration file path. */
 export const configFlag = Flag.string("config").pipe(Flag.withDescription("Config file path"), Flag.optional);
 
-const systemPromptBuilder = (skills: readonly Skill[], config: ConfigData): string => {
+const systemPromptBuilder = (skills: readonly Skill[], config: ConfigData) => {
   const explicitPrompt = config.systemPrompt ?? "";
   const autoInvokable = skills.filter((s) => !s.disableModelInvocation);
 
@@ -60,7 +52,7 @@ const systemPromptBuilder = (skills: readonly Skill[], config: ConfigData): stri
 };
 
 /** Convert a core agent error into its presentation message. */
-const coreErrorMessage = (error: AgentError): string => {
+const coreErrorMessage = (error: AgentError) => {
   switch (error._tag) {
     case "SessionNotFound":
       return `Session ${error.id} not found`;
@@ -76,17 +68,6 @@ const coreErrorMessage = (error: AgentError): string => {
       return `Interaction error: ${error.reason}`;
   }
 };
-
-/** Services the raw invocation needs from the composition root. */
-type InvocationRequirements =
-  | Workspace
-  | CommandExecutor
-  | HumanInteraction
-  | SkillRepository
-  | HttpClient.HttpClient
-  | SessionStore
-  | LanguageModel.LanguageModel
-  | Crypto.Crypto;
 
 /**
  * Merge parsed flag inputs over the assembled configuration.
@@ -121,8 +102,8 @@ export const runInvocation = (
   sessionId: Option.Option<string>,
   config: ConfigData,
   skills: readonly Skill[]
-): Stream.Stream<OutputEvent, never, InvocationRequirements> => {
-  const projected: Stream.Stream<OutputEvent, AgentError, InvocationRequirements> = Stream.unwrap(
+) => {
+  const projected = Stream.unwrap(
     Effect.gen(function* () {
       const workspace = yield* Workspace;
 
@@ -140,7 +121,7 @@ export const runInvocation = (
 
       const agentContext = yield* Layer.build(makeProdigyAgentLayer(profile));
 
-      const runOnce = (id: Option.Option<string>): Stream.Stream<OutputEvent, AgentError, ProdigyAgent> =>
+      const runOnce = (id: Option.Option<string>) =>
         Stream.unwrap(
           Effect.gen(function* () {
             const agent = yield* ProdigyAgent;
@@ -170,16 +151,6 @@ export const runInvocation = (
   );
 };
 
-/** Services still required after the per-invocation adapters are provided. */
-type StaticRequirements =
-  | Workspace
-  | CommandExecutor
-  | SessionStore
-  | HttpClient.HttpClient
-  | FileSystem.FileSystem
-  | Prompt.Environment
-  | Crypto.Crypto;
-
 /**
  * Compose the effective configuration and run it with the production
  * interaction, skill, and provider adapters.
@@ -197,7 +168,7 @@ export const invoke = (
   appConfig: ConfigData,
   flags: InvocationFlags,
   skills: readonly Skill[]
-): Stream.Stream<OutputEvent, never, StaticRequirements> =>
+) =>
   Stream.unwrap(
     Effect.gen(function* () {
       const config = resolveConfig(appConfig, flags);

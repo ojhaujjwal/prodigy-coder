@@ -29,10 +29,7 @@ const finish = (reason: "stop" | "tool-calls" | "length"): Response.StreamPartEn
   response: undefined
 });
 
-const scriptedModelLayer = (
-  turns: ReadonlyArray<ReadonlyArray<MockResponse>>,
-  prompts: Array<Prompt.Prompt>
-): Layer.Layer<LanguageModel.LanguageModel> => {
+const scriptedModelLayer = (turns: ReadonlyArray<ReadonlyArray<MockResponse>>, prompts: Array<Prompt.Prompt>) => {
   let turn = 0;
   return Layer.effect(
     LanguageModel.LanguageModel,

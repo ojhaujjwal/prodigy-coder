@@ -11,7 +11,7 @@ import {
   type GlobRequest
 } from "@prodigy/core";
 
-const revisionOf = (content: string): string => Hash.hash(content).toString(16);
+const revisionOf = (content: string) => Hash.hash(content).toString(16);
 
 const make = (root: string) =>
   Effect.gen(function* () {
@@ -19,7 +19,7 @@ const make = (root: string) =>
     const path = yield* Path.Path;
     const workspaceRoot = path.resolve(root);
 
-    const isInsideRoot = (workspacePath: WorkspacePath): boolean => {
+    const isInsideRoot = (workspacePath: WorkspacePath) => {
       const resolved = path.resolve(workspaceRoot, workspacePath);
       const relative = path.relative(workspaceRoot, resolved);
       return relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
@@ -178,5 +178,4 @@ const make = (root: string) =>
     return Workspace.of({ exists, read, write, replaceText, grep, glob });
   });
 
-export const layer = (root: string): Layer.Layer<Workspace, never, FileSystem.FileSystem | Path.Path> =>
-  Layer.effect(Workspace, make(root));
+export const layer = (root: string) => Layer.effect(Workspace, make(root));

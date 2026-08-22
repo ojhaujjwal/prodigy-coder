@@ -26,7 +26,7 @@ const appendToLog = (fs: FileSystem.FileSystem, message: string) =>
     yield* fs.writeFileString(LOG_FILE, logEntry, { flag: "a" });
   }).pipe(Effect.orDie);
 
-const formatRequest = (request: HttpClientRequest.HttpClientRequest): string => {
+const formatRequest = (request: HttpClientRequest.HttpClientRequest) => {
   const method = request.method;
   const urlStr = request.url;
   const headers = { ...request.headers };
@@ -44,7 +44,7 @@ const formatRequest = (request: HttpClientRequest.HttpClientRequest): string => 
   return `>>> REQUEST ${method} ${urlStr}\nHeaders: ${JSON.stringify(headers, null, 2)}\nBody: ${truncatedBody}`;
 };
 
-const formatResponse = (response: HttpClientResponse.HttpClientResponse): string => {
+const formatResponse = (response: HttpClientResponse.HttpClientResponse) => {
   const status = response.status;
   const headers = { ...response.headers };
   const contentType = headers["content-type"] || "";
@@ -68,11 +68,7 @@ export const withHttpDebug = (client: HttpClient.HttpClient, fs: FileSystem.File
     )
   );
 
-export const makeHttpDebugLayer = (): Layer.Layer<
-  HttpClient.HttpClient,
-  never,
-  HttpClient.HttpClient | FileSystem.FileSystem
-> =>
+export const makeHttpDebugLayer = () =>
   Layer.effect(
     HttpClient.HttpClient,
     Effect.gen(function* () {

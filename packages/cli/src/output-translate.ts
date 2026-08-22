@@ -3,7 +3,7 @@ import { Match, Predicate } from "effect";
 import type { OutputEvent } from "./output.ts";
 
 /** Render a core tool output value as a display string. */
-const formatCoreToolOutput = (output: JsonValue): string => {
+const formatCoreToolOutput = (output: JsonValue) => {
   if (Array.isArray(output)) return output.join("\n");
   return Predicate.isString(output) ? output : JSON.stringify(output);
 };

@@ -15,7 +15,7 @@
     "ci": "bun run lint && bun run typecheck && bun run test --run",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "bun --bun oxlint src",
-    "lint-fix": "bun --bun oxlint --fix src",
+    "lint-fix": "bun --bun oxlint --fix --fix-suggestions src",
     "test": "bun --bun vitest --sequence.concurrent=false",
     "coverage": "bun --bun vitest --coverage --sequence.concurrent=false",
     "start": "bun run src/index.ts"

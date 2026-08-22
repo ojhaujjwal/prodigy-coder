@@ -7,9 +7,7 @@ import {
   type InteractionResponse
 } from "@prodigy/core";
 
-export const makeHumanInteractionLayer = (
-  nonInteractive: boolean
-): Layer.Layer<HumanInteraction, never, Prompt.Environment> =>
+export const makeHumanInteractionLayer = (nonInteractive: boolean) =>
   Layer.effect(
     HumanInteraction,
     Effect.gen(function* () {

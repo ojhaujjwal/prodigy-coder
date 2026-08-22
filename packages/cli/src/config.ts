@@ -40,12 +40,12 @@ export type ConfigData = typeof ConfigSchema.Type;
 const bedrockBaseUrl = (region: string | undefined) =>
   region ? `https://bedrock-mantle.${region}.api.aws/v1` : undefined;
 
-const parseApprovalMode = (value: string | undefined): ApprovalMode | undefined => {
+const parseApprovalMode = (value: string | undefined) => {
   if (value === "none" || value === "dangerous" || value === "all") return value;
   return undefined;
 };
 
-const parseBoolean = (value: string | undefined): boolean | undefined => {
+const parseBoolean = (value: string | undefined) => {
   if (value === undefined) return undefined;
   if (value.toLowerCase() === "true" || value === "1") return true;
   if (value.toLowerCase() === "false" || value === "0") return false;
