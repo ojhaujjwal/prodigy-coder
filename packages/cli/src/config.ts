@@ -1,5 +1,6 @@
 import { Config, Context, Data, Effect, Layer, Option, Redacted, Schema } from "effect";
 import * as FileSystem from "effect/FileSystem";
+import { PositiveInt } from "@prodigy/core";
 
 export class ConfigValidationError extends Data.TaggedError("ConfigValidationError")<{
   readonly message: string;
@@ -31,7 +32,7 @@ export type ProviderConfig = typeof ProviderConfig.Type;
 export const ConfigSchema = Schema.Struct({
   provider: ProviderConfig,
   approvalMode: Schema.Literals(["none", "dangerous", "all"]),
-  maxTurns: Schema.Number,
+  maxTurns: PositiveInt,
   systemPrompt: Schema.optional(Schema.String),
   nonInteractive: Schema.optional(Schema.Boolean)
 });
@@ -86,7 +87,7 @@ const defaultConfig = (apiKey?: string, model?: string): ConfigData => ({
     model: model ?? "gpt-4o"
   },
   approvalMode: "none" as const,
-  maxTurns: 50,
+  maxTurns: PositiveInt.make(50),
   systemPrompt: undefined,
   nonInteractive: false
 });

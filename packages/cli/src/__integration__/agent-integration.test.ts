@@ -1,23 +1,26 @@
 import { describe, expect, layer } from "@effect/vitest";
 import { BunServices } from "@effect/platform-bun";
 import { Effect, Layer, Option, Schema, Stream } from "effect";
+import * as AiError from "effect/unstable/ai/AiError";
 import * as FileSystem from "effect/FileSystem";
 import { LanguageModel, Prompt, Response } from "effect/unstable/ai";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
-import { SessionStore, SessionId, memorySessionStoreLayer } from "@prodigy/core";
+import { SessionStore, SessionId, PositiveInt, fileSystemWorkspaceLayer, memorySessionStoreLayer } from "@prodigy/core";
 import type { ConfigData } from "../config.ts";
-import { runInvocation } from "../invocation.ts";
+import { RunFailed, runInvocation } from "../invocation.ts";
 import type { OutputEvent } from "../output.ts";
 import { makeHumanInteractionLayer } from "../human-interaction.ts";
 import { makeSkillRepositoryLayer } from "../skills.ts";
 import { layer as commandExecutorLayer } from "../adapters/command-executor.ts";
-import { layer as workspaceLayer } from "../adapters/workspace.ts";
 
 type MockResponse =
   | { readonly type: "text"; readonly content: string }
   | { readonly type: "tool-call"; readonly id: string; readonly name: string; readonly arguments: Schema.Json };
 
 type TestConfig = Pick<ConfigData, "maxTurns" | "approvalMode" | "nonInteractive" | "systemPrompt">;
+
+/** Brand a plain number so fixtures satisfy the `PositiveInt` config field. */
+const turns = (n: number): PositiveInt => Schema.decodeUnknownSync(PositiveInt)(n);
 
 const finish = (reason: "stop" | "tool-calls" | "length"): Response.StreamPartEncoded => ({
   type: "finish",
@@ -63,12 +66,28 @@ const testToolCall = (id: string, name: string, arguments_: Schema.Json): MockRe
 
 const testText = (content: string): MockResponse => ({ type: "text", content });
 
+/** A model whose stream always fails: the fatal-run projection's trigger. */
+const failingModelLayer = Layer.effect(
+  LanguageModel.LanguageModel,
+  LanguageModel.make({
+    generateText: () => Effect.succeed([]),
+    streamText: () =>
+      Stream.fail(
+        AiError.make({
+          module: "Test",
+          method: "streamText",
+          reason: new AiError.UnknownError({ description: "model exploded" })
+        })
+      )
+  })
+);
+
 const makeConfig = (overrides: Partial<TestConfig> = {}): ConfigData => ({
   provider: {
     type: "openai-compat",
     model: "test-model"
   },
-  maxTurns: 50,
+  maxTurns: turns(50),
   approvalMode: "none",
   nonInteractive: true,
   systemPrompt: undefined,
@@ -79,20 +98,21 @@ const makeInvocationStream = (
   userMessages: readonly string[],
   responses: ReadonlyArray<ReadonlyArray<MockResponse>>,
   configOverrides: Partial<TestConfig> = {},
-  cwd = "."
+  cwd = ".",
+  modelLayer?: Layer.Layer<LanguageModel.LanguageModel>
 ) =>
   Effect.gen(function* () {
     const config = makeConfig(configOverrides);
     const prompts: Array<Prompt.Prompt> = [];
     const testLayer = Layer.mergeAll(
       memorySessionStoreLayer,
-      workspaceLayer(cwd),
+      fileSystemWorkspaceLayer(cwd).pipe(Layer.provide(commandExecutorLayer(cwd))),
       commandExecutorLayer(cwd),
       makeHumanInteractionLayer(config.nonInteractive ?? false),
       makeSkillRepositoryLayer([])
     ).pipe(Layer.provideMerge(BunServices.layer));
     const runContext = yield* Layer.build(
-      Layer.mergeAll(testLayer, scriptedModelLayer(responses, prompts), FetchHttpClient.layer)
+      Layer.mergeAll(testLayer, modelLayer ?? scriptedModelLayer(responses, prompts), FetchHttpClient.layer)
     );
 
     const events = runInvocation(userMessages.join("\n\n"), Option.none(), config, []).pipe(Stream.provide(runContext));
@@ -239,11 +259,26 @@ layer(Layer.merge(BunServices.layer, FetchHttpClient.layer))("E2E", (it) => {
       const { result } = yield* runAgentWithMockServer(
         ["infinite loop"],
         [[testToolCall("call-1", "shell", { command: "echo loop" })]],
-        { maxTurns: 1 }
+        { maxTurns: turns(1) }
       );
       const errors = result.filter((event) => event.type === "error");
       expect(errors).toHaveLength(1);
       expect(errors[0]).toMatchObject({ message: "Max turns exceeded (1)" });
+    })
+  );
+
+  it.effect("renders a fatal model failure as an error event and fails with RunFailed", () =>
+    Effect.gen(function* () {
+      const { events } = yield* makeInvocationStream(["hello"], [], {}, ".", failingModelLayer);
+      const received: OutputEvent[] = [];
+      const failure = yield* events.pipe(
+        Stream.runForEach((event) => Effect.sync(() => received.push(event))),
+        Effect.flip
+      );
+      expect(failure).toBeInstanceOf(RunFailed);
+      const errorEvent = received.find((event) => event.type === "error");
+      expect(errorEvent).toBeDefined();
+      expect(errorEvent?.type === "error" && errorEvent.message).toContain("Model error");
     })
   );
 

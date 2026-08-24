@@ -1,8 +1,12 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Option } from "effect";
-import { resolveConfig } from "./invocation.ts";
+import { Option, Schema } from "effect";
+import { PositiveInt } from "@prodigy/core";
+import { resolveApprovalPolicy, resolveConfig } from "./invocation.ts";
 import type { InvocationFlags } from "./invocation.ts";
 import type { ConfigData } from "./config.ts";
+
+/** Brand a plain number so fixtures satisfy the `PositiveInt` config field. */
+const turns = (n: number): PositiveInt => Schema.decodeUnknownSync(PositiveInt)(n);
 
 const baseConfig: ConfigData = {
   provider: {
@@ -12,7 +16,7 @@ const baseConfig: ConfigData = {
     model: "gpt-4o"
   },
   approvalMode: "none",
-  maxTurns: 50,
+  maxTurns: turns(50),
   systemPrompt: "Base",
   nonInteractive: false
 };
@@ -37,7 +41,7 @@ describe("resolveConfig", () => {
   });
 
   it("flag maxTurns overrides the appConfig maxTurns", () => {
-    const resolved = resolveConfig(baseConfig, { ...noFlags, maxTurns: Option.some(10) });
+    const resolved = resolveConfig(baseConfig, { ...noFlags, maxTurns: Option.some(turns(10)) });
     expect(resolved.maxTurns).toBe(10);
   });
 
@@ -72,5 +76,36 @@ describe("resolveConfig", () => {
     expect(resolved.approvalMode).toBe("none");
     expect(resolved.maxTurns).toBe(50);
     expect(resolved.systemPrompt).toBe("Base");
+  });
+});
+
+describe("resolveApprovalPolicy", () => {
+  it("never gates conversational tools in any mode", () => {
+    for (const approvalMode of ["none", "dangerous", "all"] as const) {
+      const policy = resolveApprovalPolicy({ approvalMode });
+      expect(policy("ask_user")).toBe(false);
+      expect(policy("load_skill")).toBe(false);
+    }
+  });
+
+  it("gates every acting tool under all", () => {
+    const policy = resolveApprovalPolicy({ approvalMode: "all" });
+    for (const toolName of ["shell", "read", "write", "edit", "grep", "glob", "webfetch"]) {
+      expect(policy(toolName)).toBe(true);
+    }
+  });
+
+  it("gates only dangerous tools under dangerous", () => {
+    const policy = resolveApprovalPolicy({ approvalMode: "dangerous" });
+    expect(policy("shell")).toBe(true);
+    expect(policy("read")).toBe(false);
+    expect(policy("write")).toBe(false);
+    expect(policy("ask_user")).toBe(false);
+  });
+
+  it("gates nothing under none", () => {
+    const policy = resolveApprovalPolicy({ approvalMode: "none" });
+    expect(policy("shell")).toBe(false);
+    expect(policy("read")).toBe(false);
   });
 });

@@ -1,19 +1,18 @@
 import { BunServices } from "@effect/platform-bun";
 import {
-  PositiveInt,
   ProdigyAgent,
   Workspace,
   WorkspacePath,
   fileSessionStoreLayer,
+  fileSystemWorkspaceLayer,
   makeDefaultAgenticProfile,
   makeProdigyAgentLayer
 } from "@prodigy/core";
-import type { AgentError } from "@prodigy/core";
+import type { AgentError, PositiveInt } from "@prodigy/core";
 import { Effect, Layer, Option, Schema, Stream } from "effect";
 import { Flag } from "effect/unstable/cli";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import { layer as commandExecutorLayer } from "./adapters/command-executor.ts";
-import { layer as workspaceLayer } from "./adapters/workspace.ts";
 import type { ApprovalMode, ConfigData } from "./config.ts";
 import { makeHumanInteractionLayer } from "./human-interaction.ts";
 import { makeFileLoggerLayer } from "./logger.ts";
@@ -33,7 +32,7 @@ const agentsPath = Schema.decodeUnknownSync(WorkspacePath)("AGENTS.md");
  */
 export interface InvocationFlags {
   readonly model: Option.Option<string>;
-  readonly maxTurns: Option.Option<number>;
+  readonly maxTurns: Option.Option<PositiveInt>;
   readonly approvalMode: Option.Option<ApprovalMode>;
   readonly systemPrompt: Option.Option<string>;
   readonly nonInteractive: boolean;
@@ -70,6 +69,35 @@ const coreErrorMessage = (error: AgentError) => {
 };
 
 /**
+ * A terminal run failure, raised after its message has already been rendered
+ * as an `error` event. The command handler catches it to exit non-zero
+ * without re-printing anything.
+ */
+export class RunFailed extends Schema.TaggedErrorClass<RunFailed>()("RunFailed", {
+  message: Schema.String
+}) {}
+
+const failRendered = (message: string): Stream.Stream<OutputEvent, RunFailed> =>
+  Stream.concat(Stream.succeed<OutputEvent>({ type: "error", message }), Stream.fail(new RunFailed({ message })));
+
+/**
+ * Tools that converse rather than act: asking a question or loading skill
+ * instructions never touches the workspace, so gating them behind approval —
+ * especially under `all`, where approving the question precedes asking it —
+ * is rejected as policy here, matching the CLI's historical behavior.
+ */
+const UNGATED_TOOLS = new Set(["ask_user", "load_skill"]);
+
+/**
+ * The CLI approval policy for the default toolkit: the configured approval
+ * mode applied to acting tools only.
+ */
+export const resolveApprovalPolicy =
+  (config: Pick<ConfigData, "approvalMode">) =>
+  (toolName: string): boolean =>
+    !UNGATED_TOOLS.has(toolName) && needsApproval(toolName, config.approvalMode);
+
+/**
  * Merge parsed flag inputs over the assembled configuration.
  *
  * Precedence is: parsed flag value, then the `AppConfig` value (file, env,
@@ -91,19 +119,22 @@ export const resolveConfig = (appConfig: ConfigData, flags: InvocationFlags): Co
  * Run a core agent invocation as a lazy, self-scoped stream of presentation
  * events.
  *
- * The stream never fails: `SessionNotFound` restarts a new run (after a
- * `notice` event), and any remaining agent or tool error is projected into an
- * `error` event before the stream ends. All per-invocation composition (system
- * prompt, profile, and agent layer) happens lazily when the returned stream is
- * consumed, so tests cross the same seam production does.
+ * `SessionNotFound` restarts a new run (after a `notice` event). A fatal agent
+ * error is projected into an `error` event and then re-raised as
+ * {@link RunFailed} so the process can exit non-zero. `config.maxTurns` is a
+ * parsed `PositiveInt` — the configuration file and the `--max-turns` flag
+ * each reject invalid values at their own boundary, so nothing is validated
+ * here. All per-invocation composition (system prompt, profile, and agent
+ * layer) happens lazily when the returned stream is consumed, so tests cross
+ * the same seam production does.
  */
 export const runInvocation = (
   prompt: string,
   sessionId: Option.Option<string>,
   config: ConfigData,
   skills: readonly Skill[]
-) => {
-  const projected = Stream.unwrap(
+) =>
+  Stream.unwrap(
     Effect.gen(function* () {
       const workspace = yield* Workspace;
 
@@ -114,9 +145,9 @@ export const runInvocation = (
       const systemPrompt = [agentsMd.trim(), systemPromptBuilder(skills, config)].filter(Boolean).join("\n\n");
 
       const profile = makeDefaultAgenticProfile({
-        maxTurns: PositiveInt.make(config.maxTurns),
+        maxTurns: config.maxTurns,
         systemPrompt,
-        needsApproval: (toolName) => needsApproval(toolName, config.approvalMode)
+        needsApproval: resolveApprovalPolicy(config)
       });
 
       const agentContext = yield* Layer.build(makeProdigyAgentLayer(profile));
@@ -137,19 +168,23 @@ export const runInvocation = (
         ? { type: "notice" as const, message: `Session ${sessionId.value} not found, starting a new session.` }
         : { type: "notice" as const, message: "Session not found, starting a new session." };
 
-      return Stream.provide(runOnce(sessionId), agentContext).pipe(
+      // A fatal agent error is rendered once as an `error` event, then
+      // re-raised as `RunFailed` so the process exits non-zero — a run that
+      // did no work must not report success to scripts. Max-turns exhaustion
+      // stays an ordinary `error` event with exit code zero, as before the
+      // migration.
+      const projected = Stream.provide(runOnce(sessionId), agentContext).pipe(
         Stream.catchTag("SessionNotFound", () =>
           Stream.concat(Stream.succeed(notice), Stream.provide(runOnce(Option.none()), agentContext))
         )
       );
+      return Stream.catchIf(
+        projected,
+        (_error): _error is AgentError => true,
+        (error) => failRendered(coreErrorMessage(error))
+      );
     })
   );
-  return Stream.catchIf(
-    projected,
-    (_error): _error is AgentError => true,
-    (error) => Stream.succeed({ type: "error" as const, message: coreErrorMessage(error) })
-  );
-};
 
 /**
  * Compose the effective configuration and run it with the production
@@ -186,12 +221,13 @@ export const invoke = (
 /**
  * Static CLI authorities shared by the session, configuration, and run paths:
  * no per-invocation state and no configuration choice. `AppConfig` is provided
- * per invocation by the root command from its parsed `--config` flag.
+ * per invocation by the root command from its parsed `--config` flag. The
+ * workspace adapter searches through the command executor, so both share one
+ * instance.
  */
 export const applicationLayer = Layer.mergeAll(
   makeFileLoggerLayer(),
   fileSessionStoreLayer(".prodigy-coder/sessions"),
-  workspaceLayer("."),
-  commandExecutorLayer("."),
+  fileSystemWorkspaceLayer(".").pipe(Layer.provideMerge(commandExecutorLayer("."))),
   FetchHttpClient.layer
 ).pipe(Layer.provideMerge(BunServices.layer));

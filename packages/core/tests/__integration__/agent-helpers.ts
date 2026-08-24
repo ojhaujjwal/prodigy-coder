@@ -61,8 +61,10 @@ export const scriptedWorkspaceLayer = (initial?: Record<string, string>): Script
         Effect.sync(() => {
           const matches: GrepMatch[] = [];
           for (const [filePath, content] of files) {
-            if (content.includes(pattern)) {
-              matches.push({ path: brand(filePath), line: content });
+            for (const [index, line] of content.split("\n").entries()) {
+              if (line.includes(pattern)) {
+                matches.push({ path: brand(filePath), lineNumber: index + 1, line });
+              }
             }
           }
           return matches;

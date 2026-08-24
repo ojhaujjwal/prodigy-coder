@@ -238,7 +238,7 @@ export const grepHandler = (
     const matches: ReadonlyArray<GrepMatch> = yield* workspace
       .grep(request)
       .pipe(Effect.mapError(toToolError("GrepTool", "grepHandler")));
-    return matches.map((m) => `${m.path}:${m.line}`);
+    return matches.map((m) => `${m.path}:${m.lineNumber}:${m.line}`);
   });
 
 // ---------------------------------------------------------------------------

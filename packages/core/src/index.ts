@@ -6,8 +6,9 @@
  * and event/result/error vocabulary, the default toolkit with its handler
  * layer and profile, and the capability services (`SessionStore`, `Workspace`,
  * `CommandExecutor`, `HumanInteraction`, `SkillRepository`) with the usable
- * in-memory and file-backed session adapters. Importing this module performs
- * no effects and starts no runtime — consumers compose the Layers themselves.
+ * in-memory and file-backed session adapters and the filesystem-backed
+ * workspace adapter. Importing this module performs no effects and starts no
+ * runtime — consumers compose the Layers themselves.
  *
  * Identity schemas and implementation helpers stay unexported. Public value
  * schemas (`PositiveInt`, `WorkspacePath`, and `SkillName`) are exported so
@@ -54,6 +55,7 @@ export type {
 export { SessionId } from "./capabilities/session.ts";
 export { Workspace, WorkspacePath } from "./capabilities/workspace.ts";
 export type { WorkspaceError, GrepRequest, GrepMatch, GlobRequest } from "./capabilities/workspace.ts";
+export { layer as fileSystemWorkspaceLayer } from "./capabilities/file-system-workspace.ts";
 export { CommandExecutor } from "./capabilities/command-executor.ts";
 export type { CommandRequest, CommandResult } from "./capabilities/command-executor.ts";
 export { HumanInteraction } from "./capabilities/human-interaction.ts";

@@ -5,7 +5,7 @@ This context defines the language for the Prodigy command-line adapter. The CLI 
 ## Invocation And Configuration
 
 **CLI invocation**:
-One user-facing command execution that parses input, selects configuration, runs `ProdigyAgent`, and presents translated core events.
+One user-facing command execution that parses input, selects configuration, runs `ProdigyAgent`, and presents translated core events. A fatal run failure renders an `error` event and exits non-zero; turn-limit exhaustion renders an `error` event but exits zero.
 
 **Configuration**:
 The effective CLI policy assembled from defaults and user-provided configuration. It includes provider selection, turn limits, approval behavior, output format, session choice, system guidance, and interactive mode.
@@ -45,11 +45,11 @@ A model-facing operation defined and handled by core against CLI-provided capabi
 **Approval mode**:
 The CLI policy selecting which tool calls require approval: `none`, `dangerous`, or `all`.
 
-**Approval policy**:
-The CLI predicate selecting which core tool calls require human approval.
-
 **Human interaction adapter**:
-The CLI terminal implementation of core `HumanInteraction` for approvals and user questions.
+The CLI terminal implementation of core `HumanInteraction` for approvals and user questions. A closed or unusable prompt channel (EOF, piped stdin, quit) degrades to a denial rather than aborting the run; only `--non-interactive` denies without ever prompting.
+
+**Approval policy**:
+The CLI predicate selecting which core tool calls require human approval. Conversational tools (`ask_user`, `load_skill`) are never gated: approving a question before asking it is an approval loop around conversation itself, not a safety boundary.
 
 ## Skills And Commands
 

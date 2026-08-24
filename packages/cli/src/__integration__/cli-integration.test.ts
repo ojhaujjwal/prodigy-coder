@@ -6,8 +6,7 @@ import * as FileSystem from "effect/FileSystem";
 import { layer as bunServicesLayer } from "@effect/platform-bun/BunServices";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import { app } from "../index.ts";
-import { SessionStore, fileSessionStoreLayer } from "@prodigy/core";
-import { layer as workspaceLayer } from "../adapters/workspace.ts";
+import { SessionStore, fileSessionStoreLayer, fileSystemWorkspaceLayer } from "@prodigy/core";
 import { layer as commandExecutorLayer } from "../adapters/command-executor.ts";
 
 const runApp = (args: ReadonlyArray<string>) => Command.runWith(app, { version: "0.0.1" })(args);
@@ -27,7 +26,7 @@ const testLayer = Layer.mergeAll(
   TestConsole.layer,
   configProviderLayer,
   coreSessionLayer,
-  workspaceLayer("."),
+  fileSystemWorkspaceLayer(".").pipe(Layer.provide(commandExecutorLayer("."))),
   commandExecutorLayer("."),
   FetchHttpClient.layer
 ).pipe(Layer.provideMerge(bunServicesLayer));

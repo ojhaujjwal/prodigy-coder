@@ -1,7 +1,7 @@
 import { BunRuntime } from "@effect/platform-bun";
 import { Argument, Command, Flag } from "effect/unstable/cli";
 import { Config, Console, DateTime, Effect, Option, Schema, Stream } from "effect";
-import { SessionId, SessionStore } from "@prodigy/core";
+import { SessionId, SessionStore, PositiveInt } from "@prodigy/core";
 import { AppConfig, loadConfig, maskConfig } from "./config.ts";
 import { applicationLayer, configFlag, invoke } from "./invocation.ts";
 import type { InvocationFlags } from "./invocation.ts";
@@ -31,7 +31,13 @@ const continueFlag = Flag.boolean("continue").pipe(
 
 const modelFlag = Flag.string("model").pipe(Flag.withAlias("m"), Flag.withDescription("Model name"), Flag.optional);
 
+// Parsed, not validated: the flag yields a branded `PositiveInt` or a usage
+// error at parse time — an invalid value never reaches the invocation.
 const maxTurnsFlag = Flag.integer("max-turns").pipe(
+  Flag.filterMap(
+    (turns) => (turns > 0 ? Option.some(Schema.decodeUnknownSync(PositiveInt)(turns)) : Option.none()),
+    (turns) => `Invalid --max-turns: ${turns}. Must be a positive integer.`
+  ),
   Flag.withAlias("t"),
   Flag.withDescription("Maximum number of turns"),
   Flag.optional
@@ -100,7 +106,16 @@ const mainCommand = Command.make(
       const flags: InvocationFlags = { model, maxTurns, approvalMode, systemPrompt, nonInteractive };
       const formatter = createFormatter(outputFormat);
       const promptForRun = userMessages.join("\n\n");
-      yield* invoke(promptForRun, sessionId, appConfig, flags, skills).pipe(Stream.runForEach(formatter));
+      yield* invoke(promptForRun, sessionId, appConfig, flags, skills).pipe(
+        Stream.runForEach(formatter),
+        // The failure message was already rendered by the formatter; just
+        // surface it in the exit status.
+        Effect.catchTag("RunFailed", () =>
+          Effect.sync(() => {
+            process.exitCode = 1;
+          })
+        )
+      );
     })
 ).pipe(Command.withDescription("Run the AI coder"));
 
