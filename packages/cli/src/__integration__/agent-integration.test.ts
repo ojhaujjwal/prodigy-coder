@@ -3,12 +3,13 @@ import { BunServices } from "@effect/platform-bun";
 import { Effect, Layer, Option, Schema, Stream } from "effect";
 import * as AiError from "effect/unstable/ai/AiError";
 import * as FileSystem from "effect/FileSystem";
+import * as TestConsole from "effect/testing/TestConsole";
 import { LanguageModel, Prompt, Response } from "effect/unstable/ai";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import { SessionStore, SessionId, PositiveInt, fileSystemWorkspaceLayer, memorySessionStoreLayer } from "@prodigy/core";
 import type { ConfigData } from "../config.ts";
 import { RunFailed, runInvocation } from "../invocation.ts";
-import type { OutputEvent } from "../output.ts";
+import { makeStreamJsonFormatter, makeTextFormatter, type OutputEvent } from "../output.ts";
 import { makeHumanInteractionLayer } from "../human-interaction.ts";
 import { makeSkillRepositoryLayer } from "../skills.ts";
 import { layer as commandExecutorLayer } from "../adapters/command-executor.ts";
@@ -424,6 +425,59 @@ layer(Layer.merge(BunServices.layer, FetchHttpClient.layer))("E2E", (it) => {
       expect(received[0]).toMatchObject({ type: "session-info" });
       expect(received.some((event) => event.type === "text-delta")).toBe(true);
       expect(received.at(-1)).toMatchObject({ type: "finish" });
+    })
+  );
+
+  it.layer(TestConsole.layer)("formatter capture", (it) => {
+    it.effect("drains a real run through the text formatter without throwing", () =>
+      Effect.gen(function* () {
+        const { events } = yield* makeInvocationStream(["hi"], [[testText("Hello")]]);
+        yield* events.pipe(Stream.runForEach(makeTextFormatter()));
+        const logs = yield* TestConsole.logLines;
+        expect(logs.join("\n")).toContain("export PRODIGY_SESSION_ID=");
+      })
+    );
+
+    it.effect("drains a real run through the stream-json formatter as parseable lines", () =>
+      Effect.gen(function* () {
+        const { events } = yield* makeInvocationStream(["hi"], [[testText("Hello")]]);
+        yield* events.pipe(Stream.runForEach(makeStreamJsonFormatter()));
+        const logs = yield* TestConsole.logLines;
+        // TestConsole accumulates across tests in the file; the stream-json lines are
+        // the ones that are JSON objects (text-formatter output is not JSON).
+        const jsonLines = logs.map(String).filter((line) => line.startsWith("{"));
+        const parsed = jsonLines.map((line) => JSON.parse(line));
+        expect(parsed.length).toBeGreaterThan(0);
+        expect(parsed.some((p) => p.type === "session")).toBe(true);
+      })
+    );
+  });
+
+  it.effect("falls back to a new session (with a notice) when the requested session id is missing", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const tmpDir = yield* fs.makeTempDirectoryScoped();
+      const badId = Schema.decodeUnknownSync(SessionId)("deadbeef");
+      const modelLayer = scriptedModelLayer([[testText("Hello")]], []);
+      const runContext = yield* Layer.build(
+        Layer.mergeAll(
+          memorySessionStoreLayer,
+          fileSystemWorkspaceLayer(tmpDir).pipe(Layer.provide(commandExecutorLayer(tmpDir))),
+          commandExecutorLayer(tmpDir),
+          makeHumanInteractionLayer(false),
+          makeSkillRepositoryLayer([]),
+          modelLayer,
+          FetchHttpClient.layer
+        ).pipe(Layer.provideMerge(BunServices.layer))
+      );
+      const events = runInvocation("hi", Option.some(badId), makeConfig(), []).pipe(Stream.provide(runContext));
+      const collected = yield* events.pipe(Stream.runCollect);
+      const notices = collected.filter((e) => e.type === "notice");
+      const sessions = collected.filter((e) => e.type === "session-info");
+      expect(notices).toHaveLength(1);
+      expect(notices[0]).toMatchObject({ message: expect.stringContaining("not found") });
+      expect(sessions).toHaveLength(1);
+      expect(collected.some((e) => e.type === "finish")).toBe(true);
     })
   );
 
