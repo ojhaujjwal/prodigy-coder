@@ -45,9 +45,10 @@ export type GrepRequest = {
   readonly path: WorkspacePath;
 };
 
-/** A single search match: the file path and the matching line. */
+/** A single search match: the file path, its 1-based line number, and the matching line. */
 export type GrepMatch = {
   readonly path: WorkspacePath;
+  readonly lineNumber: number;
   readonly line: string;
 };
 
@@ -62,6 +63,7 @@ export type GlobRequest = {
  * project environment. Adapters enforce roots, permissions, and output
  * limits; mutations are atomic.
  */
+// @effect-diagnostics-next-line effect/deterministicKeys:off
 export class Workspace extends Context.Service<
   Workspace,
   {

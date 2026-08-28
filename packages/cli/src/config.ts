@@ -1,5 +1,6 @@
 import { Config, Context, Data, Effect, Layer, Option, Redacted, Schema } from "effect";
 import * as FileSystem from "effect/FileSystem";
+import { PositiveInt } from "@prodigy/core";
 
 export class ConfigValidationError extends Data.TaggedError("ConfigValidationError")<{
   readonly message: string;
@@ -31,7 +32,7 @@ export type ProviderConfig = typeof ProviderConfig.Type;
 export const ConfigSchema = Schema.Struct({
   provider: ProviderConfig,
   approvalMode: Schema.Literals(["none", "dangerous", "all"]),
-  maxTurns: Schema.Number,
+  maxTurns: PositiveInt,
   systemPrompt: Schema.optional(Schema.String),
   nonInteractive: Schema.optional(Schema.Boolean)
 });
@@ -40,12 +41,12 @@ export type ConfigData = typeof ConfigSchema.Type;
 const bedrockBaseUrl = (region: string | undefined) =>
   region ? `https://bedrock-mantle.${region}.api.aws/v1` : undefined;
 
-const parseApprovalMode = (value: string | undefined): ApprovalMode | undefined => {
+const parseApprovalMode = (value: string | undefined) => {
   if (value === "none" || value === "dangerous" || value === "all") return value;
   return undefined;
 };
 
-const parseBoolean = (value: string | undefined): boolean | undefined => {
+const parseBoolean = (value: string | undefined) => {
   if (value === undefined) return undefined;
   if (value.toLowerCase() === "true" || value === "1") return true;
   if (value.toLowerCase() === "false" || value === "0") return false;
@@ -86,7 +87,7 @@ const defaultConfig = (apiKey?: string, model?: string): ConfigData => ({
     model: model ?? "gpt-4o"
   },
   approvalMode: "none" as const,
-  maxTurns: 50,
+  maxTurns: PositiveInt.make(50),
   systemPrompt: undefined,
   nonInteractive: false
 });
@@ -125,119 +126,64 @@ const readConfigFile = Effect.fnUntraced(function* (path: string) {
   );
 });
 
-class AppConfig extends Context.Service<AppConfig, ConfigData>()("@prodigy/cli/config/AppConfig") {
-  static readonly layer = Layer.effect(
-    AppConfig,
-    Effect.gen(function* () {
-      const apiKey = yield* Config.option(
-        Config.redacted("PRODIGY_CODER_API_KEY").pipe(
-          Config.orElse(() => Config.redacted("OPENAI_API_KEY")),
-          Config.orElse(() => Config.redacted("ANTHROPIC_API_KEY")),
-          Config.orElse(() => Config.redacted("OPENROUTER_API_KEY")),
-          Config.orElse(() => Config.redacted("BEDROCK_API_KEY")),
-          Config.orElse(() => Config.redacted("GEMINI_API_KEY"))
-        )
+const makeAppConfigEffect = (explicitPath: Option.Option<string>) =>
+  Effect.gen(function* () {
+    const apiKey = yield* Config.option(
+      Config.redacted("PRODIGY_CODER_API_KEY").pipe(
+        Config.orElse(() => Config.redacted("OPENAI_API_KEY")),
+        Config.orElse(() => Config.redacted("ANTHROPIC_API_KEY")),
+        Config.orElse(() => Config.redacted("OPENROUTER_API_KEY")),
+        Config.orElse(() => Config.redacted("BEDROCK_API_KEY")),
+        Config.orElse(() => Config.redacted("GEMINI_API_KEY"))
+      )
+    );
+    const baseUrl = yield* Config.option(Config.string("PRODIGY_CODER_BASE_URL"));
+    const model = yield* Config.option(Config.string("PRODIGY_CODER_MODEL"));
+    const approvalMode = yield* Config.option(Config.string("PRODIGY_CODER_APPROVAL_MODE"));
+    const bedrockRegion = yield* Config.option(Config.string("BEDROCK_REGION"));
+    const nonInteractive = yield* Config.option(Config.string("PRODIGY_CODER_NON_INTERACTIVE"));
+
+    const apiKeyValue = Option.map(apiKey, Redacted.value);
+    const modelValue = Option.getOrUndefined(model);
+
+    let loadedConfig = defaultConfig(Option.getOrUndefined(apiKeyValue), modelValue);
+
+    const configPath = yield* findConfigFile(explicitPath);
+    if (Option.isSome(configPath)) {
+      const fileConfig = yield* readConfigFile(configPath.value);
+      loadedConfig = envOverrides(
+        fileConfig,
+        Option.getOrUndefined(apiKeyValue),
+        Option.getOrUndefined(baseUrl),
+        modelValue,
+        Option.getOrUndefined(approvalMode),
+        Option.getOrUndefined(bedrockRegion),
+        Option.getOrUndefined(nonInteractive)
       );
-      const baseUrl = yield* Config.option(Config.string("PRODIGY_CODER_BASE_URL"));
-      const model = yield* Config.option(Config.string("PRODIGY_CODER_MODEL"));
-      const approvalMode = yield* Config.option(Config.string("PRODIGY_CODER_APPROVAL_MODE"));
-      const bedrockRegion = yield* Config.option(Config.string("BEDROCK_REGION"));
-      const nonInteractive = yield* Config.option(Config.string("PRODIGY_CODER_NON_INTERACTIVE"));
-
-      const apiKeyValue = Option.map(apiKey, Redacted.value);
-      const modelValue = Option.getOrUndefined(model);
-
-      let loadedConfig = defaultConfig(Option.getOrUndefined(apiKeyValue), modelValue);
-
-      const configPath = yield* findConfigFile(Option.none());
-      if (Option.isSome(configPath)) {
-        const fileConfig = yield* readConfigFile(configPath.value);
-        loadedConfig = envOverrides(
-          fileConfig,
-          Option.getOrUndefined(apiKeyValue),
-          Option.getOrUndefined(baseUrl),
-          modelValue,
-          Option.getOrUndefined(approvalMode),
-          Option.getOrUndefined(bedrockRegion),
-          Option.getOrUndefined(nonInteractive)
-        );
-      } else {
-        loadedConfig = envOverrides(
-          loadedConfig,
-          Option.getOrUndefined(apiKeyValue),
-          Option.getOrUndefined(baseUrl),
-          modelValue ?? loadedConfig.provider.model,
-          Option.getOrUndefined(approvalMode),
-          Option.getOrUndefined(bedrockRegion),
-          Option.getOrUndefined(nonInteractive)
-        );
-      }
-
-      return yield* Schema.decodeUnknownEffect(ConfigSchema)(loadedConfig).pipe(
-        Effect.mapError((e) => {
-          const err = e instanceof Error ? e : new Error(String(e));
-          return new ConfigValidationError({ message: err.message, cause: err });
-        })
+    } else {
+      loadedConfig = envOverrides(
+        loadedConfig,
+        Option.getOrUndefined(apiKeyValue),
+        Option.getOrUndefined(baseUrl),
+        modelValue ?? loadedConfig.provider.model,
+        Option.getOrUndefined(approvalMode),
+        Option.getOrUndefined(bedrockRegion),
+        Option.getOrUndefined(nonInteractive)
       );
-    })
-  );
+    }
 
-  static readonly layerWithPath = (path: string) =>
-    Layer.effect(
-      AppConfig,
-      Effect.gen(function* () {
-        const apiKey = yield* Config.option(
-          Config.redacted("PRODIGY_CODER_API_KEY").pipe(
-            Config.orElse(() => Config.redacted("OPENAI_API_KEY")),
-            Config.orElse(() => Config.redacted("ANTHROPIC_API_KEY")),
-            Config.orElse(() => Config.redacted("OPENROUTER_API_KEY")),
-            Config.orElse(() => Config.redacted("BEDROCK_API_KEY")),
-            Config.orElse(() => Config.redacted("GEMINI_API_KEY"))
-          )
-        );
-        const baseUrl = yield* Config.option(Config.string("PRODIGY_CODER_BASE_URL"));
-        const model = yield* Config.option(Config.string("PRODIGY_CODER_MODEL"));
-        const approvalMode = yield* Config.option(Config.string("PRODIGY_CODER_APPROVAL_MODE"));
-        const bedrockRegion = yield* Config.option(Config.string("BEDROCK_REGION"));
-        const nonInteractive = yield* Config.option(Config.string("PRODIGY_CODER_NON_INTERACTIVE"));
-
-        const apiKeyValue = Option.map(apiKey, Redacted.value);
-        const modelValue = Option.getOrUndefined(model);
-
-        let loadedConfig = defaultConfig(Option.getOrUndefined(apiKeyValue), modelValue);
-
-        const configPath = yield* findConfigFile(Option.some(path));
-        if (Option.isSome(configPath)) {
-          const fileConfig = yield* readConfigFile(configPath.value);
-          loadedConfig = envOverrides(
-            fileConfig,
-            Option.getOrUndefined(apiKeyValue),
-            Option.getOrUndefined(baseUrl),
-            modelValue,
-            Option.getOrUndefined(approvalMode),
-            Option.getOrUndefined(bedrockRegion),
-            Option.getOrUndefined(nonInteractive)
-          );
-        } else {
-          loadedConfig = envOverrides(
-            loadedConfig,
-            Option.getOrUndefined(apiKeyValue),
-            Option.getOrUndefined(baseUrl),
-            modelValue ?? loadedConfig.provider.model,
-            Option.getOrUndefined(approvalMode),
-            Option.getOrUndefined(bedrockRegion),
-            Option.getOrUndefined(nonInteractive)
-          );
-        }
-
-        return yield* Schema.decodeUnknownEffect(ConfigSchema)(loadedConfig).pipe(
-          Effect.mapError((e) => {
-            const err = e instanceof Error ? e : new Error(String(e));
-            return new ConfigValidationError({ message: err.message, cause: err });
-          })
-        );
+    return yield* Schema.decodeUnknownEffect(ConfigSchema)(loadedConfig).pipe(
+      Effect.mapError((e) => {
+        const err = e instanceof Error ? e : new Error(String(e));
+        return new ConfigValidationError({ message: err.message, cause: err });
       })
     );
+  });
+
+class AppConfig extends Context.Service<AppConfig, ConfigData>()("@prodigy/cli/config/AppConfig") {
+  static readonly layer = Layer.effect(AppConfig, makeAppConfigEffect(Option.none()));
+
+  static readonly layerWithPath = (path: string) => Layer.effect(AppConfig, makeAppConfigEffect(Option.some(path)));
 }
 
 export const loadConfig = (explicitPath?: string) =>

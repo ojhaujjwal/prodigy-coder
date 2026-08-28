@@ -2,7 +2,7 @@ import type { ApprovalMode } from "./config.ts";
 
 const DANGEROUS_TOOLS = new Set(["shell"]);
 
-export const needsApproval = (toolName: string, mode: ApprovalMode): boolean => {
+export const needsApproval = (toolName: string, mode: ApprovalMode) => {
   switch (mode) {
     case "none":
       return false;

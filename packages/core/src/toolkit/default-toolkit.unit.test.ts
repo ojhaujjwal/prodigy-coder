@@ -8,7 +8,7 @@ import {
   WorkspacePath,
   WorkspacePersistenceError,
   WorkspaceSearchError
-} from "../capabilities/workspace.ts";
+} from "../capabilities/workspace/index.ts";
 import { makeDefaultAgenticProfile, toToolError } from "./default-toolkit.ts";
 
 describe("toToolError", () => {

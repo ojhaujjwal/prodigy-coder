@@ -9,17 +9,19 @@ import {
   SessionPersistenceError,
   SessionReadFailure,
   SessionStore,
-  SessionWriteFailure
+  SessionWriteFailure,
+  SessionQueryError
 } from "./session-store.ts";
 import {
   Session,
   SessionRevision,
+  SessionId,
   generateSessionId,
   type Message,
   type SessionCheckpoint,
-  type SessionId,
   type SessionInitial,
-  type SessionSnapshot
+  type SessionSnapshot,
+  type SessionSummary
 } from "./session.ts";
 
 const SESSION_FORMAT_VERSION = 1;
@@ -164,7 +166,52 @@ const make = (sessionDir: string) =>
     const save = (checkpoint: SessionCheckpoint) =>
       saveLocks.withPermit(checkpoint.session.id)(saveUnlocked(checkpoint));
 
-    return { create, load, save };
+    const list = Effect.fn("FileSessionStore.list")(function* (): Effect.fn.Return<
+      ReadonlyArray<SessionSummary>,
+      SessionQueryError
+    > {
+      yield* fs
+        .makeDirectory(sessionDir, { recursive: true })
+        .pipe(Effect.mapError((cause) => new SessionQueryError({ cause })));
+      const entries = yield* fs
+        .readDirectory(sessionDir)
+        .pipe(Effect.mapError((cause) => new SessionQueryError({ cause })));
+      const jsonEntries = entries.filter((value) => value.endsWith(".json"));
+      const results = yield* Effect.forEach(
+        jsonEntries,
+        (entry) =>
+          Effect.gen(function* () {
+            const id = Schema.decodeUnknownOption(SessionId)(entry.slice(0, -5));
+            if (Option.isNone(id)) return Option.none<SessionSummary>();
+            const record = yield* readEnvelope(fs, id.value, sessionPath(id.value)).pipe(
+              Effect.option,
+              Effect.map(Option.flatten)
+            );
+            if (Option.isNone(record)) return Option.none<SessionSummary>();
+            return Option.some({
+              id: record.value.session.id,
+              createdAt: record.value.session.createdAt,
+              updatedAt: record.value.session.updatedAt
+            });
+          }),
+        { concurrency: 8 }
+      );
+      const summaries = results.filter(Option.isSome).map((option) => option.value);
+      return summaries.sort((left, right) => right.updatedAt.epochMilliseconds - left.updatedAt.epochMilliseconds);
+    });
+
+    const deleteSession = Effect.fn("FileSessionStore.delete")(function* (
+      id: SessionId
+    ): Effect.fn.Return<void, SessionPersistenceError> {
+      yield* saveLocks
+        .withPermit(id)(fs.remove(sessionPath(id)))
+        .pipe(
+          Effect.catch((error) => (error.reason._tag === "NotFound" ? Effect.void : Effect.fail(error))),
+          Effect.mapError((cause) => new SessionPersistenceError({ reason: new SessionWriteFailure({ id, cause }) }))
+        );
+    });
+
+    return { create, load, save, list, delete: deleteSession };
   });
 
 /**

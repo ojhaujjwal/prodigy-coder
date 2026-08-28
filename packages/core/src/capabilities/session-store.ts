@@ -1,5 +1,11 @@
 import { Context, Effect, Schema } from "effect";
-import { SessionId, type SessionCheckpoint, type SessionInitial, type SessionSnapshot } from "./session.ts";
+import {
+  SessionId,
+  type SessionCheckpoint,
+  type SessionInitial,
+  type SessionSnapshot,
+  type SessionSummary
+} from "./session.ts";
 
 export class SessionNotFound extends Schema.TaggedErrorClass<SessionNotFound>()("SessionNotFound", {
   id: SessionId
@@ -48,6 +54,11 @@ export class SessionPersistenceError extends Schema.TaggedErrorClass<SessionPers
   }
 ) {}
 
+/** A failure while enumerating the session store. Individual malformed records are skipped by `list`. */
+export class SessionQueryError extends Schema.TaggedErrorClass<SessionQueryError>()("SessionQueryError", {
+  cause: Schema.Defect()
+}) {}
+
 export type SessionError = SessionLookupError | SessionPersistenceError;
 
 /**
@@ -61,5 +72,11 @@ export class SessionStore extends Context.Service<
     readonly create: (initial: SessionInitial) => Effect.Effect<SessionSnapshot, SessionPersistenceError>;
     readonly load: (id: SessionId) => Effect.Effect<SessionSnapshot, SessionLookupError>;
     readonly save: (checkpoint: SessionCheckpoint) => Effect.Effect<SessionSnapshot, SessionPersistenceError>;
+    readonly list: () => Effect.Effect<ReadonlyArray<SessionSummary>, SessionQueryError>;
+    /**
+     * Delete the session transcript. Deletion is idempotent: deleting a session
+     * that does not exist (never created or already deleted) succeeds.
+     */
+    readonly delete: (id: SessionId) => Effect.Effect<void, SessionPersistenceError>;
   }
 >()("@prodigy/core/capabilities/session-store/SessionStore") {}

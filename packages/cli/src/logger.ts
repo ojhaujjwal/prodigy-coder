@@ -1,10 +1,9 @@
 import { Duration, Effect, Layer, Logger } from "effect";
 import * as FileSystem from "effect/FileSystem";
-import type { PlatformError } from "effect/PlatformError";
 
 const LOG_FILE = "logs/app.log";
 
-export const makeFileLoggerLayer = (): Layer.Layer<never, PlatformError, FileSystem.FileSystem> =>
+export const makeFileLoggerLayer = () =>
   Layer.effect(
     Logger.CurrentLoggers,
     Effect.gen(function* () {

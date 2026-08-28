@@ -1,33 +1,24 @@
-import { Context, Effect, Layer, Option } from "effect";
+import { Effect, Layer, Option, Schema } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
+import { SkillName as CoreSkillName, SkillRepository } from "@prodigy/core";
 
 export interface Skill {
-  readonly name: string;
+  readonly name: CoreSkillName;
   readonly description: string;
   readonly content: string;
   readonly source: "cwd" | "home";
   readonly disableModelInvocation: boolean;
 }
 
-export class SkillsRepo extends Context.Service<
-  SkillsRepo,
-  {
-    readonly all: Effect.Effect<readonly Skill[]>;
-    readonly findByName: (name: string) => Effect.Effect<Option.Option<Skill>>;
-    readonly autoInvokable: Effect.Effect<readonly Skill[]>;
-  }
->()("@prodigy/cli/skills/SkillsRepo") {
-  static readonly layer = (skills: readonly Skill[]) =>
-    Layer.succeed(
-      SkillsRepo,
-      SkillsRepo.of({
-        all: Effect.succeed(skills),
-        findByName: (name: string) => Effect.succeed(Option.fromNullishOr(skills.find((s) => s.name === name))),
-        autoInvokable: Effect.succeed(skills.filter((s) => !s.disableModelInvocation))
-      })
-    );
-}
+export const makeSkillRepositoryLayer = (skills: readonly Skill[]) =>
+  Layer.succeed(
+    SkillRepository,
+    SkillRepository.of({
+      findByName: (name) => Effect.succeed(Option.fromUndefinedOr(skills.find((skill) => skill.name === name))),
+      autoInvokable: Effect.succeed(skills.filter((skill) => !skill.disableModelInvocation))
+    })
+  );
 
 export const parseFrontmatter = (
   fileContent: string
@@ -60,13 +51,16 @@ const discoverFromSource = (basePath: string, source: "cwd" | "home") =>
       yield* fs.readFileString(skillFile).pipe(
         Effect.map((content) => {
           Option.tap(parseFrontmatter(content), (parsed) => {
-            skills.push({
-              name: parsed.name,
-              description: parsed.description,
-              content: parsed.content,
-              source,
-              disableModelInvocation: parsed.disableModelInvocation
-            });
+            const name = Schema.decodeUnknownOption(CoreSkillName)(parsed.name);
+            if (Option.isSome(name)) {
+              skills.push({
+                name: name.value,
+                description: parsed.description,
+                content: parsed.content,
+                source,
+                disableModelInvocation: parsed.disableModelInvocation
+              });
+            }
             return Option.none();
           });
         }),
@@ -91,10 +85,10 @@ export const discoverSkills = (home: string) =>
     return [...cwdSkills, ...homeFiltered];
   });
 
-export const formatSkillsIndex = (skills: readonly Skill[]): string => {
+export const formatSkillsIndex = (skills: readonly Skill[]) => {
   if (skills.length === 0) return "";
   const lines = skills.map((s) => `- ${s.name}: ${s.description}`);
   return `Available Skills (use load_skill to view full content):\n${lines.join("\n")}`;
 };
 
-export const formatSkillContent = (skill: Skill): string => `# Skill: ${skill.name}\n\n${skill.content}`;
+export const formatSkillContent = (skill: Skill) => `# Skill: ${skill.name}\n\n${skill.content}`;

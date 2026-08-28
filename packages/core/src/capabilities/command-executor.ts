@@ -1,6 +1,6 @@
 import { Context, Effect, Schema } from "effect";
 import type { Duration } from "effect/Duration";
-import type { WorkspacePath } from "./workspace.ts";
+import type { WorkspacePath } from "./workspace/index.ts";
 
 /** A structured request to execute a command. */
 export type CommandRequest = {

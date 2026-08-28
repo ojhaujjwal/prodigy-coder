@@ -2,7 +2,11 @@ import { describe, expect, layer } from "@effect/vitest";
 import { ConfigProvider, Effect, Layer, Schema } from "effect";
 import { AppConfig, loadConfig, maskConfig, ConfigSchema } from "./config.ts";
 import * as FileSystem from "effect/FileSystem";
+import { PositiveInt } from "@prodigy/core";
 import { layer as bunServicesLayer } from "@effect/platform-bun/BunServices";
+
+/** Brand a plain number so fixtures satisfy the `PositiveInt` config field. */
+const turns = (n: number): PositiveInt => Schema.decodeUnknownSync(PositiveInt)(n);
 
 const CONFIG_DATA = {
   provider: {
@@ -12,7 +16,7 @@ const CONFIG_DATA = {
     model: "gpt-4o-mini"
   },
   approvalMode: "dangerous" as const,
-  maxTurns: 100,
+  maxTurns: turns(100),
   systemPrompt: "Custom prompt",
   nonInteractive: false
 };
@@ -26,7 +30,7 @@ const CUSTOM_CONFIG_DATA = {
     model: "claude-3-5-sonnet-20241022"
   },
   approvalMode: "all" as const,
-  maxTurns: 25,
+  maxTurns: turns(25),
   systemPrompt: undefined,
   nonInteractive: false
 };
@@ -40,7 +44,7 @@ const ENV_OVERRIDE_CONFIG_DATA = {
     model: "gpt-4o"
   },
   approvalMode: "none" as const,
-  maxTurns: 50,
+  maxTurns: turns(50),
   systemPrompt: undefined,
   nonInteractive: false
 };
@@ -155,6 +159,13 @@ layer(bunServicesLayer)("config", (it) => {
       )
     );
 
+    it.effect("non-positive maxTurns in the file is rejected at parse time", () =>
+      setupTmpDir().pipe(
+        Effect.andThen(writeConfigFile('{"provider":{"type":"openai-compat"},"approvalMode":"none","maxTurns":0}')),
+        Effect.andThen(runWithConfig(AppConfig).pipe(Effect.flip, Effect.ensuring(teardownTmpDir())))
+      )
+    );
+
     it.effect("explicit config path is used when provided", () =>
       setupTmpDir().pipe(
         Effect.andThen(writeConfigFile(CUSTOM_CONFIG_CONTENT, "custom-config.json")),
@@ -199,7 +210,7 @@ layer(bunServicesLayer)("config", (it) => {
           apiKey: "bedrock-key"
         },
         approvalMode: "none" as const,
-        maxTurns: 50,
+        maxTurns: turns(50),
         systemPrompt: undefined,
         nonInteractive: false
       });
@@ -228,7 +239,7 @@ layer(bunServicesLayer)("config", (it) => {
           baseUrl: "https://custom.aws/v1"
         },
         approvalMode: "none" as const,
-        maxTurns: 50,
+        maxTurns: turns(50),
         systemPrompt: undefined,
         nonInteractive: false
       });
@@ -260,7 +271,7 @@ layer(bunServicesLayer)("config", (it) => {
           model: "gpt-4o"
         },
         approvalMode: "none" as const,
-        maxTurns: 50,
+        maxTurns: turns(50),
         systemPrompt: undefined,
         nonInteractive: false
       };
@@ -276,7 +287,7 @@ layer(bunServicesLayer)("config", (it) => {
           model: "gpt-4o"
         },
         approvalMode: "none" as const,
-        maxTurns: 50,
+        maxTurns: turns(50),
         systemPrompt: undefined,
         nonInteractive: false
       };

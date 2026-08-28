@@ -12,7 +12,7 @@ import {
   type WorkspaceError,
   type GrepRequest,
   type GrepMatch
-} from "../capabilities/workspace.ts";
+} from "../capabilities/workspace/index.ts";
 import { PositiveInt, type AgentProfile } from "../agent/agent-profile.ts";
 
 // ---------------------------------------------------------------------------
@@ -238,7 +238,7 @@ export const grepHandler = (
     const matches: ReadonlyArray<GrepMatch> = yield* workspace
       .grep(request)
       .pipe(Effect.mapError(toToolError("GrepTool", "grepHandler")));
-    return matches.map((m) => `${m.path}:${m.line}`);
+    return matches.map((m) => `${m.path}:${m.lineNumber}:${m.line}`);
   });
 
 // ---------------------------------------------------------------------------

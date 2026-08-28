@@ -38,7 +38,9 @@ it.effect("streams one turn and commits one completed checkpoint", () =>
             session: { ...checkpoint.session, updatedAt: DateTime.makeUnsafe(1) },
             revision: SessionRevision.make(checkpoint.expectedRevision + 1)
           };
-        })
+        }),
+      list: () => Effect.die("unused"),
+      delete: () => Effect.die("unused")
     });
     const model = yield* LanguageModel.make({
       generateText: () => Effect.succeed([]),

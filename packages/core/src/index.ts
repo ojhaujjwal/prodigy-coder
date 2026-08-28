@@ -6,8 +6,9 @@
  * and event/result/error vocabulary, the default toolkit with its handler
  * layer and profile, and the capability services (`SessionStore`, `Workspace`,
  * `CommandExecutor`, `HumanInteraction`, `SkillRepository`) with the usable
- * in-memory and file-backed session adapters. Importing this module performs
- * no effects and starts no runtime — consumers compose the Layers themselves.
+ * in-memory and file-backed session adapters and the filesystem-backed
+ * workspace adapter. Importing this module performs no effects and starts no
+ * runtime — consumers compose the Layers themselves.
  *
  * Identity schemas and implementation helpers stay unexported. Public value
  * schemas (`PositiveInt`, `WorkspacePath`, and `SkillName`) are exported so
@@ -35,6 +36,7 @@ export {
   SessionConflict,
   SessionEncodeFailure,
   SessionWriteFailure,
+  SessionQueryError,
   SessionLookupError,
   SessionPersistenceError
 } from "./capabilities/session-store.ts";
@@ -45,13 +47,18 @@ export { InteractionErrorReasonSchema, approvalDecisionFromInteraction } from ".
 export { HumanInteractionError } from "./capabilities/human-interaction.ts";
 export type {
   Session,
-  SessionId,
   SessionRevision,
   SessionSnapshot,
-  SessionCheckpoint
+  SessionCheckpoint,
+  SessionSummary
 } from "./capabilities/session.ts";
-export { Workspace, WorkspacePath } from "./capabilities/workspace.ts";
-export type { WorkspaceError, GrepRequest, GrepMatch, GlobRequest } from "./capabilities/workspace.ts";
+export { SessionId } from "./capabilities/session.ts";
+export { Workspace, WorkspacePath } from "./capabilities/workspace/index.ts";
+export type { WorkspaceError, GrepRequest, GrepMatch, GlobRequest } from "./capabilities/workspace/index.ts";
+export { layer as fileSystemWorkspaceLayer } from "./capabilities/workspace/file-system-workspace/index.ts";
+export { ripgrepGrep, findGlob, globSource } from "./capabilities/workspace/file-system-workspace/index.ts";
+export { isInsideRoot, isCwdInsideRoot } from "./capabilities/workspace/file-system-workspace/paths.ts";
+export { revisionOf } from "./capabilities/workspace/file-system-workspace/revision.ts";
 export { CommandExecutor } from "./capabilities/command-executor.ts";
 export type { CommandRequest, CommandResult } from "./capabilities/command-executor.ts";
 export { HumanInteraction } from "./capabilities/human-interaction.ts";
@@ -64,7 +71,11 @@ export type {
 export { SkillRepository, SkillName } from "./capabilities/skill-repository.ts";
 export type { Skill } from "./capabilities/skill-repository.ts";
 export { CommandExecuteError } from "./capabilities/command-executor.ts";
-export { WorkspaceLookupError, WorkspacePersistenceError, WorkspaceSearchError } from "./capabilities/workspace.ts";
+export {
+  WorkspaceLookupError,
+  WorkspacePersistenceError,
+  WorkspaceSearchError
+} from "./capabilities/workspace/index.ts";
 export {
   DefaultAgenticToolkit,
   defaultAgenticToolkitLayer,

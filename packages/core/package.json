@@ -6,6 +6,7 @@
     "src/**/*.ts"
   ],
   "type": "module",
+  "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
     "./package.json": "./package.json"
@@ -14,7 +15,7 @@
     "ci": "bun run lint && bun run typecheck && bun run test --run",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "bun --bun oxlint src tests",
-    "lint-fix": "bun --bun oxlint --fix src tests",
+    "lint-fix": "bun --bun oxlint --fix --fix-suggestions src tests",
     "test": "bun --bun vitest",
     "coverage": "bun --bun vitest --coverage"
   },

@@ -100,6 +100,8 @@ export type SessionSnapshot = {
   readonly revision: SessionRevision;
 };
 
+export type SessionSummary = Pick<Session, "id" | "createdAt" | "updatedAt">;
+
 /** A session plus the revision a caller expects the store to currently hold. */
 export type SessionCheckpoint = {
   readonly session: Session;

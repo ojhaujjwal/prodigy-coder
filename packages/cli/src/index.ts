@@ -1,95 +1,15 @@
-import { BunRuntime, BunServices } from "@effect/platform-bun";
+import { BunRuntime } from "@effect/platform-bun";
 import { Argument, Command, Flag } from "effect/unstable/cli";
-import { Config, Console, Effect, Layer, Option, Schema } from "effect";
-import * as Stdio from "effect/Stdio";
-import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
-import { AppConfig, loadConfig, maskConfig, type ConfigData } from "./config.ts";
-import { SessionRepo } from "./session.ts";
+import { Config, Console, DateTime, Effect, Option, Schema, Stream } from "effect";
+import { SessionId, SessionStore, PositiveInt } from "@prodigy/core";
+import { AppConfig, loadConfig, maskConfig } from "./config.ts";
+import { applicationLayer, configFlag, invoke } from "./invocation.ts";
+import type { InvocationFlags } from "./invocation.ts";
 import { createFormatter } from "./output.ts";
-import { runAgent as runAgentLoop } from "./agent.ts";
-import type { AgentConfig } from "./agent.ts";
-import { makeToolkitLayer } from "./tools/index.ts";
-import { buildProviderLayer } from "./provider.ts";
-import { makeApprovalGateLayer } from "./approval-gate.ts";
-import { makeFileLoggerLayer } from "./logger.ts";
 import { parseCommand } from "./slash-commands.ts";
-import { discoverSkills, SkillsRepo, formatSkillsIndex, formatSkillContent } from "./skills.ts";
-import type { Skill } from "./skills.ts";
-
-const systemPromptBuilder = (skills: Skill[], config: ConfigData) => {
-  const explicitPrompt = config.systemPrompt ?? "";
-  const autoInvokable = skills.filter((s) => !s.disableModelInvocation);
-
-  const skillsIndex = autoInvokable.length > 0 ? formatSkillsIndex(autoInvokable) : "";
-
-  return [skillsIndex, explicitPrompt].filter(Boolean).join("\n\n");
-};
-
-const configPathFromArgs = (args: readonly string[]): string | undefined => {
-  for (let index = 0; index < args.length; index++) {
-    const arg = args[index];
-    if (arg?.startsWith("--config=")) {
-      return arg.slice("--config=".length);
-    }
-    if (arg === "--config") {
-      return args[index + 1];
-    }
-  }
-  return undefined;
-};
-
-const runAgent = (
-  userMessages: readonly string[],
-  sessionId: Option.Option<string>,
-  config: ConfigData,
-  skills: Skill[]
-) =>
-  Effect.scoped(
-    Effect.gen(function* () {
-      const sessionRepo = yield* SessionRepo;
-
-      const combinedSystemPrompt = systemPromptBuilder(skills, config);
-
-      const sessionEffect = Option.match(sessionId, {
-        onNone: () => sessionRepo.create(combinedSystemPrompt),
-        onSome: (id) =>
-          sessionRepo
-            .load(id)
-            .pipe(
-              Effect.catchTag("SessionNotFound", () =>
-                Effect.andThen(Console.log(`Session ${id} not found, starting a new session.`), () =>
-                  sessionRepo.create(combinedSystemPrompt)
-                )
-              )
-            )
-      });
-
-      const session = yield* sessionEffect;
-
-      const agentConfig: AgentConfig = { session, config: { ...config, systemPrompt: combinedSystemPrompt } };
-      const skillsRepoLayer = SkillsRepo.layer(skills);
-      const providerLayer = buildProviderLayer(config.provider).pipe(Layer.provideMerge(FetchHttpClient.layer));
-      const agentLayer = Layer.mergeAll(
-        providerLayer,
-        makeToolkitLayer({
-          nonInteractive: config.nonInteractive ?? false,
-          skillsRepoLayer
-        }),
-        skillsRepoLayer
-      ).pipe(Layer.provide(makeApprovalGateLayer(config)));
-
-      const outputEvents = yield* runAgentLoop(userMessages, agentConfig).pipe(
-        // @effect-diagnostics-next-line effect/strictEffectProvide:off
-        Effect.provide(agentLayer)
-      );
-      yield* sessionRepo.save(session);
-      return { outputEvents, sessionId: session.id };
-    })
-  );
+import { discoverSkills, formatSkillContent } from "./skills.ts";
 
 const promptArg = Argument.string("prompt").pipe(Argument.optional, Argument.withDescription("The prompt to process"));
-
-const printFlag = Flag.boolean("print").pipe(Flag.withAlias("p"), Flag.withDescription("Print output"));
 
 const outputFormatFlag = Flag.choice("output-format", ["text", "stream-json"] as const).pipe(
   Flag.withAlias("f"),
@@ -111,21 +31,25 @@ const continueFlag = Flag.boolean("continue").pipe(
 
 const modelFlag = Flag.string("model").pipe(Flag.withAlias("m"), Flag.withDescription("Model name"), Flag.optional);
 
+// Parsed, not validated: the flag yields a branded `PositiveInt` or a usage
+// error at parse time — an invalid value never reaches the invocation.
 const maxTurnsFlag = Flag.integer("max-turns").pipe(
+  Flag.filterMap(
+    (turns) => (turns > 0 ? Option.some(Schema.decodeUnknownSync(PositiveInt)(turns)) : Option.none()),
+    (turns) => `Invalid --max-turns: ${turns}. Must be a positive integer.`
+  ),
   Flag.withAlias("t"),
   Flag.withDescription("Maximum number of turns"),
   Flag.optional
 );
 
-const approvalModeFlag = Flag.choice("approval-mode", ["none", "dangerous", "all"]).pipe(
+const approvalModeFlag = Flag.choice("approval-mode", ["none", "dangerous", "all"] as const).pipe(
   Flag.withAlias("a"),
   Flag.withDescription("Approval mode"),
   Flag.optional
 );
 
 const systemPromptFlag = Flag.string("system-prompt").pipe(Flag.withDescription("System prompt"), Flag.optional);
-
-const configFlag = Flag.string("config").pipe(Flag.withDescription("Config file path"), Flag.optional);
 
 const nonInteractiveFlag = Flag.boolean("non-interactive").pipe(
   Flag.withAlias("n"),
@@ -137,7 +61,6 @@ const mainCommand = Command.make(
   "prodigy",
   {
     prompt: promptArg,
-    print: printFlag,
     outputFormat: outputFormatFlag,
     session: sessionFlag,
     continue: continueFlag,
@@ -145,7 +68,6 @@ const mainCommand = Command.make(
     maxTurns: maxTurnsFlag,
     approvalMode: approvalModeFlag,
     systemPrompt: systemPromptFlag,
-    config: configFlag,
     nonInteractive: nonInteractiveFlag
   },
   ({ prompt, outputFormat, session, continue: cont, model, maxTurns, approvalMode, systemPrompt, nonInteractive }) =>
@@ -181,45 +103,33 @@ const mainCommand = Command.make(
         userMessages = [promptText];
       }
 
-      const finalConfig: ConfigData = {
-        ...appConfig,
-        provider: {
-          ...appConfig.provider,
-          model: Option.getOrElse(model, () => appConfig.provider.model)
-        },
-        maxTurns: Option.getOrElse(maxTurns, () => appConfig.maxTurns),
-        approvalMode: Option.getOrElse(approvalMode, () => appConfig.approvalMode),
-        systemPrompt: Option.getOrElse(systemPrompt, () => appConfig.systemPrompt),
-        nonInteractive: nonInteractive || appConfig.nonInteractive
-      };
-
+      const flags: InvocationFlags = { model, maxTurns, approvalMode, systemPrompt, nonInteractive };
       const formatter = createFormatter(outputFormat);
-      const { outputEvents, sessionId: resultingSessionId } = yield* runAgent(
-        userMessages,
-        sessionId,
-        finalConfig,
-        skills
+      const promptForRun = userMessages.join("\n\n");
+      yield* invoke(promptForRun, sessionId, appConfig, flags, skills).pipe(
+        Stream.runForEach(formatter),
+        // The failure message was already rendered by the formatter; just
+        // surface it in the exit status.
+        Effect.catchTag("RunFailed", () =>
+          Effect.sync(() => {
+            process.exitCode = 1;
+          })
+        )
       );
-
-      for (const event of outputEvents) {
-        yield* formatter(event);
-      }
-
-      yield* formatter({ type: "session-info", sessionId: resultingSessionId });
     })
 ).pipe(Command.withDescription("Run the AI coder"));
 
 const listSessionsCommand = Command.make("list", {}, () =>
   Effect.gen(function* () {
-    const repo = yield* SessionRepo;
-    const sessions = yield* repo.list();
+    const store = yield* SessionStore;
+    const sessions = yield* store.list();
 
     if (sessions.length === 0) {
       yield* Console.log("No sessions found");
     } else {
       for (const session of sessions) {
         yield* Console.log(
-          `${session.id} | Created: ${session.createdAt.toISOString()} | Updated: ${session.updatedAt.toISOString()}`
+          `${session.id} | Created: ${DateTime.formatIso(session.createdAt)} | Updated: ${DateTime.formatIso(session.updatedAt)}`
         );
       }
     }
@@ -230,8 +140,13 @@ const deleteSessionArg = Argument.string("id").pipe(Argument.withDescription("Se
 
 const deleteSessionCommand = Command.make("delete", { id: deleteSessionArg }, ({ id }) =>
   Effect.gen(function* () {
-    const repo = yield* SessionRepo;
-    yield* repo.delete(id);
+    const store = yield* SessionStore;
+    const sessionId = Schema.decodeUnknownOption(SessionId)(id);
+    if (Option.isNone(sessionId)) {
+      yield* Console.log(`Invalid session ID: ${id}`);
+      return;
+    }
+    yield* store.delete(sessionId.value);
     yield* Console.log(`Deleted session ${id}`);
   })
 ).pipe(Command.withDescription("Delete a session"));
@@ -257,22 +172,10 @@ const configCommand = Command.make("config", {}, () => Effect.void).pipe(
 
 export const app = Command.make("prodigy", {}).pipe(
   Command.withDescription("AI coding assistant"),
-  Command.withSubcommands([mainCommand, sessionCommand, configCommand])
+  Command.withSharedFlags({ config: configFlag }),
+  Command.withSubcommands([mainCommand, sessionCommand, configCommand]),
+  Command.provide((input) => loadConfig(Option.getOrUndefined(input.config)))
 );
-
-const appConfigLayer = Layer.unwrap(
-  Stdio.Stdio.pipe(
-    Effect.flatMap((stdio) => stdio.args),
-    Effect.map((args) => loadConfig(configPathFromArgs(args)))
-  )
-);
-
-const applicationLayer = Layer.mergeAll(
-  appConfigLayer,
-  makeFileLoggerLayer(),
-  SessionRepo.layer(".prodigy-coder/sessions"),
-  SkillsRepo.layer([])
-).pipe(Layer.provideMerge(BunServices.layer));
 
 const cli = Command.run(app, {
   version: "0.0.1"

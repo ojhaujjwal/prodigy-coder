@@ -4,6 +4,7 @@ import {
   SessionLookupError,
   SessionNotFound,
   SessionPersistenceError,
+  SessionQueryError,
   SessionStore
 } from "./session-store.ts";
 import {
@@ -14,7 +15,8 @@ import {
   type SessionCheckpoint,
   type SessionId,
   type SessionInitial,
-  type SessionSnapshot
+  type SessionSnapshot,
+  type SessionSummary
 } from "./session.ts";
 
 type SessionEntry = {
@@ -86,7 +88,25 @@ const make = Effect.gen(function* () {
     return outcome.snapshot;
   });
 
-  return { create, load, save };
+  const list = Effect.fn("MemorySessionStore.list")(function* (): Effect.fn.Return<
+    ReadonlyArray<SessionSummary>,
+    SessionQueryError
+  > {
+    const current = yield* Ref.get(entries);
+    return Array.from(HashMap.values(current), (entry) => ({
+      id: entry.session.id,
+      createdAt: entry.session.createdAt,
+      updatedAt: entry.session.updatedAt
+    })).sort((left, right) => right.updatedAt.epochMilliseconds - left.updatedAt.epochMilliseconds);
+  });
+
+  const deleteSession = Effect.fn("MemorySessionStore.delete")(function* (
+    id: SessionId
+  ): Effect.fn.Return<void, SessionPersistenceError> {
+    yield* Ref.update(entries, (current) => HashMap.remove(current, id));
+  });
+
+  return { create, load, save, list, delete: deleteSession };
 });
 
 /**

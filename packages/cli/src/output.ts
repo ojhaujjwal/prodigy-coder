@@ -42,7 +42,13 @@ export const SessionInfo = Schema.Struct({
 });
 export type SessionInfo = typeof SessionInfo.Type;
 
-export const OutputEvent = Schema.Union([TextDelta, ToolCall, ToolResult, Finish, ErrorEvent, SessionInfo]);
+export const Notice = Schema.Struct({
+  type: Schema.Literal("notice"),
+  message: Schema.String
+});
+export type Notice = typeof Notice.Type;
+
+export const OutputEvent = Schema.Union([TextDelta, ToolCall, ToolResult, Finish, ErrorEvent, SessionInfo, Notice]);
 export type OutputEvent = typeof OutputEvent.Type;
 
 export type OutputFormatter = (event: OutputEvent) => Effect.Effect<void>;
@@ -56,61 +62,61 @@ export type OutputPayload =
   | { readonly type: "error"; readonly message: string }
   | { readonly type: "session"; readonly session_id: string; readonly export_command: string };
 
-const textColor = (color: number, text: string): string => `\x1b[${color}m${text}\x1b[0m`;
+const textColor = (color: number, text: string) => `\x1b[${color}m${text}\x1b[0m`;
 
-const truncate = (str: string, maxLen: number): string => {
+const truncate = (str: string, maxLen: number) => {
   if (str.length <= maxLen) return str;
   return str.slice(0, maxLen) + "...";
 };
 
-export const makeTextFormatter =
-  (): OutputFormatter =>
-  (event: OutputEvent): Effect.Effect<void> => {
+export const makeTextFormatter = (): OutputFormatter => (event: OutputEvent) => {
+  switch (event.type) {
+    case "text-delta":
+      return Console.log(event.delta);
+    case "tool-call": {
+      const paramsStr = JSON.stringify(event.params);
+      const display = `> ${event.name}(${truncate(paramsStr, 100)})`;
+      return Console.log(textColor(34, display));
+    }
+    case "tool-result":
+      return Console.log(textColor(90, truncate(event.result, 500)));
+    case "finish":
+      return Console.log("\n" + event.text + "\n");
+    case "error":
+      return Console.log(textColor(31, `Error: ${event.message}`));
+    case "session-info":
+      return Console.log(`\n---\nSession: ${event.sessionId}\nexport PRODIGY_SESSION_ID=${event.sessionId}\n---\n`);
+    case "notice":
+      return Console.log(textColor(33, event.message));
+  }
+};
+
+export const makeStreamJsonFormatter = (): OutputFormatter => (event: OutputEvent) => {
+  const output: OutputPayload = (() => {
     switch (event.type) {
       case "text-delta":
-        return Console.log(event.delta);
-      case "tool-call": {
-        const paramsStr = JSON.stringify(event.params);
-        const display = `> ${event.name}(${truncate(paramsStr, 100)})`;
-        return Console.log(textColor(34, display));
-      }
+        return { type: "content", content: [{ type: "text", text: event.delta }] };
+      case "tool-call":
+        return { type: "tool_use", name: event.name, input: event.params };
       case "tool-result":
-        return Console.log(textColor(90, truncate(event.result, 500)));
+        return { type: "tool_result", content: event.result, is_error: event.isError };
       case "finish":
-        return Console.log("\n" + event.text + "\n");
+        return { type: "final", content: event.text };
       case "error":
-        return Console.log(textColor(31, `Error: ${event.message}`));
+        return { type: "error", message: event.message };
       case "session-info":
-        return Console.log(`\n---\nSession: ${event.sessionId}\nexport PRODIGY_SESSION_ID=${event.sessionId}\n---\n`);
+        return {
+          type: "session",
+          session_id: event.sessionId,
+          export_command: `export PRODIGY_SESSION_ID=${event.sessionId}`
+        };
+      case "notice":
+        return { type: "content", content: [{ type: "text", text: event.message }] };
     }
-  };
+  })();
 
-export const makeStreamJsonFormatter =
-  (): OutputFormatter =>
-  (event: OutputEvent): Effect.Effect<void> => {
-    const output: OutputPayload = (() => {
-      switch (event.type) {
-        case "text-delta":
-          return { type: "content", content: [{ type: "text", text: event.delta }] };
-        case "tool-call":
-          return { type: "tool_use", name: event.name, input: event.params };
-        case "tool-result":
-          return { type: "tool_result", content: event.result, is_error: event.isError };
-        case "finish":
-          return { type: "final", content: event.text };
-        case "error":
-          return { type: "error", message: event.message };
-        case "session-info":
-          return {
-            type: "session",
-            session_id: event.sessionId,
-            export_command: `export PRODIGY_SESSION_ID=${event.sessionId}`
-          };
-      }
-    })();
+  return Console.log(JSON.stringify(output));
+};
 
-    return Console.log(JSON.stringify(output));
-  };
-
-export const createFormatter = (format: "text" | "stream-json"): OutputFormatter =>
+export const createFormatter = (format: "text" | "stream-json") =>
   format === "text" ? makeTextFormatter() : makeStreamJsonFormatter();

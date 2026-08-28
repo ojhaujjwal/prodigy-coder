@@ -1,11 +1,11 @@
 # Prodigy CLI
 
-This context defines the language for the current Prodigy command-line application. The CLI currently owns its invocation, provider, tool, session, approval, skill, and output behavior; it is being prepared for a later migration to the runtime-neutral contracts in `packages/core`.
+This context defines the language for the Prodigy command-line adapter. The CLI owns invocation, provider configuration, terminal interaction, skills, commands, and output compatibility; `packages/core` owns agent runs, tools, sessions, and capability contracts.
 
 ## Invocation And Configuration
 
 **CLI invocation**:
-One user-facing command execution that parses input, selects configuration, runs the current agent loop, and presents the result.
+One user-facing command execution that parses input, selects configuration, runs `ProdigyAgent`, and presents translated core events. A fatal run failure renders an `error` event and exits non-zero; turn-limit exhaustion renders an `error` event but exits zero.
 
 **Configuration**:
 The effective CLI policy assembled from defaults and user-provided configuration. It includes provider selection, turn limits, approval behavior, output format, session choice, system guidance, and interactive mode.
@@ -16,37 +16,40 @@ The CLI choice of model service for an invocation. Provider-specific configurati
 **Non-interactive mode**:
 A CLI policy that cannot wait for a human prompt. Approval requests are denied and user-question tools are unavailable rather than being silently approved.
 
-## Current Agent Vocabulary
+## Agent Vocabulary
 
-**CLI agent loop**:
-The current CLI-owned execution of user messages, model turns, tool calls, approvals, and session persistence. It is transitional vocabulary while the CLI still runs independently from the core package.
+**Core agent run**:
+The core-owned execution of prompts, model turns, tool calls, approvals, checkpoints, and terminal results. The CLI consumes its lazy event stream.
 
 **OutputEvent**:
-The CLI's presentation-oriented event vocabulary. It includes text deltas, tool calls and results, finish and error messages, and session information; it is not the same protocol as core's `AgentEvent`.
-_Avoid_: AgentEvent
+The CLI's presentation-oriented event vocabulary. It includes text deltas, tool calls and results, finish and error messages, notices, and session information; it is not the same protocol as core's `AgentEvent`.
+The CLI translates `AgentEvent` to `OutputEvent` only at the presentation boundary, and the translation is total: every core event is either projected into presentation events or explicitly treated as presentation-internal.
+
+**Notice**:
+A CLI-generated presentation event for invocation-time messages that are not part of the model's output (for example, announcing that a missing session is being restarted). It flows through the same output formats as model output; in stream-JSON it renders as content text so the wire protocol stays stable.
 
 **Output format**:
 The presentation contract used to render CLI events as human-readable text or stream JSON. A format controls presentation and compatibility fields, not the meaning of the underlying agent work.
 
-**CLI session**:
-Conversation state managed by the current CLI application, including its list and delete commands. It overlaps with core's future `Session` concept but remains a separate current model until migration is complete.
+**Session administration**:
+CLI list and delete commands operating on the core `FileSessionStore` format.
 
 **Session continuation**:
-The CLI request to use a prior session, supplied explicitly by a flag or environment value. The current CLI may apply its own fallback behavior when that session is unavailable; this must not be confused with core's explicit continuation semantics.
+The CLI request to use a prior session, supplied explicitly by a flag or environment value. The CLI retains its missing-session notice and retries as a new run; core continuation itself remains explicit.
 
 ## Tools And Approval
 
-**CLI tool**:
-A model-facing operation currently wired by the CLI to local providers and local execution behavior. The later core migration will move the stable tool contract and authority boundary into core while leaving CLI policy in this context.
+**Core tool**:
+A model-facing operation defined and handled by core against CLI-provided capability layers.
 
 **Approval mode**:
 The CLI policy selecting which tool calls require approval: `none`, `dangerous`, or `all`.
 
-**ApprovalGate**:
-The CLI policy boundary that applies the selected approval mode to a tool call and decides whether to allow, deny, or request approval.
+**Human interaction adapter**:
+The CLI terminal implementation of core `HumanInteraction` for approvals and user questions. A closed or unusable prompt channel (EOF, piped stdin, quit) degrades to a denial rather than aborting the run; only `--non-interactive` denies without ever prompting.
 
-**Approval prompt**:
-The terminal interaction used to collect an approval decision for a gated tool call. It is a CLI presentation adapter, not the canonical interaction contract for all deployments.
+**Approval policy**:
+The CLI predicate selecting which core tool calls require human approval. Conversational tools (`ask_user`, `load_skill`) are never gated: approving a question before asking it is an approval loop around conversation itself, not a safety boundary.
 
 ## Skills And Commands
 
@@ -64,4 +67,4 @@ A CLI management command for listing or deleting the CLI's persisted sessions. I
 
 ## Ownership Boundary
 
-The CLI currently owns terminal input and output, command-line flags, provider configuration, local tool wiring, approval policy, skill discovery, output compatibility, and CLI session management. The later migration will make the CLI an adapter over core's run, event, error, toolkit, session, and authority contracts; until then, similarly named CLI and core values must not be treated as interchangeable.
+The CLI owns terminal input and output, command-line flags, provider configuration, approval policy, skill discovery, output compatibility, and session administration. Core owns the run, event, error, toolkit, session persistence, and capability contracts. The CLI supplies `Workspace`, `CommandExecutor`, `HumanInteraction`, and `SkillRepository` implementations.
