@@ -176,22 +176,27 @@ const make = (sessionDir: string) =>
       const entries = yield* fs
         .readDirectory(sessionDir)
         .pipe(Effect.mapError((cause) => new SessionQueryError({ cause })));
-      const summaries: SessionSummary[] = [];
-      for (const entry of entries.filter((value) => value.endsWith(".json"))) {
-        const id = Schema.decodeUnknownOption(SessionId)(entry.slice(0, -5));
-        if (Option.isNone(id)) continue;
-        const record = yield* readEnvelope(fs, id.value, sessionPath(id.value)).pipe(
-          Effect.option,
-          Effect.map(Option.flatten)
-        );
-        if (Option.isSome(record)) {
-          summaries.push({
-            id: record.value.session.id,
-            createdAt: record.value.session.createdAt,
-            updatedAt: record.value.session.updatedAt
-          });
-        }
-      }
+      const jsonEntries = entries.filter((value) => value.endsWith(".json"));
+      const results = yield* Effect.forEach(
+        jsonEntries,
+        (entry) =>
+          Effect.gen(function* () {
+            const id = Schema.decodeUnknownOption(SessionId)(entry.slice(0, -5));
+            if (Option.isNone(id)) return Option.none<SessionSummary>();
+            const record = yield* readEnvelope(fs, id.value, sessionPath(id.value)).pipe(
+              Effect.option,
+              Effect.map(Option.flatten)
+            );
+            if (Option.isNone(record)) return Option.none<SessionSummary>();
+            return Option.some({
+              id: record.value.session.id,
+              createdAt: record.value.session.createdAt,
+              updatedAt: record.value.session.updatedAt
+            });
+          }),
+        { concurrency: 8 }
+      );
+      const summaries = results.filter(Option.isSome).map((option) => option.value);
       return summaries.sort((left, right) => right.updatedAt.epochMilliseconds - left.updatedAt.epochMilliseconds);
     });
 

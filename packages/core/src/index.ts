@@ -53,9 +53,12 @@ export type {
   SessionSummary
 } from "./capabilities/session.ts";
 export { SessionId } from "./capabilities/session.ts";
-export { Workspace, WorkspacePath } from "./capabilities/workspace.ts";
-export type { WorkspaceError, GrepRequest, GrepMatch, GlobRequest } from "./capabilities/workspace.ts";
-export { layer as fileSystemWorkspaceLayer } from "./capabilities/file-system-workspace.ts";
+export { Workspace, WorkspacePath } from "./capabilities/workspace/index.ts";
+export type { WorkspaceError, GrepRequest, GrepMatch, GlobRequest } from "./capabilities/workspace/index.ts";
+export { layer as fileSystemWorkspaceLayer } from "./capabilities/workspace/file-system-workspace/index.ts";
+export { ripgrepGrep, findGlob, globSource } from "./capabilities/workspace/file-system-workspace/index.ts";
+export { isInsideRoot, isCwdInsideRoot } from "./capabilities/workspace/file-system-workspace/paths.ts";
+export { revisionOf } from "./capabilities/workspace/file-system-workspace/revision.ts";
 export { CommandExecutor } from "./capabilities/command-executor.ts";
 export type { CommandRequest, CommandResult } from "./capabilities/command-executor.ts";
 export { HumanInteraction } from "./capabilities/human-interaction.ts";
@@ -68,7 +71,11 @@ export type {
 export { SkillRepository, SkillName } from "./capabilities/skill-repository.ts";
 export type { Skill } from "./capabilities/skill-repository.ts";
 export { CommandExecuteError } from "./capabilities/command-executor.ts";
-export { WorkspaceLookupError, WorkspacePersistenceError, WorkspaceSearchError } from "./capabilities/workspace.ts";
+export {
+  WorkspaceLookupError,
+  WorkspacePersistenceError,
+  WorkspaceSearchError
+} from "./capabilities/workspace/index.ts";
 export {
   DefaultAgenticToolkit,
   defaultAgenticToolkitLayer,

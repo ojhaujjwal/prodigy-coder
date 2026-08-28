@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Schema } from "effect";
-import { WorkspacePath } from "./workspace.ts";
+import { WorkspacePath } from "./workspace/index.ts";
 
 describe("WorkspacePath", () => {
   it("accepts non-empty relative paths without normalizing them", () => {

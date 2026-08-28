@@ -13,7 +13,7 @@ import {
   WorkspacePath,
   type GrepMatch,
   type GrepRequest
-} from "../../src/capabilities/workspace.ts";
+} from "../../src/capabilities/workspace/index.ts";
 import { SkillRepository, type Skill } from "../../src/capabilities/skill-repository.ts";
 import { PositiveInt, type AgentProfile } from "../../src/agent/agent-profile.ts";
 

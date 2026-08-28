@@ -12,7 +12,7 @@ import {
   type WorkspaceError,
   type GrepRequest,
   type GrepMatch
-} from "../capabilities/workspace.ts";
+} from "../capabilities/workspace/index.ts";
 import { PositiveInt, type AgentProfile } from "../agent/agent-profile.ts";
 
 // ---------------------------------------------------------------------------

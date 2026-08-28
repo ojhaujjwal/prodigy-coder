@@ -1,9 +1,15 @@
-import { Effect, Layer, Stream } from "effect";
+import { Duration, Effect, Layer, Stream } from "effect";
 import * as PlatformError from "effect/PlatformError";
 import * as Path from "effect/Path";
 import { ChildProcess } from "effect/unstable/process";
 import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
-import { CommandExecutor, CommandExecuteError, type CommandRequest, type CommandResult } from "@prodigy/core";
+import {
+  CommandExecutor,
+  CommandExecuteError,
+  isCwdInsideRoot,
+  type CommandRequest,
+  type CommandResult
+} from "@prodigy/core";
 
 const make = (root: string) =>
   Effect.gen(function* () {
@@ -19,8 +25,7 @@ const make = (root: string) =>
         return yield* new CommandExecuteError({ reason: "Spawn", cause: new Error("Command argv is empty") });
       }
       const cwd = request.cwd === undefined ? workspaceRoot : path.resolve(workspaceRoot, request.cwd);
-      const relativeCwd = path.relative(workspaceRoot, cwd);
-      if (relativeCwd === ".." || relativeCwd.startsWith(`..${path.sep}`) || path.isAbsolute(relativeCwd)) {
+      if (!isCwdInsideRoot(path, workspaceRoot, cwd)) {
         return yield* new CommandExecuteError({ reason: "Spawn", cause: new Error("Command cwd escapes workspace") });
       }
       const command = ChildProcess.make(executable, request.argv.slice(1), {
@@ -47,7 +52,7 @@ const make = (root: string) =>
         })
       ).pipe(
         Effect.timeoutOrElse({
-          duration: request.timeout ?? "10 minutes",
+          duration: request.timeout ?? Duration.minutes(10),
           orElse: () => Effect.fail(new CommandExecuteError({ reason: "Timeout" }))
         }),
         Effect.mapError((cause) =>

@@ -15,8 +15,8 @@ import {
   type CommandRequest,
   type CommandResult
 } from "@prodigy/core";
-import { WorkspaceSearchError } from "../../src/capabilities/workspace.ts";
-import { findGlob, ripgrepGrep } from "../../src/capabilities/file-system-workspace.ts";
+import { WorkspaceSearchError } from "../../src/capabilities/workspace/index.ts";
+import { findGlob, ripgrepGrep } from "../../src/capabilities/workspace/file-system-workspace/index.ts";
 
 const path = (value: string) => Schema.decodeUnknownSync(WorkspacePath)(value);
 
